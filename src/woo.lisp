@@ -21,7 +21,22 @@
                 :socket-remote-port
                 :with-sockaddr)
   #-woo-no-ssl
-  (:import-from :woo.ssl)
+  (:import-from :woo.ssl
+                :get-negotiated-protocol
+                :*alpn-protocols*
+                :configure-alpn)
+  (:import-from :woo.websocket
+                :websocket-p
+                :compute-accept-key
+                :setup-websocket
+                :send-text-frame
+                :send-binary-frame
+                :send-ping
+                :send-pong
+                :send-close
+                :write-websocket-upgrade-response)
+  (:import-from :woo.http2.clack
+                :make-http2-app-handler)
   (:import-from :woo.util
                 :integer-string-p)
   (:import-from :quri
@@ -55,7 +70,20 @@
            :*buffer-size*
            :*connection-timeout*
            :*default-backlog-size*
-           :*default-worker-num*))
+           :*default-worker-num*
+           ;; WebSocket exports
+           :websocket-p
+           :compute-accept-key
+           :setup-websocket
+           :send-text-frame
+           :send-binary-frame
+           :send-ping
+           :send-pong
+           :send-close
+           :write-websocket-upgrade-response
+           ;; SSL/ALPN exports
+           #-woo-no-ssl :*alpn-protocols*
+           #-woo-no-ssl :configure-alpn))
 (in-package :woo)
 
 (defvar *default-backlog-size* 128)
@@ -72,7 +100,7 @@
   (declare (ignorable ssl-key-password))
   (assert (and (integerp backlog)
                (plusp backlog)
-               (<= backlog 128)))
+               (<= backlog 65535)))
   (assert (or (and (integerp worker-num)
                    (< 0 worker-num))
               (null worker-num)))
@@ -83,14 +111,25 @@
   (let ((*app* app)
         (*debug* debug)
         (*listener* nil)
-        (ssl (or ssl-key-file ssl-cert-file)))
+        (ssl (or ssl-key-file ssl-cert-file))
+        (http2-handler nil))
     (labels ((start-socket (socket)
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
                                           ssl-cert-file
                                           ssl-key-file
-                                          ssl-key-password))
+                                          ssl-key-password)
+                 ;; Check ALPN negotiated protocol for HTTP/2
+                 (let ((proto (get-negotiated-protocol socket)))
+                   (when (and proto (string= proto "h2"))
+                     ;; HTTP/2 connection - use HTTP/2 handler
+                     (unless http2-handler
+                       (setf http2-handler (make-http2-app-handler *app*)))
+                     (funcall http2-handler socket)
+                     (woo.ev.tcp:start-listening-socket socket)
+                     (return-from start-socket))))
+               ;; HTTP/1.1 connection (or non-SSL)
                (setup-parser socket)
                (woo.ev.tcp:start-listening-socket socket))
              (start-multithread-server ()

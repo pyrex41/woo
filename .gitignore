@@ -13,3 +13,16 @@ benchmark/benchmark.log
 qlfile
 qlfile.lock
 t/certs/
+
+# SCUD
+.scud/
+
+# Compiled core images
+*.core
+
+# Claude Code
+.claude/
+
+# Working notes
+thoughts/
+dump.md
