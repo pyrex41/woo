@@ -6,7 +6,6 @@
                 :defcallback
                 :foreign-funcall
                 :foreign-alloc
-                :foreign-free
                 :mem-ref
                 :mem-aref
                 :with-foreign-object
@@ -74,41 +73,49 @@
 
 (defun parse-alpn-protocols (data len)
   "Parse ALPN protocol list from wire format into list of strings.
-   Wire format: length-prefixed strings (1 byte length + string bytes)."
+   Wire format: length-prefixed strings (1 byte length + string bytes).
+   Does not read past LEN. A truncated entry ends the list."
   (let ((protocols nil)
         (idx 0))
     (loop while (< idx len)
-          for proto-len = (cffi:mem-aref data :unsigned-char idx)
-          do (incf idx)
-             (when (and (> proto-len 0) (<= (+ idx proto-len) len))
-               (let ((proto (make-string proto-len)))
-                 (dotimes (i proto-len)
-                   (setf (char proto i)
-                         (code-char (cffi:mem-aref data :unsigned-char (+ idx i)))))
-                 (push proto protocols)))
-             (incf idx proto-len))
+          do (let ((proto-len (cffi:mem-aref data :unsigned-char idx)))
+               (incf idx)
+               (unless (<= (+ idx proto-len) len)
+                 (return))
+               (when (> proto-len 0)
+                 (let ((proto (make-string proto-len)))
+                   (dotimes (i proto-len)
+                     (setf (char proto i)
+                           (code-char (cffi:mem-aref data :unsigned-char (+ idx i)))))
+                   (push proto protocols)))
+               (incf idx proto-len)))
     (nreverse protocols)))
 
 (defun find-protocol-in-buffer (data len protocol)
   "Find a protocol string in the ALPN wire format buffer.
    Returns (values pointer length) if found, NIL otherwise.
-   The pointer points directly into the input buffer."
+   The pointer points directly into the input buffer.
+   Does not read past LEN, including when an entry's length byte
+   claims more payload than remains."
   (let ((idx 0)
         (proto-len (length protocol)))
     (loop while (< idx len)
-          for entry-len = (cffi:mem-aref data :unsigned-char idx)
-          do (when (= entry-len proto-len)
-               ;; Check if this entry matches
-               (let ((match t))
-                 (dotimes (i proto-len)
-                   (unless (char= (char protocol i)
-                                  (code-char (cffi:mem-aref data :unsigned-char (+ idx 1 i))))
-                     (setf match nil)
-                     (return)))
-                 (when match
-                   (return-from find-protocol-in-buffer
-                     (values (cffi:inc-pointer data (1+ idx)) proto-len)))))
-             (incf idx (1+ entry-len)))
+          do (let* ((entry-len (cffi:mem-aref data :unsigned-char idx))
+                    (entry-end (+ idx 1 entry-len)))
+               (unless (<= entry-end len)
+                 (return nil))
+               (when (= entry-len proto-len)
+                 (let ((match t))
+                   (dotimes (i proto-len)
+                     (unless (char= (char protocol i)
+                                    (code-char (cffi:mem-aref data :unsigned-char
+                                                              (+ idx 1 i))))
+                       (setf match nil)
+                       (return)))
+                   (when match
+                     (return-from find-protocol-in-buffer
+                       (values (cffi:inc-pointer data (1+ idx)) proto-len)))))
+               (setf idx entry-end)))
     nil))
 
 ;; Global variable to hold the ALPN selector function
@@ -156,13 +163,20 @@
       (vom:error "ALPN callback error: ~A" e)
       +ssl-tlsext-err-alert-fatal+)))
 
-(defvar *alpn-arg-ptr* nil)
+(defstruct alpn-ctx-arg
+  protocols
+  ptr
+  retired)
+
+;; Per SSL_CTX callback arg. Not one process-global buffer: workers share
+;; an SSL_CTX and may be inside alpn-select-cb while another worker
+;; reconfigures. Never foreign-free a pointer that has been installed.
+(defvar *alpn-ctx-args* (make-hash-table :test 'eql))
+(defvar *alpn-arg-lock* (bt2:make-lock))
 
 (defun encode-protocols-arg (preferred-protocols)
-  "Pack protocol list into a small C buffer passed as the ALPN callback arg."
-  (when *alpn-arg-ptr*
-    (cffi:foreign-free *alpn-arg-ptr*)
-    (setf *alpn-arg-ptr* nil))
+  "Allocate a fresh C buffer of PREFERRED-PROTOCOLS. Does not free or
+   replace any buffer already handed to OpenSSL."
   (let* ((n (min 8 (length preferred-protocols)))
          (ptr (cffi:foreign-alloc :unsigned-char :count (+ 1 (* 32 n)))))
     (setf (cffi:mem-ref ptr :unsigned-char) n)
@@ -174,17 +188,43 @@
              (dotimes (j len)
                (setf (cffi:mem-aref ptr :unsigned-char (+ off 1 j))
                      (char-code (char proto j)))))
-    (setf *alpn-arg-ptr* ptr)
     ptr))
+
+(defun ensure-ctx-alpn-arg (ssl-ctx protocols &key call-openssl)
+  "Return the callback arg private to SSL-CTX.
+   Reuses the existing buffer when PROTOCOLS is unchanged. A changed list
+   allocates a new buffer and retains the previous one so an in-flight
+   callback still has a live pointer. CALL-OPENSSL installs it on SSL-CTX."
+  (let ((protocols (copy-list protocols)))
+    (bt2:with-lock-held (*alpn-arg-lock*)
+      (let* ((addr (cffi:pointer-address ssl-ctx))
+             (state (gethash addr *alpn-ctx-args*)))
+        (cond
+          ((and state (equal (alpn-ctx-arg-protocols state) protocols))
+           (alpn-ctx-arg-ptr state))
+          (t
+           (let ((ptr (encode-protocols-arg protocols)))
+             (setf (gethash addr *alpn-ctx-args*)
+                   (make-alpn-ctx-arg
+                    :protocols protocols
+                    :ptr ptr
+                    :retired (if state
+                                 (cons (alpn-ctx-arg-ptr state)
+                                       (alpn-ctx-arg-retired state))
+                                 nil)))
+             (when call-openssl
+               (%ssl-ctx-set-alpn-select-cb ssl-ctx
+                                             (cffi:callback alpn-select-cb)
+                                             ptr))
+             ptr)))))))
 
 (defun ssl-ctx-set-alpn-select-callback (ssl-ctx preferred-protocols)
   "Set up ALPN protocol selection on an SSL context.
    PREFERRED-PROTOCOLS is a list of protocol strings in preference order,
-   e.g., '(\"h2\" \"http/1.1\")."
-  (setf *preferred-protocols* preferred-protocols)
-  (%ssl-ctx-set-alpn-select-cb ssl-ctx
-                                (cffi:callback alpn-select-cb)
-                                (encode-protocols-arg preferred-protocols)))
+   e.g., '(\"h2\" \"http/1.1\"). The callback arg is private to SSL-CTX
+   and is not freed while a worker may still be inside the callback."
+  (setf *preferred-protocols* (copy-list preferred-protocols))
+  (ensure-ctx-alpn-arg ssl-ctx preferred-protocols :call-openssl t))
 
 (defun make-alpn-selector (preferred-protocols)
   "Create an ALPN selector function.

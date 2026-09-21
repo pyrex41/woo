@@ -18,6 +18,9 @@
                 :http2-stream-pending-end-stream
                 ;; Functions
                 :stream-transition
+                :stream-state-error
+                :stream-state-error-code
+                :stream-state-error-connection-error-p
                 :stream-open-p
                 :stream-half-closed-remote-p
                 :stream-closed-p
@@ -30,7 +33,9 @@
                 :+state-half-closed-remote+
                 :+state-closed+)
   (:import-from :woo.http2.constants
-                :+default-initial-window-size+))
+                :+default-initial-window-size+
+                :+protocol-error+
+                :+stream-closed+))
 (in-package :woo-test.http2-stream)
 
 ;;; Stream Creation Tests
@@ -164,11 +169,29 @@
       (ok (= (http2-stream-state stream) +state-half-closed-local+)))))
 
 (deftest trailing-headers-test
+  (testing "open can receive HEADERS and stays open"
+    (let ((stream (make-http2-stream :id 1 :state +state-open+)))
+      (stream-transition stream :recv-headers)
+      (ok (stream-open-p stream))))
+
+  (testing "open HEADERS plus END_STREAM moves to half-closed-remote"
+    (let ((stream (make-http2-stream :id 1 :state +state-open+)))
+      (stream-transition stream :recv-headers)
+      (ok (stream-open-p stream))
+      (stream-transition stream :recv-end-stream)
+      (ok (stream-half-closed-remote-p stream))))
+
   (testing "half-closed-local can receive trailing headers"
     (let ((stream (make-http2-stream :id 1 :state +state-half-closed-local+)))
       (stream-transition stream :recv-headers)
       ;; State should remain half-closed-local
-      (ok (= (http2-stream-state stream) +state-half-closed-local+)))))
+      (ok (= (http2-stream-state stream) +state-half-closed-local+))))
+
+  (testing "half-closed-local trailers with END_STREAM close the stream"
+    (let ((stream (make-http2-stream :id 1 :state +state-half-closed-local+)))
+      (stream-transition stream :recv-headers)
+      (stream-transition stream :recv-end-stream)
+      (ok (stream-closed-p stream)))))
 
 ;;; Invalid Transition Tests
 
@@ -189,18 +212,35 @@
     (let ((stream (make-http2-stream :id 1 :state +state-closed+)))
       (ok (signals (stream-transition stream :send-headers) 'error)))))
 
+(defun capture-state-error (stream event)
+  (handler-case
+      (progn (stream-transition stream event) nil)
+    (stream-state-error (e) e)))
+
 (deftest invalid-recv-headers-transitions-test
-  (testing "Cannot receive HEADERS from open state"
-    (let ((stream (make-http2-stream :id 1 :state +state-open+)))
-      (ok (signals (stream-transition stream :recv-headers) 'error))))
+  (testing "HEADERS on half-closed-remote is a stream error and does not change state"
+    (let* ((stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (condition (capture-state-error stream :recv-headers)))
+      (ok (typep condition 'stream-state-error))
+      (ok (not (stream-state-error-connection-error-p condition)))
+      (ok (= (stream-state-error-code condition) +stream-closed+))
+      (ok (stream-half-closed-remote-p stream))))
 
-  (testing "Cannot receive HEADERS from half-closed-remote state"
-    (let ((stream (make-http2-stream :id 1 :state +state-half-closed-remote+)))
-      (ok (signals (stream-transition stream :recv-headers) 'error))))
+  (testing "HEADERS on closed is a connection error and does not change state"
+    (let* ((stream (make-http2-stream :id 1 :state +state-closed+))
+           (condition (capture-state-error stream :recv-headers)))
+      (ok (typep condition 'stream-state-error))
+      (ok (stream-state-error-connection-error-p condition))
+      (ok (= (stream-state-error-code condition) +stream-closed+))
+      (ok (stream-closed-p stream))))
 
-  (testing "Cannot receive HEADERS from closed state"
-    (let ((stream (make-http2-stream :id 1 :state +state-closed+)))
-      (ok (signals (stream-transition stream :recv-headers) 'error)))))
+  (testing "HEADERS on reserved-local is a connection PROTOCOL_ERROR"
+    (let* ((stream (make-http2-stream :id 1 :state +state-reserved-local+))
+           (condition (capture-state-error stream :recv-headers)))
+      (ok (typep condition 'stream-state-error))
+      (ok (stream-state-error-connection-error-p condition))
+      (ok (= (stream-state-error-code condition) +protocol-error+))
+      (ok (= (http2-stream-state stream) +state-reserved-local+)))))
 
 (deftest invalid-send-end-stream-transitions-test
   (testing "Cannot send END_STREAM from idle state"

@@ -77,6 +77,9 @@
   (buffer (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
   (fragment-opcode nil)
   (fragment-buffer (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
+  ;; Set once a frame has failed the connection. Further parses must not
+  ;; succeed or re-enter the error callback; the offending bytes stay buffered.
+  (failed nil :type boolean)
   socket
   on-message    ; (lambda (opcode payload))
   on-ping       ; (lambda (payload))
@@ -133,16 +136,57 @@
       (= opcode +opcode-ping+)
       (= opcode +opcode-pong+)))
 
+(defun known-opcode-p (opcode)
+  (or (= opcode +opcode-continuation+)
+      (= opcode +opcode-text+)
+      (= opcode +opcode-binary+)
+      (control-opcode-p opcode)))
+
+(defun data-opcode-p (opcode)
+  (or (= opcode +opcode-text+)
+      (= opcode +opcode-binary+)))
+
+(defun close-ws (state)
+  (let ((socket (ws-state-socket state)))
+    (when (and socket (socket-open-p socket))
+      (close-socket socket))))
+
 (defun ws-fail (state reason)
-  (when (ws-state-on-error state)
-    (funcall (ws-state-on-error state)
-             (make-condition 'websocket-protocol-error :reason reason)))
+  "Mark the connection failed and close its socket.
+   Returns :ERROR. Does not consume buffered bytes: only a T return from
+   PARSE-FRAME means a frame was consumed, and :ERROR must not be retried."
+  (unless (ws-state-failed state)
+    (setf (ws-state-failed state) t)
+    (unwind-protect
+         (when (ws-state-on-error state)
+           (funcall (ws-state-on-error state)
+                    (make-condition 'websocket-protocol-error :reason reason)))
+      (close-ws state)))
   :error)
+
+(defun append-fragment (state payload)
+  "Append PAYLOAD to the open fragment. Fail the connection instead of
+   growing past +MAX-WS-PAYLOAD+. Returns T on success, NIL after WS-FAIL."
+  (let* ((frag (ws-state-fragment-buffer state))
+         (old (length frag))
+         (new (+ old (length payload))))
+    (when (> new +max-ws-payload+)
+      (ws-fail state "fragment exceeds maximum payload")
+      (return-from append-fragment nil))
+    (let ((grown (adjust-array frag new :fill-pointer new)))
+      (setf (ws-state-fragment-buffer state) grown)
+      (replace grown payload :start1 old))
+    t))
 
 (defun parse-frame (state)
   "Parse WebSocket frame from state buffer.
-   Returns T if a complete frame was processed, NIL if more data needed,
-   or :ERROR on RFC 6455 protocol violation (unmasked, RSV, control rules, oversize)."
+   Returns T if a complete frame was consumed, NIL if more data is needed,
+   or :ERROR on an RFC 6455 protocol violation. :ERROR does not consume
+   bytes and must not be treated as success: the same buffer fails again.
+   A failed connection returns :ERROR without parsing further."
+  (when (ws-state-failed state)
+    (return-from parse-frame :error))
+
   (let* ((buf (ws-state-buffer state))
          (buf-len (length buf)))
 
@@ -164,6 +208,11 @@
 
       (unless masked
         (return-from parse-frame (ws-fail state "client frames must be masked")))
+
+      ;; Opcodes 0x3-0x7 and 0xB-0xF are reserved (RFC 6455 5.2). No extension
+      ;; is negotiated, so an unknown opcode fails the connection.
+      (unless (known-opcode-p opcode)
+        (return-from parse-frame (ws-fail state "reserved opcode")))
 
       (when (and (control-opcode-p opcode) (not fin))
         (return-from parse-frame (ws-fail state "control frames must not be fragmented")))
@@ -215,6 +264,11 @@
              (when (ws-state-on-pong state)
                (funcall (ws-state-on-pong state) payload)))
             ((= opcode +opcode-close+)
+             ;; A body must be empty or start with a 2-octet status code.
+             ;; One octet is illegal (RFC 6455 5.5.1) and fails the connection.
+             (when (= payload-len 1)
+               (return-from parse-frame
+                 (ws-fail state "close body must be empty or at least 2 octets")))
              (let ((code (if (>= payload-len 2)
                              (+ (ash (aref payload 0) 8) (aref payload 1))
                              1000))
@@ -224,11 +278,11 @@
                (when (ws-state-on-close state)
                  (funcall (ws-state-on-close state) code reason))))
             ((= opcode +opcode-continuation+)
-             (let ((frag-buf (ws-state-fragment-buffer state))
-                   (old-len (length (ws-state-fragment-buffer state))))
-               (adjust-array frag-buf (+ old-len payload-len)
-                             :fill-pointer (+ old-len payload-len))
-               (replace frag-buf payload :start1 old-len))
+             (unless (ws-state-fragment-opcode state)
+               (return-from parse-frame
+                 (ws-fail state "continuation with no message in progress")))
+             (unless (append-fragment state payload)
+               (return-from parse-frame :error))
              (when fin
                (when (ws-state-on-message state)
                  (funcall (ws-state-on-message state)
@@ -236,15 +290,20 @@
                           (ws-state-fragment-buffer state)))
                (setf (fill-pointer (ws-state-fragment-buffer state)) 0
                      (ws-state-fragment-opcode state) nil)))
-            ((or (= opcode +opcode-text+) (= opcode +opcode-binary+))
+            ((data-opcode-p opcode)
+             (when (ws-state-fragment-opcode state)
+               (return-from parse-frame
+                 (ws-fail state "data frame while a message is fragmented")))
              (if fin
                  (when (ws-state-on-message state)
                    (funcall (ws-state-on-message state) opcode payload))
                  (progn
+                   (setf (fill-pointer (ws-state-fragment-buffer state)) 0)
                    (setf (ws-state-fragment-opcode state) opcode)
-                   (let ((frag-buf (ws-state-fragment-buffer state)))
-                     (adjust-array frag-buf payload-len :fill-pointer payload-len)
-                     (replace frag-buf payload))))))
+                   (unless (append-fragment state payload)
+                     (return-from parse-frame :error)))))
+            (t
+             (return-from parse-frame (ws-fail state "reserved opcode"))))
 
           (let ((remaining (- buf-len frame-len)))
             (if (zerop remaining)
@@ -315,15 +374,23 @@
     (setf (socket-data socket)
           (lambda (data &key (start 0) (end (length data)))
             (handler-case
-                (let ((buf (ws-state-buffer state))
-                      (new-len (- end start)))
-                  ;; Append new data to buffer
-                  (let ((old-len (length buf)))
-                    (adjust-array buf (+ old-len new-len)
-                                  :fill-pointer (+ old-len new-len))
-                    (replace buf data :start1 old-len :start2 start :end2 end))
-                  ;; Parse as many complete frames as possible
-                  (loop while (parse-frame state)))
+                (cond
+                  ;; Already failed: do not parse again (the bad frame is
+                  ;; still buffered, and :ERROR is truthy).
+                  ((ws-state-failed state)
+                   (close-ws state))
+                  (t
+                   (let* ((buf (ws-state-buffer state))
+                          (new-len (- end start))
+                          (old-len (length buf))
+                          (grown (adjust-array buf (+ old-len new-len)
+                                               :fill-pointer (+ old-len new-len))))
+                     (setf (ws-state-buffer state) grown)
+                     (replace grown data :start1 old-len :start2 start :end2 end))
+                     ;; Only T means a frame was consumed. NIL waits for more
+                     ;; bytes. :ERROR leaves the buffer unchanged; retrying it
+                     ;; would spin the worker.
+                     (loop while (eq (parse-frame state) t))))
               (error (e)
                 (when (ws-state-on-error state)
                   (funcall (ws-state-on-error state) e))))))

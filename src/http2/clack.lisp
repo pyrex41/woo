@@ -54,16 +54,46 @@
 (defun request-pseudo-name-p (name)
   (member name '(":method" ":scheme" ":path" ":authority") :test #'string=))
 
+(defparameter *http-tchar-extra* "!#$%&'*+-.^_`|~"
+  "tchar bytes that are not DIGIT or lowercase ALPHA (RFC 9110).")
+
+(defun http-token-name-p (name)
+  "HTTP/2 field names are lowercase tokens."
+  (and (plusp (length name))
+       (every (lambda (char)
+                (or (char<= #\0 char #\9)
+                    (char<= #\a char #\z)
+                    (find char *http-tchar-extra* :test #'char=)))
+              name)))
+
+(defun field-value-ok-p (value)
+  "RFC 9113 §8.2.1: no NUL, CR, or LF in a field value."
+  (not (find-if (lambda (char)
+                  (or (char= char #\Nul)
+                      (char= char #\Return)
+                      (char= char #\Newline)))
+                value)))
+
+(defun valid-request-path-p (path)
+  ":path is \"*\" or an absolute path (RFC 9113 §8.3.1)."
+  (or (string= path "*")
+      (and (plusp (length path))
+           (char= (char path 0) #\/))))
+
 (defun validate-request-headers (headers)
   "Return T if HEADERS is a valid HTTP/2 request header list, else NIL.
    Enforces pseudo-header order, required set, no response :status, no
-   connection-specific fields (RFC 9113 §8.2–8.3)."
+   connection-specific fields, token names, and :path / host agreement
+   (RFC 9113 §8.2–8.3)."
   (let ((seen-regular nil)
+        (authority nil)
         (seen (make-hash-table :test 'equal)))
     (dolist (header headers)
       (let ((name (car header))
             (value (cdr header)))
         (unless (and (stringp name) (stringp value) (> (length name) 0))
+          (return-from validate-request-headers nil))
+        (unless (field-value-ok-p value)
           (return-from validate-request-headers nil))
         (when (find-if #'upper-case-p name)
           (return-from validate-request-headers nil))
@@ -77,9 +107,20 @@
              (return-from validate-request-headers nil))
            (setf (gethash name seen) t)
            (when (zerop (length value))
-             (return-from validate-request-headers nil)))
+             (return-from validate-request-headers nil))
+           (when (string= name ":path")
+             (unless (valid-request-path-p value)
+               (return-from validate-request-headers nil)))
+           (when (string= name ":authority")
+             (setf authority value)))
           (t
+           (unless (http-token-name-p name)
+             (return-from validate-request-headers nil))
            (setf seen-regular t)
+           (when (and authority
+                      (string= name "host")
+                      (not (string-equal value authority)))
+             (return-from validate-request-headers nil))
            (when (connection-specific-header-p name value)
              (return-from validate-request-headers nil))))))
     (and (gethash ":method" seen)
@@ -147,11 +188,7 @@
           ((string= name ":scheme")
            (setf (getf env :url-scheme) value))
           ((string= name ":authority")
-           (let ((colon-pos (position #\: value :from-end t)))
-             (if (and colon-pos (> colon-pos 0))
-                 (setf (getf env :server-name) (subseq value 0 colon-pos)
-                       (getf env :server-port) (parse-integer value :start (1+ colon-pos) :junk-allowed t))
-                 (setf (getf env :server-name) value))))
+           (apply-authority env value))
           ((string= name "content-type")
            (setf (getf env :content-type) value)
            (setf (gethash name http-headers) value))
@@ -161,15 +198,12 @@
           ((string= name "host")
            (setf (gethash name http-headers) value)
            (unless (getf env :server-name)
-             (let ((colon-pos (position #\: value :from-end t)))
-               (if (and colon-pos (> colon-pos 0))
-                   (setf (getf env :server-name) (subseq value 0 colon-pos)
-                         (getf env :server-port) (parse-integer value :start (1+ colon-pos) :junk-allowed t))
-                   (setf (getf env :server-name) value)))))
+             (apply-authority env value)))
           ((not (pseudo-header-p name))
            (setf (gethash name http-headers) value)))))
 
-    (unless (getf env :server-port)
+    ;; Port 0 is real; only an absent port takes the scheme default.
+    (unless (integerp (getf env :server-port))
       (setf (getf env :server-port)
             (if (string= (getf env :url-scheme) "https") 443 80)))
     (unless (getf env :path-info)
@@ -179,6 +213,46 @@
 
     (setf (getf env :headers) http-headers)
     env))
+
+(defun parse-decimal-port (string start)
+  "Port digits at START, or NIL. Junk after a number is ignored, matching Host."
+  (when (and (< start (length string))
+             (digit-char-p (char string start)))
+    (parse-integer string :start start :junk-allowed t)))
+
+(defun split-authority (authority)
+  "Split :authority or Host into host and port.
+   Bracketed IPv6 keeps its brackets. The port is only the number after
+   the closing bracket, so \"[::1]\" is not host \"[:\" port 1.
+   Returns (values host port). PORT is NIL when absent."
+  (let ((len (length authority)))
+    (cond
+      ((and (plusp len) (char= (char authority 0) #\[))
+       (let ((end (position #\] authority)))
+         (cond
+           ((null end)
+            (values authority nil))
+           ((and (< (1+ end) len)
+                 (char= (char authority (1+ end)) #\:))
+            (values (subseq authority 0 (1+ end))
+                    (parse-decimal-port authority (+ end 2))))
+           (t
+            (values (subseq authority 0 (1+ end)) nil)))))
+      (t
+       (let ((colon (position #\: authority :from-end t)))
+         (if (and colon (plusp colon))
+             (let ((port (parse-decimal-port authority (1+ colon))))
+               (if (integerp port)
+                   (values (subseq authority 0 colon) port)
+                   (values authority nil)))
+             (values authority nil)))))))
+
+(defun apply-authority (env value)
+  (multiple-value-bind (host port) (split-authority value)
+    (setf (getf env :server-name) host)
+    ;; Port 0 is a real port. Only NIL means "absent".
+    (when (integerp port)
+      (setf (getf env :server-port) port))))
 
 (defun send-header-block (conn stream-id header-block &key end-stream)
   "Send HEADER-BLOCK as HEADERS plus CONTINUATION frames at max frame size."
@@ -212,20 +286,31 @@
   (decf (http2-connection-remote-window-size conn) n)
   (decf (http2-stream-window-size stream) n))
 
+(defun queue-unsent-data (conn stream bytes end-stream)
+  "Hold bytes that do not fit in the send window. Returns NIL: not fully sent."
+  (setf (gethash (http2-stream-id stream) (http2-connection-send-queue conn))
+        (cons bytes (and end-stream t)))
+  nil)
+
 (defun send-data-bytes (conn stream bytes &key end-stream)
-  "Send BODY bytes as DATA frames split at max frame size, limited by send windows."
+  "Send BODY bytes as DATA frames split at max frame size, limited by send windows.
+   Bytes that do not fit are queued, not dropped. Returns T only when every byte
+   has been written (END_STREAM on the last frame when requested). NIL means the
+   tail is queued and must not be reported as a successful full send."
   (let* ((stream-id (http2-stream-id stream))
          (max (connection-send-max-frame-size conn))
          (len (length bytes))
          (offset 0))
     (when (and (zerop len) end-stream)
       (emit-frame conn (make-data-frame stream-id #() :end-stream t))
+      (remhash stream-id (http2-connection-send-queue conn))
       (return-from send-data-bytes t))
     (loop while (< offset len)
           do (let* ((window (send-window-available conn stream))
                     (chunk (min max window (- len offset))))
                (when (<= chunk 0)
-                 (return-from send-data-bytes nil))
+                 (return-from send-data-bytes
+                   (queue-unsent-data conn stream (subseq bytes offset) end-stream)))
                (let* ((end (= (+ offset chunk) len))
                       (fragment (subseq bytes offset (+ offset chunk))))
                  (emit-frame conn
@@ -233,6 +318,7 @@
                                               :end-stream (and end-stream end)))
                  (consume-send-window conn stream chunk)
                  (incf offset chunk))))
+    (remhash stream-id (http2-connection-send-queue conn))
     t))
 
 (defun body-to-bytes (body)
@@ -255,32 +341,148 @@
            (incf i (length p)))
          out)))))
 
+(defun read-pathname-octets (path)
+  "Read a static-file body the way HTTP/1 sends a pathname response."
+  (with-open-file (in path :element-type '(unsigned-byte 8))
+    (let* ((size (file-length in))
+           (buf (make-array size :element-type '(unsigned-byte 8))))
+      (read-sequence buf in)
+      buf)))
+
+(defun response-header-present-p (headers key)
+  (loop for k in headers by #'cddr
+        thereis (or (eq k key)
+                    (and (symbolp k)
+                         (string-equal (symbol-name k) (symbol-name key)))
+                    (and (stringp k)
+                         (string-equal k (symbol-name key))))))
+
+(defun prepare-response-body (headers body)
+  "Return (values headers bytes). Pathname bodies match HTTP/1 static files."
+  (if (pathnamep body)
+      (let ((bytes (read-pathname-octets body))
+            (headers (copy-list headers)))
+        (unless (response-header-present-p headers :content-type)
+          (setf (getf headers :content-type) (mimes:mime body)))
+        (unless (response-header-present-p headers :content-length)
+          (setf (getf headers :content-length) (length bytes)))
+        (values headers bytes))
+      (values headers (body-to-bytes body))))
+
+(defun note-response-finished (conn stream)
+  "Our END_STREAM has been sent. A request that already ended moves to closed
+   and is dropped from the open table so it no longer counts as concurrent."
+  (cond
+    ((= (http2-stream-state stream) +state-half-closed-remote+)
+     (stream-transition stream :send-end-stream))
+    ((= (http2-stream-state stream) +state-open+)
+     (stream-transition stream :send-end-stream)))
+  (when (stream-closed-p stream)
+    (connection-drop-closed-stream conn stream)))
+
+(defun ensure-send-flush-hook (conn)
+  (unless (http2-connection-flush-sends conn)
+    (setf (http2-connection-flush-sends conn) #'flush-pending-response-data)))
+
+(defun flush-pending-response-data (conn &optional only-stream)
+  "Write queued DATA now that a send window has grown. END_STREAM rides the last frame."
+  (flet ((flush-one (stream)
+           (let* ((id (http2-stream-id stream))
+                  (entry (gethash id (http2-connection-send-queue conn))))
+             (when (and entry (not (stream-closed-p stream)))
+               (remhash id (http2-connection-send-queue conn))
+               (when (send-data-bytes conn stream (car entry) :end-stream (cdr entry))
+                 (note-response-finished conn stream))))))
+    (if only-stream
+        (flush-one only-stream)
+        (dolist (id (let ((ids nil))
+                      (maphash (lambda (id entry)
+                                 (declare (ignore entry))
+                                 (push id ids))
+                               (http2-connection-send-queue conn))
+                      (sort ids #'<)))
+          (let ((stream (gethash id (http2-connection-streams conn))))
+            (when stream
+              (flush-one stream)))))))
+
 (defun send-http2-response (conn stream status headers body)
   "Send HTTP/2 response on stream.
    HEADERS should be a plist of header names to values.
-   BODY can be nil, a byte vector, a string, or a list of strings/vectors."
-  (let* ((status-str (write-to-string status))
-         (response-headers (list (cons ":status" status-str))))
+   BODY can be nil, a byte vector, a string, a list of strings/vectors, or a pathname.
+   Returns T only when the response was fully written, including END_STREAM.
+   NIL means the body tail is queued for a later WINDOW_UPDATE and was not dropped."
+  (multiple-value-bind (headers bytes) (prepare-response-body headers body)
+    (let* ((status-str (write-to-string status))
+           (response-headers (list (cons ":status" status-str))))
+      (loop for (name value) on headers by #'cddr
+            unless (null value)
+            do (let ((name-str (etypecase name
+                                 (string (string-downcase name))
+                                 (keyword (string-downcase (symbol-name name)))
+                                 (symbol (string-downcase (symbol-name name))))))
+                 (push (cons name-str (princ-to-string value)) response-headers)))
+      (setf response-headers (nreverse response-headers))
+      (let* ((header-block (hpack-encode-headers
+                            (http2-connection-encoder-context conn)
+                            response-headers))
+             (has-body (> (length bytes) 0)))
+        (ensure-send-flush-hook conn)
+        (send-header-block conn (http2-stream-id stream) header-block
+                           :end-stream (not has-body))
+        (cond
+          ((not has-body)
+           (note-response-finished conn stream)
+           t)
+          ((send-data-bytes conn stream bytes :end-stream t)
+           (note-response-finished conn stream)
+           t)
+          (t nil))))))
 
-    (loop for (name value) on headers by #'cddr
-          when value
-          do (let ((name-str (etypecase name
-                               (string (string-downcase name))
-                               (keyword (string-downcase (symbol-name name)))
-                               (symbol (string-downcase (symbol-name name))))))
-               (push (cons name-str (princ-to-string value)) response-headers)))
+(defun http2-socket-accepts-p (socket)
+  (or (null socket) (socket-open-p socket)))
 
-    (setf response-headers (nreverse response-headers))
+(defun dispatch-clack-response (conn socket stream response)
+  "Send a Clack response. A function is a delayed response, same as HTTP/1."
+  (flet ((send-list (clack-res)
+           (when (and (consp clack-res)
+                      (http2-socket-accepts-p socket))
+             (destructuring-bind (status resp-headers &optional body) clack-res
+               (send-http2-response conn stream status resp-headers body)))))
+    (etypecase response
+      (cons (send-list response))
+      (function (funcall response #'send-list)))))
 
-    (let* ((header-block (hpack-encode-headers
-                          (http2-connection-encoder-context conn)
-                          response-headers))
-           (bytes (body-to-bytes body))
-           (has-body (> (length bytes) 0)))
-      (send-header-block conn (http2-stream-id stream) header-block
-                         :end-stream (not has-body))
-      (when has-body
-        (send-data-bytes conn stream bytes :end-stream t)))))
+(defun invoke-http2-app (conn socket stream app env)
+  (handler-case
+      (dispatch-clack-response conn socket stream (funcall app env))
+    (error (e)
+      (vom:error "Error in HTTP/2 app handler: ~A" e)
+      (when (http2-socket-accepts-p socket)
+        (send-http2-response conn stream 500
+                             '(:content-type "text/plain")
+                             "Internal Server Error")))))
+
+(defun handle-http2-headers (conn socket stream headers end-stream app)
+  "Validate, then run APP only for a complete request. Malformed headers RST first."
+  (let ((env (build-clack-env socket stream headers)))
+    (cond
+      ((null env)
+       (connection-stream-error conn stream +protocol-error+))
+      (end-stream
+       (setf (getf env :http2.connection) conn
+             (getf env :raw-body) nil)
+       (invoke-http2-app conn socket stream app env)))))
+
+(defun handle-http2-data-end (conn socket stream app)
+  (let* ((env (build-clack-env socket stream (http2-stream-headers stream)))
+         (body (http2-stream-body-buffer stream)))
+    (cond
+      ((null env)
+       (connection-stream-error conn stream +protocol-error+))
+      (t
+       (setf (getf env :http2.connection) conn
+             (getf env :raw-body) (if (> (length body) 0) body nil))
+       (invoke-http2-app conn socket stream app env)))))
 
 (defun make-http2-app-handler (app)
   "Create HTTP/2 connection handler that invokes Clack app for each request.
@@ -292,50 +494,13 @@
              socket
              :on-headers
              (lambda (stream headers end-stream)
-               (let ((env (build-clack-env socket stream headers)))
-                 (cond
-                   ((null env)
-                    (connection-send-frame conn
-                      (make-rst-stream-frame (http2-stream-id stream) +protocol-error+)))
-                   (end-stream
-                    (setf (getf env :http2.connection) conn
-                          (getf env :raw-body) nil)
-                    (handler-case
-                        (let ((response (funcall app env)))
-                          (when (and (listp response) (socket-open-p socket))
-                            (destructuring-bind (status resp-headers &optional body) response
-                              (send-http2-response conn stream status resp-headers body))))
-                      (error (e)
-                        (vom:error "Error in HTTP/2 app handler: ~A" e)
-                        (when (socket-open-p socket)
-                          (send-http2-response conn stream 500
-                                               '(:content-type "text/plain")
-                                               "Internal Server Error"))))))))
+               (handle-http2-headers conn socket stream headers end-stream app))
 
              :on-data
              (lambda (stream data end-stream)
                (declare (ignore data))
                (when end-stream
-                 (let* ((env (build-clack-env socket stream (http2-stream-headers stream)))
-                        (body (http2-stream-body-buffer stream)))
-                   (cond
-                     ((null env)
-                      (connection-send-frame conn
-                        (make-rst-stream-frame (http2-stream-id stream) +protocol-error+)))
-                     (t
-                      (setf (getf env :http2.connection) conn
-                            (getf env :raw-body) (if (> (length body) 0) body nil))
-                      (handler-case
-                          (let ((response (funcall app env)))
-                            (when (and (listp response) (socket-open-p socket))
-                              (destructuring-bind (status resp-headers &optional resp-body) response
-                                (send-http2-response conn stream status resp-headers resp-body))))
-                        (error (e)
-                          (vom:error "Error in HTTP/2 app handler: ~A" e)
-                          (when (socket-open-p socket)
-                            (send-http2-response conn stream 500
-                                                 '(:content-type "text/plain")
-                                                 "Internal Server Error"))))))))))
+                 (handle-http2-data-end conn socket stream app)))
 
              :on-goaway
              (lambda (last-stream-id error-code debug-data)

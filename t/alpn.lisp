@@ -82,6 +82,16 @@
           ;; Should skip the invalid protocol
           (ok (null result)))))))
 
+(deftest test-parse-alpn-protocols-truncated-after-valid
+  (testing "a truncated entry does not discard an earlier protocol or read past inlen"
+    ;; ["h2", truncated "http/1.1"]: length byte 8 but only two payload bytes.
+    (let ((buffer #(2 104 50 8 104 116 116 112 47 49 46 49)))
+      (cffi:with-foreign-object (data :unsigned-char (length buffer))
+        (loop for i from 0 below (length buffer)
+              do (setf (cffi:mem-aref data :unsigned-char i) (aref buffer i)))
+        (let ((result (woo.ssl.alpn::parse-alpn-protocols data 6)))
+          (ok (equal result '("h2"))))))))
+
 ;;; Test find-protocol-in-buffer
 
 (deftest test-find-protocol-in-buffer-found
@@ -145,6 +155,34 @@
         (multiple-value-bind (ptr len)
             (woo.ssl.alpn::find-protocol-in-buffer data (length buffer) "http")
           ;; Should not match "http" when buffer contains "http/1.1"
+          (ok (null ptr))
+          (ok (null len)))))))
+
+(deftest test-find-protocol-in-buffer-truncated-entry
+  (testing "find-protocol-in-buffer does not read past inlen"
+    ;; Full allocation is ["h3","h2"]. inlen 4 keeps "h3" and the next
+    ;; length byte; the "h2" payload sits past inlen. Matching it would
+    ;; mean the scanner read outside the buffer.
+    (let ((buffer #(2 104 51 2 104 50)))
+      (cffi:with-foreign-object (data :unsigned-char (length buffer))
+        (loop for i from 0 below (length buffer)
+              do (setf (cffi:mem-aref data :unsigned-char i) (aref buffer i)))
+        (multiple-value-bind (ptr len)
+            (woo.ssl.alpn::find-protocol-in-buffer data 4 "h2")
+          (ok (null ptr) "truncated h2 is not a match")
+          (ok (null len)))
+        (multiple-value-bind (ptr len)
+            (woo.ssl.alpn::find-protocol-in-buffer data 4 "h3")
+          (ok (not (null ptr)) "in-bounds h3 is still found")
+          (ok (= len 2)))))
+    ;; Sole entry claims 2 payload bytes but inlen stops one short,
+    ;; and the completing byte is allocated just past inlen.
+    (let ((buffer #(2 104 50)))
+      (cffi:with-foreign-object (data :unsigned-char (length buffer))
+        (loop for i from 0 below (length buffer)
+              do (setf (cffi:mem-aref data :unsigned-char i) (aref buffer i)))
+        (multiple-value-bind (ptr len)
+            (woo.ssl.alpn::find-protocol-in-buffer data 2 "h2")
           (ok (null ptr))
           (ok (null len)))))))
 
@@ -222,14 +260,131 @@
                  '("http/1.1"))))))
 
 (deftest test-alpn-callback-arg-roundtrip
-  (testing "preferred protocols encoded in callback arg"
-    (let ((ptr (woo.ssl.alpn::encode-protocols-arg '("h2" "http/1.1"))))
+  (testing "preferred protocols encoded in a private callback arg"
+    (let ((first (woo.ssl.alpn::encode-protocols-arg '("h2")))
+          (second (woo.ssl.alpn::encode-protocols-arg '("http/1.1"))))
       (unwind-protect
-           (let ((decoded (woo.ssl.alpn::protocols-from-arg ptr)))
-             (ok (equal decoded '("h2" "http/1.1"))))
-        (when woo.ssl.alpn::*alpn-arg-ptr*
-          (cffi:foreign-free woo.ssl.alpn::*alpn-arg-ptr*)
-          (setf woo.ssl.alpn::*alpn-arg-ptr* nil))))))
+           (progn
+             (ok (not (cffi:pointer-eq first second))
+                 "each encode allocates its own buffer")
+             (ok (equal (woo.ssl.alpn::protocols-from-arg first) '("h2"))
+                 "earlier buffer is not freed by a later encode")
+             (ok (equal (woo.ssl.alpn::protocols-from-arg second) '("http/1.1"))))
+        (cffi:foreign-free first)
+        (cffi:foreign-free second)))))
+
+(deftest test-alpn-arg-per-context
+  (testing "each SSL_CTX has its own callback arg and reconfigure does not free it"
+    (let ((ctx-a (cffi:make-pointer #xF0000000A1100001))
+          (ctx-b (cffi:make-pointer #xF0000000A1100002)))
+      (let* ((a1 (woo.ssl.alpn::ensure-ctx-alpn-arg ctx-a '("h2" "http/1.1")))
+             (a2 (woo.ssl.alpn::ensure-ctx-alpn-arg ctx-a '("h2" "http/1.1")))
+             (b1 (woo.ssl.alpn::ensure-ctx-alpn-arg ctx-b '("http/1.1"))))
+        (ok (cffi:pointer-eq a1 a2)
+            "unchanged protocols keep the same pointer")
+        (ok (not (cffi:pointer-eq a1 b1))
+            "contexts do not share one C buffer")
+        (ok (equal (woo.ssl.alpn::protocols-from-arg a1) '("h2" "http/1.1")))
+        (ok (equal (woo.ssl.alpn::protocols-from-arg b1) '("http/1.1")))
+        (let ((a3 (woo.ssl.alpn::ensure-ctx-alpn-arg ctx-a '("h2"))))
+          (ok (not (cffi:pointer-eq a1 a3))
+              "a new list gets a new buffer")
+          (ok (equal (woo.ssl.alpn::protocols-from-arg a1) '("h2" "http/1.1"))
+              "previous arg is still readable")
+          (ok (equal (woo.ssl.alpn::protocols-from-arg a3) '("h2")))
+          (ok (equal (woo.ssl.alpn::protocols-from-arg b1) '("http/1.1"))
+              "the other context is untouched"))))))
+
+(defun call-alpn-select (data inlen arg)
+  (cffi:with-foreign-objects ((out :pointer)
+                              (outlen :unsigned-char))
+    (setf (cffi:mem-ref out :pointer) (cffi:null-pointer))
+    (setf (cffi:mem-ref outlen :unsigned-char) 0)
+    (let ((rc (cffi:foreign-funcall-pointer
+               (cffi:callback woo.ssl.alpn::alpn-select-cb)
+               ()
+               :pointer (cffi:null-pointer)
+               :pointer out
+               :pointer outlen
+               :pointer data
+               :unsigned-int inlen
+               :pointer arg
+               :int)))
+      (values rc
+              (cffi:mem-ref outlen :unsigned-char)
+              (cffi:mem-ref out :pointer)))))
+
+(deftest test-alpn-callback-inbounds-and-truncated
+  (testing "ALPN callback selects an in-bounds protocol and rejects a truncated list"
+    (let ((client #(2 104 50 8 104 116 116 112 47 49 46 49))
+          (arg (woo.ssl.alpn::encode-protocols-arg '("h2" "http/1.1"))))
+      (unwind-protect
+           (cffi:with-foreign-object (data :unsigned-char (length client))
+             (loop for i from 0 below (length client)
+                   do (setf (cffi:mem-aref data :unsigned-char i) (aref client i)))
+             (multiple-value-bind (rc outlen out)
+                 (call-alpn-select data (length client) arg)
+               (ok (= rc +ssl-tlsext-err-ok+))
+               (ok (= outlen 2))
+               (ok (not (cffi:null-pointer-p out)))
+               (when (and out (not (cffi:null-pointer-p out)))
+                 (ok (= (cffi:mem-aref out :unsigned-char 0) 104))
+                 (ok (= (cffi:mem-aref out :unsigned-char 1) 50)))))
+        (cffi:foreign-free arg)))
+    ;; inlen covers "h2" plus a length byte claiming 8 more bytes that are
+    ;; not in range. Preferring only http/1.1 must not succeed by reading them.
+    (let ((client #(2 104 50 8 104 116 116 112 47 49 46 49))
+          (arg (woo.ssl.alpn::encode-protocols-arg '("http/1.1"))))
+      (unwind-protect
+           (cffi:with-foreign-object (data :unsigned-char (length client))
+             (loop for i from 0 below (length client)
+                   do (setf (cffi:mem-aref data :unsigned-char i) (aref client i)))
+             (multiple-value-bind (rc outlen out)
+                 (call-alpn-select data 6 arg)
+               (ok (= rc +ssl-tlsext-err-noack+))
+               (ok (= outlen 0) "truncated match must not publish a length")
+               (ok (cffi:null-pointer-p out)
+                   "truncated match must not publish a pointer past inlen")))
+        (cffi:foreign-free arg)))))
+
+(deftest test-alpn-truncated-allocation
+  (testing "scanner and callback do not read past a truncated ALPN buffer"
+    ;; Exactly four octets are allocated: "h2" and a length byte of 8.
+    ;; Those eight payload bytes are not in the buffer. Selecting
+    ;; http/1.1, or walking the claimed length, would read past it.
+    (let ((buffer #(2 104 50 8)))
+      (cffi:with-foreign-object (data :unsigned-char (length buffer))
+        (loop for i from 0 below (length buffer)
+              do (setf (cffi:mem-aref data :unsigned-char i) (aref buffer i)))
+        (multiple-value-bind (ptr len)
+            (woo.ssl.alpn::find-protocol-in-buffer data (length buffer) "http/1.1")
+          (ok (null ptr))
+          (ok (null len)))
+        (multiple-value-bind (ptr len)
+            (woo.ssl.alpn::find-protocol-in-buffer data (length buffer) "h2")
+          (ok (not (null ptr)))
+          (ok (= len 2))
+          (ok (= (cffi:mem-aref ptr :unsigned-char 0) 104))
+          (ok (= (cffi:mem-aref ptr :unsigned-char 1) 50)))
+        (let ((prefer-h2 (woo.ssl.alpn::encode-protocols-arg '("h2" "http/1.1")))
+              (prefer-11 (woo.ssl.alpn::encode-protocols-arg '("http/1.1"))))
+          (unwind-protect
+               (progn
+                 (multiple-value-bind (rc outlen out)
+                     (call-alpn-select data (length buffer) prefer-h2)
+                   (ok (= rc +ssl-tlsext-err-ok+))
+                   (ok (= outlen 2))
+                   (ok (not (cffi:null-pointer-p out)))
+                   (when (and out (not (cffi:null-pointer-p out)))
+                     (ok (= (cffi:mem-aref out :unsigned-char 0) 104))
+                     (ok (= (cffi:mem-aref out :unsigned-char 1) 50))))
+                 (multiple-value-bind (rc outlen out)
+                     (call-alpn-select data (length buffer) prefer-11)
+                   (ok (= rc +ssl-tlsext-err-noack+))
+                   (ok (= outlen 0))
+                   (ok (cffi:null-pointer-p out))))
+            (cffi:foreign-free prefer-h2)
+            (cffi:foreign-free prefer-11)))))))
 
 (deftest test-alpn-not-queried-before-handshake
   (testing "start-socket defers ALPN until after pending buffer / ssl-read path"

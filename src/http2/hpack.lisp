@@ -7,6 +7,8 @@
   (:export :make-hpack-context
            :hpack-context
            :hpack-context-max-dynamic-table-size
+           :hpack-context-dynamic-table
+           :hpack-context-dynamic-table-size
            :hpack-encode-headers
            :hpack-decode-headers
            :hpack-context-update-size
@@ -88,49 +90,87 @@
     ("via" . "")
     ("www-authenticate" . "")))
 
-(defstruct hpack-context
+(defstruct (hpack-context (:constructor %make-hpack-context))
   "HPACK encoder/decoder context with dynamic table."
   (dynamic-table (make-array 0 :adjustable t :fill-pointer 0))
+  ;; Parallel to dynamic-table: name/value lengths in octets, not characters.
+  (entry-name-octets (make-array 0 :adjustable t :fill-pointer 0))
+  (entry-value-octets (make-array 0 :adjustable t :fill-pointer 0))
   (dynamic-table-size 0 :type fixnum)
-  (max-dynamic-table-size 4096 :type fixnum))
+  ;; Current maximum selected by the encoder (dynamic table size updates).
+  (max-dynamic-table-size 4096 :type fixnum)
+  ;; SETTINGS_HEADER_TABLE_SIZE ceiling. Size updates cannot exceed this.
+  (header-table-size-limit 4096 :type fixnum))
+
+(defun make-hpack-context (&key (max-dynamic-table-size 4096))
+  "Create a context. MAX-DYNAMIC-TABLE-SIZE is both the current maximum
+   and the advertised SETTINGS_HEADER_TABLE_SIZE limit."
+  (%make-hpack-context
+   :max-dynamic-table-size max-dynamic-table-size
+   :header-table-size-limit max-dynamic-table-size))
+
+(defun hpack-octet-length (string)
+  "UTF-8 octet length of a Lisp string, not its character length.
+   Header-block inserts pass the raw HPACK octet count instead: values
+   are opaque octets and need not be valid UTF-8 (RFC 7541 §4.1, §5.2)."
+  (length (string-to-utf-8-bytes string)))
 
 (defun hpack-entry-size (name value)
-  "Calculate entry size per RFC 7541 Section 4.1.
-   Size = length of name + length of value + 32 bytes overhead."
+  "Entry size per RFC 7541 §4.1: name octets + value octets + 32."
   (+ 32
-     (length name)
-     (length value)))
+     (hpack-octet-length name)
+     (hpack-octet-length value)))
+
+(defun hpack-insert-front (vec value)
+  (vector-push-extend value vec)
+  (loop for i from (1- (length vec)) downto 1
+        do (setf (aref vec i) (aref vec (1- i))))
+  (setf (aref vec 0) value))
+
+(defun hpack-context-clear (ctx)
+  (setf (fill-pointer (hpack-context-dynamic-table ctx)) 0
+        (fill-pointer (hpack-context-entry-name-octets ctx)) 0
+        (fill-pointer (hpack-context-entry-value-octets ctx)) 0
+        (hpack-context-dynamic-table-size ctx) 0))
+
+(defun hpack-context-evict-one (ctx)
+  "Drop the oldest dynamic-table entry (highest index)."
+  (let ((name-oct (vector-pop (hpack-context-entry-name-octets ctx)))
+        (value-oct (vector-pop (hpack-context-entry-value-octets ctx))))
+    (vector-pop (hpack-context-dynamic-table ctx))
+    (decf (hpack-context-dynamic-table-size ctx) (+ 32 name-oct value-oct))))
 
 (defun hpack-context-evict (ctx)
-  "Evict entries from dynamic table until size <= max size."
+  "Evict from the end until size <= max size (RFC 7541 §4.3)."
   (loop while (and (> (length (hpack-context-dynamic-table ctx)) 0)
                    (> (hpack-context-dynamic-table-size ctx)
                       (hpack-context-max-dynamic-table-size ctx)))
-        do (let* ((table (hpack-context-dynamic-table ctx))
-                  (entry (aref table (1- (length table)))))
-             ;; Remove oldest entry (at the end)
-             (decf (hpack-context-dynamic-table-size ctx)
-                   (hpack-entry-size (car entry) (cdr entry)))
-             (vector-pop table))))
+        do (hpack-context-evict-one ctx)))
 
-(defun hpack-context-add-entry (ctx name value)
-  "Add entry to dynamic table (at the beginning, index 62)."
-  (let ((size (hpack-entry-size name value)))
-    (when (<= size (hpack-context-max-dynamic-table-size ctx))
-      ;; Add to front by shifting all elements
-      (let ((table (hpack-context-dynamic-table ctx)))
-        (vector-push-extend nil table)
-        ;; Shift elements right
-        (loop for i from (1- (length table)) downto 1
-              do (setf (aref table i) (aref table (1- i))))
-        ;; Insert new entry at front
-        (setf (aref table 0) (cons name value)))
-      (incf (hpack-context-dynamic-table-size ctx) size)
-      (hpack-context-evict ctx))))
+(defun hpack-context-add-entry (ctx name value &key name-octets value-octets)
+  "Add entry at the newest index. An entry larger than the current maximum
+   empties the table and is not inserted (RFC 7541 §4.4)."
+  (let* ((n-oct (if name-octets name-octets (hpack-octet-length name)))
+         (v-oct (if value-octets value-octets (hpack-octet-length value)))
+         (size (+ 32 n-oct v-oct)))
+    (cond
+      ((> size (hpack-context-max-dynamic-table-size ctx))
+       (hpack-context-clear ctx))
+      (t
+       (loop while (> (+ (hpack-context-dynamic-table-size ctx) size)
+                      (hpack-context-max-dynamic-table-size ctx))
+             do (hpack-context-evict-one ctx))
+       (hpack-insert-front (hpack-context-dynamic-table ctx) (cons name value))
+       (hpack-insert-front (hpack-context-entry-name-octets ctx) n-oct)
+       (hpack-insert-front (hpack-context-entry-value-octets ctx) v-oct)
+       (incf (hpack-context-dynamic-table-size ctx) size)))))
 
 (defun hpack-context-update-size (ctx new-size)
-  "Update max dynamic table size and evict if necessary."
-  (setf (hpack-context-max-dynamic-table-size ctx) new-size)
+  "Apply SETTINGS_HEADER_TABLE_SIZE: this sets the current maximum and the
+   protocol ceiling, then evicts. Header-block size updates must not use
+   this, because they cannot raise the ceiling (RFC 7541 §6.3)."
+  (setf (hpack-context-header-table-size-limit ctx) new-size
+        (hpack-context-max-dynamic-table-size ctx) new-size)
   (hpack-context-evict ctx))
 
 (defun hpack-lookup-index (ctx index)
@@ -148,6 +188,17 @@
          (unless (and (>= dyn-idx 0) (< dyn-idx (length dyn-table)))
            (hpack-error (format nil "unknown index ~A" index)))
          (aref dyn-table dyn-idx))))))
+
+(defun hpack-indexed-name (ctx index)
+  "Return (values name name-octet-length) for a non-zero table index.
+   Dynamic-table names keep the octet length stored at insert."
+  (let ((static-len (1- (length *static-table*)))
+        (entry (hpack-lookup-index ctx index)))
+    (if (<= index static-len)
+        (values (car entry) (hpack-octet-length (car entry)))
+        (values (car entry)
+                (aref (hpack-context-entry-name-octets ctx)
+                      (- index static-len 1))))))
 
 (defun hpack-find-header (ctx name value)
   "Find header in tables. Returns (values index name-only-p).
@@ -352,9 +403,28 @@
 
 ;;; String encoding/decoding (RFC 7541 Section 5.2)
 
+(defun hpack-latin1-string (bytes start end)
+  "One character per octet. Used when the octets are not valid UTF-8."
+  (let ((s (make-string (- end start) :element-type 'character)))
+    (loop for i from start below end
+          for j from 0
+          do (setf (char s j) (code-char (aref bytes i))))
+    s))
+
+(defun hpack-octets-to-string (bytes start end)
+  "Map opaque HPACK octets to a Lisp string (RFC 7541 §5.2).
+   Valid UTF-8 is decoded so application strings round-trip. Invalid
+   UTF-8 (obs-text) is kept as raw octets and must not signal — a
+   UTF-8 decoder error is not an HPACK compression error."
+  (handler-case
+      (utf-8-bytes-to-string bytes :start start :end end)
+    (error ()
+      (hpack-latin1-string bytes start end))))
+
 (defun hpack-decode-string (data start &optional (end (length data)))
   "Decode HPACK string starting at START.
-   Returns (values string bytes-consumed)."
+   Returns (values string bytes-consumed octet-length).
+   OCTET-LENGTH is the decoded string size, not the Huffman wire size."
   (unless (< start end)
     (hpack-error "string truncated"))
   (let ((huffman-p (logbitp 7 (aref data start))))
@@ -364,12 +434,14 @@
             (str-end (+ start consumed slen)))
         (when (> str-end end)
           (hpack-error "string truncated"))
-        (values
-         (if huffman-p
-             (utf-8-bytes-to-string
-              (huffman-decode-bytes data str-start str-end))
-             (utf-8-bytes-to-string data :start str-start :end str-end))
-         (+ consumed slen))))))
+        (if huffman-p
+            (let ((raw (huffman-decode-bytes data str-start str-end)))
+              (values (hpack-octets-to-string raw 0 (length raw))
+                      (+ consumed slen)
+                      (length raw)))
+            (values (hpack-octets-to-string data str-start str-end)
+                    (+ consumed slen)
+                    slen))))))
 
 (defun hpack-encode-string (string &key (huffman nil))
   "Encode HPACK string. When HUFFMAN is true, use RFC 7541 Huffman coding."
@@ -386,16 +458,31 @@
 
 ;;; Header block decoding (RFC 7541 Section 6)
 
+(defun hpack-read-literal-name (ctx data idx end index)
+  "Read a literal name that may be an index or a new string.
+   Returns (values name name-octets new-idx)."
+  (if (zerop index)
+      (multiple-value-bind (name consumed octets)
+          (hpack-decode-string data idx end)
+        (values name octets (+ idx consumed)))
+      (multiple-value-bind (name octets)
+          (hpack-indexed-name ctx index)
+        (values name octets idx))))
+
 (defun hpack-decode-headers (ctx data &key (start 0) (end (length data)))
   "Decode HPACK header block.
-   Returns list of (name . value) pairs as strings."
+   Returns list of (name . value) pairs as strings.
+   Dynamic table size updates are legal only before the first header
+   field and only up to SETTINGS_HEADER_TABLE_SIZE (RFC 7541 §4.2, §6.3)."
   (let ((headers nil)
-        (idx start))
+        (idx start)
+        (seen-field nil))
     (loop while (< idx end)
           for byte = (aref data idx)
           do (cond
                ;; Indexed Header Field (Section 6.1) - starts with 1
                ((logbitp 7 byte)
+                (setf seen-field t)
                 (multiple-value-bind (index consumed)
                     (hpack-decode-integer data idx 7 end)
                   (let ((entry (hpack-lookup-index ctx index)))
@@ -404,33 +491,41 @@
 
                ;; Literal Header Field with Incremental Indexing (Section 6.2.1) - starts with 01
                ((= (logand byte #xC0) #x40)
+                (setf seen-field t)
                 (multiple-value-bind (index consumed)
                     (hpack-decode-integer data idx 6 end)
                   (incf idx consumed)
-                  (let (name value)
-                    (if (zerop index)
-                        (multiple-value-bind (n c)
-                            (hpack-decode-string data idx end)
-                          (setf name n)
-                          (incf idx c))
-                        (setf name (car (hpack-lookup-index ctx index))))
-                    (multiple-value-bind (v c)
+                  (multiple-value-bind (name name-octets new-idx)
+                      (hpack-read-literal-name ctx data idx end index)
+                    (setf idx new-idx)
+                    (multiple-value-bind (value vconsumed value-octets)
                         (hpack-decode-string data idx end)
-                      (setf value v)
-                      (incf idx c))
-                    (hpack-context-add-entry ctx name value)
-                    (push (cons name value) headers))))
+                      (incf idx vconsumed)
+                      ;; Name string and its octet length are captured before
+                      ;; insertion, which may evict the referenced entry.
+                      (hpack-context-add-entry ctx name value
+                                               :name-octets name-octets
+                                               :value-octets value-octets)
+                      (push (cons name value) headers)))))
 
                ;; Dynamic Table Size Update (Section 6.3) - starts with 001
                ((= (logand byte #xE0) #x20)
+                (when seen-field
+                  (hpack-error "dynamic table size update after header field"))
                 (multiple-value-bind (size consumed)
                     (hpack-decode-integer data idx 5 end)
-                  (hpack-context-update-size ctx size)
+                  (unless (<= size (hpack-context-header-table-size-limit ctx))
+                    (hpack-error "dynamic table size update exceeds SETTINGS_HEADER_TABLE_SIZE"))
+                  ;; Do not call hpack-context-update-size: that would raise
+                  ;; the protocol ceiling.
+                  (setf (hpack-context-max-dynamic-table-size ctx) size)
+                  (hpack-context-evict ctx)
                   (incf idx consumed)))
 
                ;; Literal Header Field without Indexing (Section 6.2.2) - starts with 0000
                ;; Literal Header Field Never Indexed (Section 6.2.3) - starts with 0001
                (t
+                (setf seen-field t)
                 (let ((prefix-bits 4))
                   (multiple-value-bind (index consumed)
                       (hpack-decode-integer data idx prefix-bits end)

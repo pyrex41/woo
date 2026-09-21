@@ -15,6 +15,12 @@
            :http2-stream-awaiting-continuation
            :http2-stream-pending-end-stream
            :stream-transition
+           :stream-state-error
+           :stream-state-error-stream
+           :stream-state-error-event
+           :stream-state-error-state
+           :stream-state-error-code
+           :stream-state-error-connection-error-p
            :stream-open-p
            :stream-half-closed-remote-p
            :stream-closed-p
@@ -64,9 +70,55 @@
   "Check if stream is closed."
   (= (http2-stream-state stream) +state-closed+))
 
+(defun state-name (state)
+  "Return human-readable name for stream state."
+  (case state
+    (#.+state-idle+ "idle")
+    (#.+state-reserved-local+ "reserved (local)")
+    (#.+state-reserved-remote+ "reserved (remote)")
+    (#.+state-open+ "open")
+    (#.+state-half-closed-local+ "half-closed (local)")
+    (#.+state-half-closed-remote+ "half-closed (remote)")
+    (#.+state-closed+ "closed")
+    (t "unknown")))
+
+(define-condition stream-state-error (error)
+  ((stream :initarg :stream :reader stream-state-error-stream)
+   (event :initarg :event :reader stream-state-error-event)
+   (state :initarg :state :reader stream-state-error-state)
+   (error-code :initarg :error-code :reader stream-state-error-code)
+   (connection-error-p :initarg :connection-error-p
+                       :reader stream-state-error-connection-error-p))
+  (:report (lambda (condition out)
+             (format out "Cannot ~A in state ~A"
+                     (stream-state-error-event condition)
+                     (state-name (stream-state-error-state condition))))))
+
+(defun signal-stream-state-error (stream event old-state)
+  "Signal an illegal transition. Does not return.
+   Half-closed (remote) peer frames are a stream error (RST STREAM_CLOSED).
+   Closed is a connection error (GOAWAY STREAM_CLOSED). Other illegal
+   transitions are connection errors (GOAWAY PROTOCOL_ERROR)."
+  (multiple-value-bind (code connection-error-p)
+      (cond
+        ((and (= old-state +state-half-closed-remote+)
+              (member event '(:recv-headers :recv-end-stream :recv-push-promise)))
+         (values +stream-closed+ nil))
+        ((= old-state +state-closed+)
+         (values +stream-closed+ t))
+        (t
+         (values +protocol-error+ t)))
+    (error 'stream-state-error
+           :stream stream
+           :event event
+           :state old-state
+           :error-code code
+           :connection-error-p connection-error-p)))
+
 (defun stream-transition (stream event)
   "Transition stream state based on event.
-   Returns the new state, or signals an error for invalid transitions.
+   Returns the new state, or signals stream-state-error for invalid transitions.
+   END_STREAM is a separate event from the frame that carries it (RFC 9113 §5.1).
 
    Events:
    - :send-headers - Sending HEADERS frame
@@ -84,36 +136,37 @@
               (case old-state
                 (#.+state-idle+ +state-open+)
                 (#.+state-reserved-local+ +state-half-closed-remote+)
-                (t (error "Cannot send HEADERS in state ~A" old-state))))
+                (t (signal-stream-state-error stream event old-state))))
 
              (:recv-headers
               (case old-state
                 (#.+state-idle+ +state-open+)
                 (#.+state-reserved-remote+ +state-half-closed-local+)
-                (#.+state-half-closed-local+ old-state)  ; Trailing headers
-                (t (error "Cannot receive HEADERS in state ~A" old-state))))
+                ;; Trailers. END_STREAM, if set, is :recv-end-stream.
+                ((#.+state-open+ #.+state-half-closed-local+) old-state)
+                (t (signal-stream-state-error stream event old-state))))
 
              (:send-end-stream
               (case old-state
                 (#.+state-open+ +state-half-closed-local+)
                 (#.+state-half-closed-remote+ +state-closed+)
-                (t (error "Cannot send END_STREAM in state ~A" old-state))))
+                (t (signal-stream-state-error stream event old-state))))
 
              (:recv-end-stream
               (case old-state
                 (#.+state-open+ +state-half-closed-remote+)
                 (#.+state-half-closed-local+ +state-closed+)
-                (t (error "Cannot receive END_STREAM in state ~A" old-state))))
+                (t (signal-stream-state-error stream event old-state))))
 
              (:send-push-promise
               (case old-state
                 (#.+state-idle+ +state-reserved-local+)
-                (t (error "Cannot send PUSH_PROMISE in state ~A" old-state))))
+                (t (signal-stream-state-error stream event old-state))))
 
              (:recv-push-promise
               (case old-state
                 (#.+state-idle+ +state-reserved-remote+)
-                (t (error "Cannot receive PUSH_PROMISE in state ~A" old-state))))
+                (t (signal-stream-state-error stream event old-state))))
 
              (:send-rst
               +state-closed+)
@@ -124,15 +177,3 @@
              (t (error "Unknown stream event: ~A" event)))))
     (setf (http2-stream-state stream) new-state)
     new-state))
-
-(defun state-name (state)
-  "Return human-readable name for stream state."
-  (case state
-    (#.+state-idle+ "idle")
-    (#.+state-reserved-local+ "reserved (local)")
-    (#.+state-reserved-remote+ "reserved (remote)")
-    (#.+state-open+ "open")
-    (#.+state-half-closed-local+ "half-closed (local)")
-    (#.+state-half-closed-remote+ "half-closed (remote)")
-    (#.+state-closed+ "closed")
-    (t "unknown")))

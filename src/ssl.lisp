@@ -30,8 +30,10 @@
   "Whether ALPN has been configured on the SSL context.")
 
 (defun configure-alpn (&optional (protocols *alpn-protocols*))
-  "Configure ALPN on the global SSL context with PROTOCOLS (preference order).
-   Always updates the selector so later calls are not first-wins-sticky."
+  "Configure ALPN on the current SSL_CTX with PROTOCOLS (preference order).
+   Always updates the selector so later calls are not first-wins-sticky.
+   The callback argument is owned by that SSL_CTX, not a process-global
+   C buffer, and is not freed here: a worker may be inside the callback."
   (setf *alpn-protocols* protocols)
   (handler-case
       (let ((ctx cl+ssl::*ssl-global-context*))

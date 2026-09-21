@@ -29,10 +29,16 @@
                 :+settings-max-concurrent-streams+
                 :+settings-initial-window-size+
                 :+settings-max-frame-size+
+                :+settings-enable-push+
+                :+settings-max-header-list-size+
+                :+default-max-header-list-size+
                 :+protocol-error+
                 :+stream-closed+
+                :+internal-error+
                 :+frame-size-error+
                 :+flow-control-error+
+                :+enhance-your-calm+
+                :+cancel+
                 :+flag-end-stream+
                 :+flag-end-headers+
                 :+flag-padded+
@@ -41,6 +47,11 @@
                 :+frame-data+
                 :+frame-continuation+
                 :+frame-settings+
+                :+frame-ping+
+                :+frame-goaway+
+                :+frame-rst-stream+
+                :+frame-push-promise+
+                :+frame-window-update+
                 :+min-max-frame-size+
                 :+max-frame-size-limit+
                 :+max-window-size+)
@@ -49,24 +60,37 @@
                 :http2-stream-state
                 :http2-stream-window-size
                 :http2-stream-recv-window-size
+                :http2-stream-content-length
+                :http2-stream-bytes-received
                 :http2-stream-pending-end-stream
                 :http2-stream-awaiting-continuation
                 :http2-stream-headers
                 :+state-idle+
+                :+state-reserved-local+
                 :+state-closed+
+                :stream-transition
+                :stream-open-p
                 :stream-closed-p
                 :stream-half-closed-remote-p)
   (:import-from :woo.http2.frames
                 :make-frame
                 :make-headers-frame
+                :make-continuation-frame
                 :make-data-frame
                 :make-settings-frame
                 :make-settings-ack-frame
                 :make-window-update-frame
+                :make-ping-frame
+                :make-goaway-frame
+                :make-rst-stream-frame
+                :make-push-promise-frame
                 :parse-frame
+                :parse-settings-payload
                 :serialize-frame
                 :frame-payload)
   (:import-from :woo.http2.hpack
+                :make-hpack-context
+                :hpack-encode-headers
                 :hpack-context-max-dynamic-table-size))
 (in-package :woo-test.http2-connection)
 
@@ -126,7 +150,8 @@
         (let ((max-concurrent (cdr (assoc +settings-max-concurrent-streams+ settings)))
               (initial-window (cdr (assoc +settings-initial-window-size+ settings)))
               (max-frame-size (cdr (assoc +settings-max-frame-size+ settings)))
-              (header-table-size (cdr (assoc +settings-header-table-size+ settings))))
+              (header-table-size (cdr (assoc +settings-header-table-size+ settings)))
+              (header-list-size (cdr (assoc +settings-max-header-list-size+ settings))))
 
           (ok (= 100 max-concurrent)
               "Max concurrent streams is 100")
@@ -135,7 +160,9 @@
           (ok (= +default-max-frame-size+ max-frame-size)
               "Max frame size matches default")
           (ok (= +default-header-table-size+ header-table-size)
-              "Header table size matches default"))))))
+              "Header table size matches default")
+          (ok (= +default-max-header-list-size+ header-list-size)
+              "SETTINGS_MAX_HEADER_LIST_SIZE is advertised"))))))
 
 (deftest connection-remote-settings
   (testing "Connection starts with nil remote settings"
@@ -519,7 +546,16 @@
       (connection-process-frame
        conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
                                            :initial-element 1)))
-      (ok (= (funcall err) +flow-control-error+))))
+      (ok (= (funcall err) +flow-control-error+))
+      (ok (= (http2-connection-window-size conn) 5)
+          "overflow does not debit the recv window")
+      (ok (= (http2-connection-remote-window-size conn)
+             +default-initial-window-size+)
+          "overflow does not touch the send window")
+      (ok (http2-connection-goaway-sent conn)
+          "flow-control overflow is a connection error")
+      (ok (null (woo.http2.connection::http2-connection-last-rst conn))
+          "flow-control overflow is not a stream RST")))
 
   (testing "DATA after END_STREAM is STREAM_CLOSED"
     (multiple-value-bind (conn err)
@@ -529,7 +565,14 @@
       (connection-process-frame
        conn (make-data-frame 1 (make-array 1 :element-type '(unsigned-byte 8)
                                            :initial-element 1)))
-      (ok (= (funcall err) +stream-closed+))))
+      (ok (= (funcall err) +stream-closed+))
+      (ok (not (http2-connection-goaway-sent conn))
+          "DATA after END_STREAM is RST, not GOAWAY")
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +stream-closed+)))
+      (ok (= (http2-connection-window-size conn) +default-initial-window-size+)
+          "rejected DATA does not debit the recv window")
+      (ok (stream-closed-p (connection-get-stream conn 1)))))
 
   (testing "Empty DATA does not apply increment 0"
     (multiple-value-bind (conn err)
@@ -538,3 +581,575 @@
        conn (make-headers-frame 1 #() :end-headers t))
       (connection-process-frame conn (make-window-update-frame 1 0))
       (ok (= (funcall err) +protocol-error+)))))
+
+(deftest b4-trailers-and-state-errors
+  (testing "HEADERS in open with END_STREAM are trailers and half-close remote"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((ends nil))
+        (setf (woo.http2.connection::http2-connection-on-headers conn)
+              (lambda (stream headers end-stream)
+                (declare (ignore stream headers))
+                (push end-stream ends)))
+        (connection-process-frame
+         conn (make-headers-frame 1 #() :end-headers t))
+        (ok (stream-open-p (connection-get-stream conn 1)))
+        (connection-process-frame
+         conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (null (woo.http2.connection::http2-connection-last-rst conn)))
+        (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))
+        (ok (equal (reverse ends) '(nil t))))))
+
+  (testing "HEADERS on reserved-local is GOAWAY PROTOCOL_ERROR, not INTERNAL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((stream (connection-get-stream conn 1 :create t)))
+        (stream-transition stream :send-push-promise)
+        (ok (= (http2-stream-state stream) +state-reserved-local+)))
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (/= (funcall err) +internal-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (woo.http2.connection::http2-connection-last-rst conn)))))
+
+  (testing "HEADERS on half-closed-remote is RST STREAM_CLOSED, not GOAWAY"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((stream (connection-get-stream conn 1 :create t)))
+        (stream-transition stream :recv-headers)
+        (stream-transition stream :recv-end-stream)
+        (setf (http2-stream-awaiting-continuation stream) t)
+        (setf (http2-connection-awaiting-continuation-stream-id conn) 1))
+      (connection-process-frame
+       conn (make-continuation-frame 1 #()))
+      (ok (= (funcall err) +stream-closed+))
+      (ok (/= (funcall err) +internal-error+))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +stream-closed+)))
+      (ok (stream-closed-p (connection-get-stream conn 1))))))
+
+(defun ub8 (n &optional (byte 0))
+  (make-array n :element-type '(unsigned-byte 8) :initial-element byte))
+
+(defun hpack-block (headers)
+  (hpack-encode-headers (make-hpack-context) headers))
+
+(defun headers-of (stream-id headers &key end-stream (end-headers t))
+  (make-headers-frame stream-id (hpack-block headers)
+                      :end-stream end-stream
+                      :end-headers end-headers))
+
+(defun set-header-list-limit (conn n)
+  (setf (cdr (assoc +settings-max-header-list-size+
+                    (http2-connection-local-settings conn)))
+        n))
+
+(defun concat-octets (&rest parts)
+  (let* ((len (reduce #'+ parts :key #'length :initial-value 0))
+         (out (make-array len :element-type '(unsigned-byte 8)))
+         (start 0))
+    (dolist (part parts out)
+      (replace out part :start1 start)
+      (incf start (length part)))))
+
+(defun parse-bytes (conn bytes)
+  (woo.http2.connection::parse-connection-data conn bytes 0 (length bytes)))
+
+(defun last-rst (conn)
+  (woo.http2.connection::http2-connection-last-rst conn))
+
+(deftest content-length-checks
+  (testing "non-integer content-length is RST PROTOCOL_ERROR and the connection stays up"
+    (dolist (bad '("nope" "" "4 " " 4" "-1" "+4" "4.0" "4,4" "4, 4"))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (let ((headers-called nil))
+          (setf (woo.http2.connection::http2-connection-on-headers conn)
+                (lambda (stream headers end-stream)
+                  (declare (ignore stream headers end-stream))
+                  (setf headers-called t)))
+          (connection-process-frame
+           conn (headers-of 1 `(("content-length" . ,bad)) :end-stream t))
+          (ok (not headers-called) bad)
+          (ok (= (funcall err) +protocol-error+) bad)
+          (ok (/= (funcall err) +internal-error+) bad)
+          (ok (not (http2-connection-goaway-sent conn)) bad)
+          (ok (equal (last-rst conn) (cons 1 +protocol-error+)) bad)
+          (ok (stream-closed-p (connection-get-stream conn 1)) bad)
+          (connection-process-frame
+           conn (make-headers-frame 3 #() :end-headers t))
+          (ok (not (http2-connection-goaway-sent conn)) bad)
+          (ok (stream-open-p (connection-get-stream conn 3)) bad)))))
+
+  (testing "duplicate content-length values are RST PROTOCOL_ERROR"
+    (dolist (values '(("4" "4") ("4" "5")))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (connection-process-frame
+         conn (headers-of 1 (mapcar (lambda (v) (cons "content-length" v)) values)
+                          :end-stream t))
+        (ok (= (funcall err) +protocol-error+))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal (last-rst conn) (cons 1 +protocol-error+))))))
+
+  (testing "a later content-length is a duplicate even when it matches"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((n 0))
+        (setf (woo.http2.connection::http2-connection-on-headers conn)
+              (lambda (stream headers end-stream)
+                (declare (ignore stream headers end-stream))
+                (incf n)))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "4"))))
+        (ok (= n 1))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 4 97)))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "4")) :end-stream t))
+        (ok (= n 1))
+        (ok (= (funcall err) +protocol-error+))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal (last-rst conn) (cons 1 +protocol-error+))))))
+
+  (testing "content-length 0 with END_STREAM and no body is valid"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((saw nil))
+        (setf (woo.http2.connection::http2-connection-on-headers conn)
+              (lambda (stream headers end-stream)
+                (declare (ignore headers))
+                (setf saw (list (http2-stream-content-length stream) end-stream))))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "0")) :end-stream t))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal saw '(0 t)))
+        (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))
+        (ok (= 0 (http2-stream-bytes-received (connection-get-stream conn 1)))))))
+
+  (testing "content-length 0 then a body byte is RST PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((data-called nil))
+        (setf (woo.http2.connection::http2-connection-on-data conn)
+              (lambda (stream data end-stream)
+                (declare (ignore stream data end-stream))
+                (setf data-called t)))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "0"))))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 1 97) :end-stream t))
+        (ok (not data-called))
+        (ok (= (funcall err) +protocol-error+))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal (last-rst conn) (cons 1 +protocol-error+))))))
+
+  (testing "END_STREAM shorter than content-length is RST and not delivered"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((data-called nil))
+        (setf (woo.http2.connection::http2-connection-on-data conn)
+              (lambda (stream data end-stream)
+                (declare (ignore stream data end-stream))
+                (setf data-called t)))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "4"))))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 3 97) :end-stream t))
+        (ok (not data-called))
+        (ok (= (funcall err) +protocol-error+))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (stream-closed-p (connection-get-stream conn 1))))))
+
+  (testing "a body longer than content-length is RST before END_STREAM"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((chunks 0))
+        (setf (woo.http2.connection::http2-connection-on-data conn)
+              (lambda (stream data end-stream)
+                (declare (ignore stream data end-stream))
+                (incf chunks)))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "4"))))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 2 97)))
+        (ok (null (funcall err)))
+        (ok (= chunks 1))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 3 97)))
+        (ok (= chunks 1))
+        (ok (= (funcall err) +protocol-error+))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal (last-rst conn) (cons 1 +protocol-error+))))))
+
+  (testing "bytes-received must equal content-length at END_STREAM"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((chunks 0))
+        (setf (woo.http2.connection::http2-connection-on-data conn)
+              (lambda (stream data end-stream)
+                (declare (ignore stream data end-stream))
+                (incf chunks)))
+        (connection-process-frame
+         conn (headers-of 1 '(("content-length" . "4"))))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 2 97)))
+        (connection-process-frame
+         conn (make-data-frame 1 (ub8 2 98) :end-stream t))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (= chunks 2))
+        (let ((stream (connection-get-stream conn 1)))
+          (ok (= 4 (http2-stream-content-length stream)))
+          (ok (= 4 (http2-stream-bytes-received stream)))
+          (ok (stream-half-closed-remote-p stream)))))))
+
+(deftest ignored-frames-are-connection-errors
+  (testing "client PUSH_PROMISE is GOAWAY PROTOCOL_ERROR and stops the connection"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-push-promise-frame 1 2 (ub8 0)))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (last-rst conn)))
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (ok (null (connection-get-stream conn 1)))))
+
+  (testing "PING with a non-zero stream id is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type +frame-ping+ :flags 0 :stream-id 1 :payload (ub8 8)))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (last-rst conn)))))
+
+  (testing "PING whose payload is not 8 octets is FRAME_SIZE_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type +frame-ping+ :flags 0 :stream-id 0 :payload (ub8 3)))
+      (ok (= (funcall err) +frame-size-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "a valid PING is not an error"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-ping-frame (ub8 8 7)))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "WINDOW_UPDATE on an idle stream is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-window-update-frame 1 1000))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (last-rst conn)))
+      (ok (= (http2-connection-remote-window-size conn)
+             +default-initial-window-size+))
+      (ok (= (http2-connection-window-size conn)
+             +default-initial-window-size+))))
+
+  (testing "WINDOW_UPDATE on an explicitly idle stream is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-get-stream conn 1 :create t)
+      (connection-process-frame conn (make-window-update-frame 1 50))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "WINDOW_UPDATE on stream 0 credits only the send window"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((recv (http2-connection-window-size conn)))
+        (connection-process-frame conn (make-window-update-frame 0 1000))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (= (http2-connection-remote-window-size conn)
+               (+ +default-initial-window-size+ 1000)))
+        (ok (= (http2-connection-window-size conn) recv)))))
+
+  (testing "WINDOW_UPDATE on an open stream credits the stream send window"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (let ((stream (connection-get-stream conn 1))
+            (recv (http2-stream-recv-window-size
+                   (connection-get-stream conn 1))))
+        (connection-process-frame conn (make-window-update-frame 1 25))
+        (ok (null (funcall err)))
+        (ok (= (http2-stream-window-size stream)
+               (+ +default-initial-window-size+ 25)))
+        (ok (= (http2-stream-recv-window-size stream) recv)))))
+
+  (testing "WINDOW_UPDATE on half-closed (remote) is not an error"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (let ((stream (connection-get-stream conn 1)))
+        (connection-process-frame conn (make-window-update-frame 1 10))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (null (last-rst conn)))
+        (ok (stream-half-closed-remote-p stream))
+        (ok (= (http2-stream-window-size stream)
+               (+ +default-initial-window-size+ 10))))))
+
+  (testing "RST_STREAM on stream 0 is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-rst-stream-frame 0 +cancel+))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (last-rst conn)))))
+
+  (testing "RST_STREAM on an idle stream is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-rst-stream-frame 1 +cancel+))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "RST_STREAM payload other than 4 octets is FRAME_SIZE_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type +frame-rst-stream+ :flags 0 :stream-id 1
+                        :payload (ub8 2)))
+      (ok (= (funcall err) +frame-size-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "RST_STREAM on an open stream closes it and leaves the connection up"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (connection-process-frame conn (make-rst-stream-frame 1 +cancel+))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (null (last-rst conn)))
+      (ok (stream-closed-p (connection-get-stream conn 1)))
+      (connection-process-frame conn (make-rst-stream-frame 1 +cancel+))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "GOAWAY on a non-zero stream is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((called nil))
+        (setf (woo.http2.connection::http2-connection-on-goaway conn)
+              (lambda (last code debug)
+                (declare (ignore last code debug))
+                (setf called t)))
+        (connection-process-frame
+         conn (make-frame :type +frame-goaway+ :flags 0 :stream-id 1
+                          :payload (ub8 8)))
+        (ok (not called))
+        (ok (= (funcall err) +protocol-error+))
+        (ok (http2-connection-goaway-sent conn))
+        (ok (not (woo.http2.connection::http2-connection-goaway-received conn))))))
+
+  (testing "GOAWAY shorter than 8 octets is FRAME_SIZE_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type +frame-goaway+ :flags 0 :stream-id 0
+                        :payload (ub8 7)))
+      (ok (= (funcall err) +frame-size-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "a valid GOAWAY is delivered and is not a connection error"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((got nil))
+        (setf (woo.http2.connection::http2-connection-on-goaway conn)
+              (lambda (last code debug)
+                (declare (ignore debug))
+                (setf got (list last code))))
+        (connection-process-frame
+         conn (make-goaway-frame 7 +protocol-error+))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (woo.http2.connection::http2-connection-goaway-received conn))
+        (ok (equal got (list 7 +protocol-error+))))))
+
+  (testing "SETTINGS_ENABLE_PUSH other than 0 or 1 is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-settings-frame (list (cons +settings-enable-push+ 2))))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (assoc +settings-enable-push+
+                       (http2-connection-remote-settings conn))))))
+
+  (testing "SETTINGS_ENABLE_PUSH 0 and 1 are accepted"
+    (dolist (value '(0 1))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (connection-process-frame
+         conn (make-settings-frame (list (cons +settings-enable-push+ value))))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (= value (cdr (assoc +settings-enable-push+
+                                 (http2-connection-remote-settings conn))))))))
+
+  (testing "an unknown frame type is still ignored"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type 20 :flags 0 :stream-id 0 :payload (ub8 0)))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "the first frame after the preface must be SETTINGS"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (parse-bytes conn
+                   (concat-octets
+                    +connection-preface+
+                    (serialize-frame (make-frame :type +frame-ping+
+                                                 :flags 0 :stream-id 0
+                                                 :payload (ub8 8)))
+                    (serialize-frame (make-headers-frame 1 #()
+                                                        :end-headers t
+                                                        :end-stream t))))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (connection-get-stream conn 1)))
+      (parse-bytes conn (serialize-frame (make-headers-frame 3 #() :end-headers t)))
+      (ok (null (connection-get-stream conn 3)))))
+
+  (testing "SETTINGS ACK is not a valid first frame"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (parse-bytes conn
+                   (concat-octets +connection-preface+
+                                  (serialize-frame (make-settings-ack-frame))))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "preface followed by SETTINGS then other frames is accepted"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (parse-bytes conn
+                   (concat-octets
+                    +connection-preface+
+                    (serialize-frame (make-settings-frame nil))
+                    (serialize-frame (make-ping-frame (ub8 8)))
+                    (serialize-frame (make-headers-frame 1 #() :end-headers t))))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (woo.http2.connection::http2-connection-preface-received conn))
+      (ok (not (woo.http2.connection::http2-connection-awaiting-first-settings conn)))
+      (ok (stream-open-p (connection-get-stream conn 1))))))
+
+(deftest data-after-remote-close-is-stream-error
+  (testing "DATA on a fully closed stream is RST STREAM_CLOSED, not GOAWAY"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (let ((stream (connection-get-stream conn 1)))
+        (stream-transition stream :send-end-stream)
+        (ok (stream-closed-p stream))
+        (let ((recv (http2-connection-window-size conn))
+              (send (http2-connection-remote-window-size conn)))
+          (connection-process-frame
+           conn (make-data-frame 1 (ub8 4 1)))
+          (ok (= (funcall err) +stream-closed+))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (equal (last-rst conn) (cons 1 +stream-closed+)))
+          (ok (= (http2-connection-window-size conn) recv))
+          (ok (= (http2-connection-remote-window-size conn) send))
+          (connection-process-frame
+           conn (make-headers-frame 3 #() :end-headers t))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (stream-open-p (connection-get-stream conn 3))))))))
+
+(deftest header-list-size-limit
+  (testing "SETTINGS_MAX_HEADER_LIST_SIZE is on the advertised SETTINGS frame"
+    (let* ((conn (make-http2-connection))
+           (frame (make-settings-frame (http2-connection-local-settings conn)))
+           (parsed (parse-settings-payload (frame-payload frame))))
+      (ok (= +settings-max-header-list-size+ #x6))
+      (ok (= +default-max-header-list-size+
+             (cdr (assoc +settings-max-header-list-size+ parsed))))))
+
+  (testing "a peer SETTINGS_MAX_HEADER_LIST_SIZE is accepted"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-settings-frame (list (cons +settings-max-header-list-size+ 1000))))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (= 1000 (cdr (assoc +settings-max-header-list-size+
+                              (http2-connection-remote-settings conn)))))))
+
+  (testing "a header block over the cap is GOAWAY ENHANCE_YOUR_CALM before decode"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (set-header-list-limit conn 10)
+      (connection-process-frame
+       conn (make-headers-frame 1 (ub8 20 #xff) :end-headers t))
+      (ok (= (funcall err) +enhance-your-calm+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (last-rst conn)))
+      (ok (null (connection-get-stream conn 1)))))
+
+  (testing "CONTINUATION concatenation is capped before the block is complete"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (set-header-list-limit conn 8)
+      (connection-process-frame
+       conn (make-headers-frame 1 (ub8 4) :end-headers nil))
+      (ok (null (funcall err)))
+      (ok (= 1 (http2-connection-awaiting-continuation-stream-id conn)))
+      (connection-process-frame
+       conn (make-continuation-frame 1 (ub8 5) :end-headers nil))
+      (ok (= (funcall err) +enhance-your-calm+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (http2-connection-awaiting-continuation-stream-id conn)))
+      (connection-process-frame
+       conn (make-headers-frame 3 #() :end-headers t))
+      (ok (null (connection-get-stream conn 3)))))
+
+  (testing "uncompressed header list at the cap is accepted and one octet over is not"
+    (let ((size (woo.http2.connection::uncompressed-header-list-size
+                 '(("a" . "b")))))
+      (ok (= size 34))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (set-header-list-limit conn size)
+        (connection-process-frame
+         conn (headers-of 1 '(("a" . "b"))))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (stream-open-p (connection-get-stream conn 1))))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (let ((called nil))
+          (setf (woo.http2.connection::http2-connection-on-headers conn)
+                (lambda (stream headers end-stream)
+                  (declare (ignore stream headers end-stream))
+                  (setf called t)))
+          (set-header-list-limit conn (1- size))
+          (connection-process-frame
+           conn (headers-of 1 '(("a" . "b"))))
+          (ok (not called))
+          (ok (= (funcall err) +enhance-your-calm+))
+          (ok (http2-connection-goaway-sent conn))
+          (ok (null (last-rst conn)))
+          (let ((stream (connection-get-stream conn 1)))
+            (ok stream)
+            (ok (= +state-idle+ (http2-stream-state stream)))))))))

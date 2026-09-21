@@ -484,7 +484,7 @@
       (loop for opcode in opcodes
             do (let ((frame (woo.websocket::make-frame opcode payload :fin t :mask nil)))
                  (ok (= (logand (aref frame 0) #x0F) opcode)
-                     (format nil "Frame should have correct opcode ~X" opcode))))))
+                     (format nil "Frame should have correct opcode ~X" opcode)))))))
 
 ;;; B12: RFC 6455 client-frame rules
 (defun apply-mask (payload key)
@@ -608,3 +608,334 @@
           "Opcode should be in low 4 bits of first byte")
       (ok (= (logand (aref frame 0) #xF0) #x80)
           "FIN bit should be in high bit of first byte"))))
+
+;;; B1/B2: a rejected frame must not parse as success on retry, and the
+;;; reader must stop. Fragmentation, reserved opcodes, and close bodies
+;;; fail the connection; the fragment buffer stays within +max-ws-payload+.
+
+(defun ws-octets (&rest bytes)
+  (make-array (length bytes) :element-type '(unsigned-byte 8)
+              :initial-contents bytes))
+
+(defun concat-octets (&rest parts)
+  (let* ((n (reduce #'+ parts :key #'length :initial-value 0))
+         (out (make-array n :element-type '(unsigned-byte 8)))
+         (i 0))
+    (dolist (p parts out)
+      (replace out p :start1 i)
+      (incf i (length p)))))
+
+(defun ws-buffer-copy (state)
+  (let ((buf (woo.websocket::ws-state-buffer state)))
+    (subseq buf 0 (length buf))))
+
+(defun feed-ws (state bytes)
+  (let* ((buf (woo.websocket::ws-state-buffer state))
+         (old (length buf))
+         (grown (adjust-array buf (+ old (length bytes))
+                              :fill-pointer (+ old (length bytes)))))
+    (setf (woo.websocket::ws-state-buffer state) grown)
+    (replace grown bytes :start1 old))
+  (woo.websocket::parse-frame state))
+
+(defun make-parse-state (&key on-message on-ping on-pong on-close on-error)
+  (woo.websocket::make-ws-state
+   :on-message on-message
+   :on-ping on-ping
+   :on-pong on-pong
+   :on-close on-close
+   :on-error on-error))
+
+(defun assert-rejected-stays-rejected (bytes)
+  "A rejected frame stays buffered and the next parse is still not T."
+  (let* ((errors 0)
+         (state (make-parse-state
+                 :on-error (lambda (e)
+                             (declare (ignore e))
+                             (incf errors)))))
+    (ok (eq (feed-ws state bytes) :error))
+    (let ((buffered (ws-buffer-copy state)))
+      (ok (equalp buffered bytes)
+          "rejected frame is not consumed")
+      (ok (not (eq (woo.websocket::parse-frame state) t))
+          "retrying the same buffer must not succeed")
+      (ok (eq (woo.websocket::parse-frame state) :error))
+      (ok (equalp (ws-buffer-copy state) buffered))
+      (ok (= errors 1)
+          "a failed connection is not parsed again"))))
+
+(defmacro with-stubbed-close ((closed) &body body)
+  "Record CLOSE-SOCKET calls. A bare test socket must not reach the real closer."
+  (let ((sym (gensym)) (orig (gensym)))
+    `(let* ((,sym (find-symbol "CLOSE-SOCKET" :woo.websocket))
+            (,orig (symbol-function ,sym))
+            (,closed nil))
+       (unwind-protect
+            (progn
+              (setf (symbol-function ,sym)
+                    (lambda (socket)
+                      (push socket ,closed)
+                      (setf (woo.ev.socket:socket-open-p socket) nil)
+                      t))
+              ,@body)
+         (setf (symbol-function ,sym) ,orig)))))
+
+(defun make-bare-socket ()
+  (woo.ev.socket::%make-socket
+   :fd 0
+   :last-activity 0.0d0
+   :open-p t
+   :watchers (make-array 3 :initial-element (cffi:null-pointer))))
+
+(deftest test-rejected-frame-is-not-success-on-retry
+  (testing "unmasked client frame"
+    (assert-rejected-stays-rejected
+     (unmasked-frame +opcode-text+ (string-to-utf-8-bytes "nope"))))
+  (testing "reserved opcode"
+    (assert-rejected-stays-rejected
+     (masked-frame #x3 (string-to-utf-8-bytes "x"))))
+  (testing "one-octet close body"
+    (assert-rejected-stays-rejected
+     (masked-frame +opcode-close+ (ws-octets 1)))))
+
+(deftest test-setup-websocket-stops-on-rejected-frame
+  (testing "reader returns, closes the socket, and does not parse again"
+    (with-stubbed-close (closed)
+      (let* ((errors 0)
+             (messages nil)
+             (socket (make-bare-socket))
+             (bad (unmasked-frame +opcode-text+ (string-to-utf-8-bytes "spin")))
+             (good (masked-frame +opcode-text+ (string-to-utf-8-bytes "ok")))
+             (state (setup-websocket
+                     socket
+                     :on-message (lambda (op data)
+                                   (push (list op (copy-seq data)) messages))
+                     :on-ping (lambda (payload) (declare (ignore payload)))
+                     :on-close (lambda (code reason)
+                                 (declare (ignore code reason)))
+                     :on-error (lambda (e)
+                                 (declare (ignore e))
+                                 (incf errors))))
+             (reader (woo.ev.socket:socket-data socket))
+             (stopped t))
+        #+sbcl
+        (handler-case
+            (sb-ext:with-timeout 1
+              (funcall reader bad)
+              (funcall reader good))
+          (sb-ext:timeout ()
+            (setf stopped nil)))
+        #-sbcl
+        (progn
+          (funcall reader bad)
+          (funcall reader good))
+        (ok stopped "setup-websocket stops after a rejected frame")
+        (when stopped
+          (ok (= errors 1))
+          (ok closed "socket was closed")
+          (ok (not (woo.ev.socket:socket-open-p socket)))
+          (ok (null messages) "rejected frame is not a message")
+          (ok (equalp (ws-buffer-copy state) bad)
+              "later bytes are not parsed onto the rejected frame")
+          (ok (woo.websocket::ws-state-failed state))
+          (ok (not (eq (woo.websocket::parse-frame state) t)))
+          (ok (eq (woo.websocket::parse-frame state) :error))))))
+  (testing "T still consumes every complete frame, NIL waits"
+    (with-stubbed-close (closed)
+      (let* ((messages nil)
+             (socket (make-bare-socket))
+             (hello (masked-frame +opcode-text+ (string-to-utf-8-bytes "Hello")))
+             (state (setup-websocket
+                     socket
+                     :on-message (lambda (op data)
+                                   (push (list op (copy-seq data)) messages))
+                     :on-ping (lambda (payload) (declare (ignore payload)))
+                     :on-close (lambda (code reason)
+                                 (declare (ignore code reason)))))
+             (reader (woo.ev.socket:socket-data socket)))
+        (funcall reader (concat-octets
+                         (masked-frame +opcode-text+ (string-to-utf-8-bytes "A"))
+                         (masked-frame +opcode-text+ (string-to-utf-8-bytes "B"))))
+        (ok (= (length messages) 2))
+        (ok (null closed))
+        (funcall reader (subseq hello 0 4))
+        (ok (= (length messages) 2))
+        (ok (woo.ev.socket:socket-open-p socket))
+        (funcall reader (subseq hello 4))
+        (ok (= (length messages) 3))
+        (ok (equalp (second (first messages)) (string-to-utf-8-bytes "Hello")))
+        (ok (null (woo.websocket::ws-state-failed state))))))
+  (testing "a good frame followed by a rejected one stops before the next frame"
+    (with-stubbed-close (closed)
+      (let* ((messages nil)
+             (socket (make-bare-socket))
+             (state (setup-websocket
+                     socket
+                     :on-message (lambda (op data)
+                                   (push (list op (copy-seq data)) messages))
+                     :on-ping (lambda (payload) (declare (ignore payload)))
+                     :on-close (lambda (code reason)
+                                 (declare (ignore code reason)))))
+             (reader (woo.ev.socket:socket-data socket)))
+        (funcall reader
+                 (concat-octets
+                  (masked-frame +opcode-text+ (string-to-utf-8-bytes "A"))
+                  (unmasked-frame +opcode-text+ (string-to-utf-8-bytes "bad"))
+                  (masked-frame +opcode-text+ (string-to-utf-8-bytes "C"))))
+        (ok (= (length messages) 1))
+        (ok (equalp (second (first messages)) (string-to-utf-8-bytes "A")))
+        (ok closed)
+        (ok (woo.websocket::ws-state-failed state))
+        (ok (not (eq (woo.websocket::parse-frame state) t)))
+        (ok (eq (woo.websocket::parse-frame state) :error))))))
+
+(deftest test-ws-data-fragment-state-machine
+  (testing "fragmented text reassembles and keeps the original opcode"
+    (let* ((messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (push (list op (copy-seq data)) messages)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-text+
+                                           (string-to-utf-8-bytes "He")
+                                           :fin nil))
+              t))
+      (ok (null messages))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+
+                                           (string-to-utf-8-bytes "l")
+                                           :fin nil))
+              t))
+      (ok (null messages))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+
+                                           (string-to-utf-8-bytes "lo")))
+              t))
+      (ok (= (length messages) 1))
+      (ok (= (first (first messages)) +opcode-text+))
+      (ok (equalp (second (first messages)) (string-to-utf-8-bytes "Hello")))
+      (ok (null (woo.websocket::ws-state-fragment-opcode state)))))
+  (testing "binary fragments keep the binary opcode"
+    (let* ((messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (push (list op (copy-seq data)) messages)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-binary+ (ws-octets 1 2) :fin nil))
+              t))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+ (ws-octets 3)))
+              t))
+      (ok (equalp (first messages) (list +opcode-binary+ (ws-octets 1 2 3))))))
+  (testing "continuation with no open fragment fails the connection"
+    (assert-rejected-stays-rejected
+     (masked-frame +opcode-continuation+ (string-to-utf-8-bytes "lo"))))
+  (testing "a new data opcode while fragmented fails the connection"
+    (let* ((messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (push (list op (copy-seq data)) messages)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-text+
+                                           (string-to-utf-8-bytes "aa")
+                                           :fin nil))
+              t))
+      (let ((bad (masked-frame +opcode-text+ (string-to-utf-8-bytes "bb") :fin nil)))
+        (ok (eq (feed-ws state bad) :error))
+        (ok (null messages))
+        (ok (equalp (ws-buffer-copy state) bad))
+        (ok (not (eq (woo.websocket::parse-frame state) t)))
+        (ok (eq (woo.websocket::parse-frame state) :error)))))
+  (testing "control frames may arrive between fragments"
+    (let* ((messages nil)
+           (pings nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (push (list op (copy-seq data)) messages))
+                   :on-ping (lambda (payload)
+                              (push (copy-seq payload) pings)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-text+
+                                           (string-to-utf-8-bytes "AB")
+                                           :fin nil))
+              t))
+      (ok (eq (feed-ws state (masked-frame +opcode-ping+ (string-to-utf-8-bytes "Z")))
+              t))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+
+                                           (string-to-utf-8-bytes "CD")))
+              t))
+      (ok (equalp (first pings) (string-to-utf-8-bytes "Z")))
+      (ok (equalp (first messages)
+                  (list +opcode-text+ (string-to-utf-8-bytes "ABCD")))))))
+
+(deftest test-ws-reserved-opcodes
+  (testing "non-control and control reserved opcodes fail"
+    (dolist (opcode '(#x3 #x4 #x5 #x6 #x7 #xB #xC #xD #xE #xF))
+      (assert-rejected-stays-rejected
+       (masked-frame opcode (ws-octets 9)))))
+  (testing "fragmented reserved control opcode is still reserved"
+    (assert-rejected-stays-rejected
+     (masked-frame #xB (ws-octets 1) :fin nil))))
+
+(deftest test-ws-close-body-length
+  (testing "empty close is status 1000"
+    (let* ((got nil)
+           (state (make-parse-state
+                   :on-close (lambda (code reason) (setf got (list code reason))))))
+      (ok (eq (feed-ws state (masked-frame +opcode-close+
+                                           (make-array 0 :element-type '(unsigned-byte 8))))
+              t))
+      (ok (equal got '(1000 "")))))
+  (testing "two-octet close keeps the status and reason"
+    (let* ((got nil)
+           (reason (string-to-utf-8-bytes "Bye"))
+           (payload (make-array (+ 2 (length reason)) :element-type '(unsigned-byte 8)))
+           (state (make-parse-state
+                   :on-close (lambda (code text) (setf got (list code text))))))
+      (setf (aref payload 0) #x03
+            (aref payload 1) #xE8)
+      (replace payload reason :start1 2)
+      (ok (eq (feed-ws state (masked-frame +opcode-close+ payload)) t))
+      (ok (equal got '(1000 "Bye")))))
+  (testing "one-octet close body fails and does not call on-close"
+    (let* ((closed nil)
+           (state (make-parse-state
+                   :on-close (lambda (code reason)
+                               (declare (ignore code reason))
+                               (setf closed t)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-close+ (ws-octets 9))) :error))
+      (ok (null closed))
+      (ok (not (eq (woo.websocket::parse-frame state) t)))
+      (ok (eq (woo.websocket::parse-frame state) :error)))))
+
+(deftest test-ws-fragment-buffer-cap
+  (testing "accumulated fragments may reach +max-ws-payload+ but not pass it"
+    (let* ((max woo.websocket:+max-ws-payload+)
+           (delivered nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (declare (ignore op))
+                                 (setf delivered (length data))))))
+      (setf (woo.websocket::ws-state-fragment-opcode state) +opcode-text+)
+      (setf (woo.websocket::ws-state-fragment-buffer state)
+            (make-array (1- max)
+                        :element-type '(unsigned-byte 8)
+                        :adjustable t
+                        :fill-pointer (1- max)))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+ (ws-octets 7)))
+              t))
+      (ok (= delivered max))
+      (ok (null (woo.websocket::ws-state-failed state)))))
+  (testing "one octet past the cap fails without growing or succeeding on retry"
+    (let* ((max woo.websocket:+max-ws-payload+)
+           (messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (declare (ignore op data))
+                                 (setf messages t)))))
+      (setf (woo.websocket::ws-state-fragment-opcode state) +opcode-binary+)
+      (setf (woo.websocket::ws-state-fragment-buffer state)
+            (make-array max
+                        :element-type '(unsigned-byte 8)
+                        :adjustable t
+                        :fill-pointer max))
+      (let ((before (length (woo.websocket::ws-state-fragment-buffer state))))
+        (ok (eq (feed-ws state (masked-frame +opcode-continuation+ (ws-octets 1)))
+                :error))
+        (ok (= (length (woo.websocket::ws-state-fragment-buffer state)) before))
+        (ok (null messages))
+        (ok (not (eq (woo.websocket::parse-frame state) t)))
+        (ok (eq (woo.websocket::parse-frame state) :error))))))

@@ -3,6 +3,9 @@
   (:use :cl :rove :woo-test.prop)
   (:import-from :woo.http2.hpack
                 :make-hpack-context
+                :hpack-context-max-dynamic-table-size
+                :hpack-context-dynamic-table
+                :hpack-context-dynamic-table-size
                 :hpack-encode-headers
                 :hpack-decode-headers
                 :hpack-compression-error)
@@ -266,6 +269,139 @@
                           #x0d #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x68 #x65 #x61 #x64 #x65 #x72))
            (decoded (hpack-decode-headers (make-hpack-context) block)))
       (ok (equal decoded '(("custom-key" . "custom-header")))))))
+
+(defun table-has-value (ctx value)
+  (find value (hpack-context-dynamic-table ctx) :key #'cdr :test #'string=))
+
+(deftest rfc7541-dynamic-table-eviction
+  (testing "RFC 7541 C.5 evicts on a fresh table of 256 octets"
+    (let ((ctx (make-hpack-context :max-dynamic-table-size 256))
+          (c51 (octets
+                #x48 #x03 #x33 #x30 #x32 #x58 #x07 #x70 #x72 #x69 #x76 #x61 #x74 #x65 #x61 #x1d
+                #x4d #x6f #x6e #x2c #x20 #x32 #x31 #x20 #x4f #x63 #x74 #x20 #x32 #x30 #x31 #x33
+                #x20 #x32 #x30 #x3a #x31 #x33 #x3a #x32 #x31 #x20 #x47 #x4d #x54 #x6e #x17 #x68
+                #x74 #x74 #x70 #x73 #x3a #x2f #x2f #x77 #x77 #x77 #x2e #x65 #x78 #x61 #x6d #x70
+                #x6c #x65 #x2e #x63 #x6f #x6d))
+          (c52 (octets #x48 #x03 #x33 #x30 #x37 #xc1 #xc0 #xbf))
+          (c53 (octets
+                #x88 #xc1 #x61 #x1d #x4d #x6f #x6e #x2c #x20 #x32 #x31 #x20 #x4f #x63 #x74 #x20
+                #x32 #x30 #x31 #x33 #x20 #x32 #x30 #x3a #x31 #x33 #x3a #x32 #x32 #x20 #x47 #x4d
+                #x54 #xc0 #x5a #x04 #x67 #x7a #x69 #x70 #x77 #x38 #x66 #x6f #x6f #x3d #x41 #x53
+                #x44 #x4a #x4b #x48 #x51 #x4b #x42 #x5a #x58 #x4f #x51 #x57 #x45 #x4f #x50 #x49
+                #x55 #x41 #x58 #x51 #x57 #x45 #x4f #x49 #x55 #x3b #x20 #x6d #x61 #x78 #x2d #x61
+                #x67 #x65 #x3d #x33 #x36 #x30 #x30 #x3b #x20 #x76 #x65 #x72 #x73 #x69 #x6f #x6e
+                #x3d #x31)))
+      (let ((headers (hpack-decode-headers ctx c51)))
+        (ok (= (length headers) 4))
+        (ok (string= (cdar headers) "302"))
+        (ok (= (hpack-context-dynamic-table-size ctx) 222))
+        (ok (= (length (hpack-context-dynamic-table ctx)) 4)))
+      (let ((headers (hpack-decode-headers ctx c52)))
+        (ok (string= (cdar headers) "307"))
+        (ok (= (hpack-context-dynamic-table-size ctx) 222))
+        (ok (= (length (hpack-context-dynamic-table ctx)) 4))
+        (ok (string= (cdr (aref (hpack-context-dynamic-table ctx) 0)) "307"))
+        (ok (not (table-has-value ctx "302")) "C.5.2 evicts :status 302"))
+      (let ((headers (hpack-decode-headers ctx c53)))
+        (ok (= (length headers) 6))
+        (ok (string= (cdar headers) "200"))
+        (ok (string= (cdr (car (last headers)))
+                     "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1"))
+        (ok (= (hpack-context-dynamic-table-size ctx) 215))
+        (ok (= (length (hpack-context-dynamic-table ctx)) 3))
+        (ok (not (table-has-value ctx "307")))
+        (ok (not (table-has-value ctx "https://www.example.com"))))))
+  (testing "RFC 7541 C.6 evicts by decoded octet length, not Huffman wire length"
+    (let ((ctx (make-hpack-context :max-dynamic-table-size 256))
+          (c61 (octets
+                #x48 #x82 #x64 #x02 #x58 #x85 #xae #xc3 #x77 #x1a #x4b #x61 #x96 #xd0 #x7a #xbe
+                #x94 #x10 #x54 #xd4 #x44 #xa8 #x20 #x05 #x95 #x04 #x0b #x81 #x66 #xe0 #x82 #xa6
+                #x2d #x1b #xff #x6e #x91 #x9d #x29 #xad #x17 #x18 #x63 #xc7 #x8f #x0b #x97 #xc8
+                #xe9 #xae #x82 #xae #x43 #xd3))
+          (c62 (octets #x48 #x83 #x64 #x0e #xff #xc1 #xc0 #xbf))
+          (c63 (octets
+                #x88 #xc1 #x61 #x96 #xd0 #x7a #xbe #x94 #x10 #x54 #xd4 #x44 #xa8 #x20 #x05 #x95
+                #x04 #x0b #x81 #x66 #xe0 #x84 #xa6 #x2d #x1b #xff #xc0 #x5a #x83 #x9b #xd9 #xab
+                #x77 #xad #x94 #xe7 #x82 #x1d #xd7 #xf2 #xe6 #xc7 #xb3 #x35 #xdf #xdf #xcd #x5b
+                #x39 #x60 #xd5 #xaf #x27 #x08 #x7f #x36 #x72 #xc1 #xab #x27 #x0f #xb5 #x29 #x1f
+                #x95 #x87 #x31 #x60 #x65 #xc0 #x03 #xed #x4e #xe5 #xb1 #x06 #x3d #x50 #x07)))
+      (hpack-decode-headers ctx c61)
+      (ok (= (hpack-context-dynamic-table-size ctx) 222)
+          "decoded octets sum to 222; Huffman wire length is shorter")
+      (hpack-decode-headers ctx c62)
+      (ok (not (table-has-value ctx "302")))
+      (ok (string= (cdr (aref (hpack-context-dynamic-table ctx) 0)) "307"))
+      (let ((headers (hpack-decode-headers ctx c63)))
+        (ok (= (length headers) 6))
+        (ok (= (hpack-context-dynamic-table-size ctx) 215))
+        (ok (= (length (hpack-context-dynamic-table ctx)) 3)))))
+  (testing "Non-ASCII value is 42 octets and evicts an entry that character length would keep"
+    ;; "a" + U+65E5 U+672C U+8A9E is 32+1+9 = 42. Three characters would be 36.
+    ;; A prior 34-octet entry fits beside 36 (70) but not beside 42.
+    (let* ((ctx (make-hpack-context :max-dynamic-table-size 70))
+           (prior (octets #x40 #x01 #x61 #x01 #x62))
+           (block (octets #x40 #x01 #x61 #x09
+                          #xE6 #x97 #xA5 #xE6 #x9C #xAC #xE8 #xAA #x9E)))
+      (hpack-decode-headers ctx prior)
+      (ok (= (hpack-context-dynamic-table-size ctx) 34))
+      (let ((headers (hpack-decode-headers ctx block)))
+        (ok (= (length headers) 1))
+        (ok (equal (map 'list #'char-code (cdar headers))
+                   '(#x65E5 #x672C #x8A9E)))
+        (ok (= (length (hpack-context-dynamic-table ctx)) 1))
+        (ok (= (hpack-context-dynamic-table-size ctx) 42))
+        (ok (not (table-has-value ctx "b")))))
+    ;; 42 > 41: the insert empties the table and is not stored.
+    (let* ((ctx (make-hpack-context :max-dynamic-table-size 41))
+           (block (octets #x40 #x01 #x61 #x09
+                          #xE6 #x97 #xA5 #xE6 #x9C #xAC #xE8 #xAA #x9E))
+           (headers (hpack-decode-headers ctx block)))
+      (ok (= (length headers) 1))
+      (ok (= (length (hpack-context-dynamic-table ctx)) 0))
+      (ok (= (hpack-context-dynamic-table-size ctx) 0))))
+  (testing "Oversized insert empties the table and does not insert"
+    (let ((ctx (make-hpack-context :max-dynamic-table-size 50))
+          (prior (octets #x40 #x01 #x61 #x01 #x62))
+          (huge (let ((value (make-array 15 :element-type '(unsigned-byte 8)
+                                         :initial-element #x78))
+                      (head (octets #x40 #x04 #x6e #x61 #x6d #x65 #x0f)))
+                  (let ((out (make-array (+ (length head) 15)
+                                         :element-type '(unsigned-byte 8))))
+                    (replace out head)
+                    (replace out value :start1 (length head))
+                    out))))
+      (hpack-decode-headers ctx prior)
+      (ok (= (length (hpack-context-dynamic-table ctx)) 1))
+      (let ((headers (hpack-decode-headers ctx huge)))
+        (ok (string= (caar headers) "name"))
+        (ok (= (length (cdar headers)) 15))
+        (ok (= (length (hpack-context-dynamic-table ctx)) 0))
+        (ok (= (hpack-context-dynamic-table-size ctx) 0)))))
+  (testing "Size update after a field or above the advertised max is COMPRESSION_ERROR"
+    (let ((ctx (make-hpack-context)))
+      (ok (signals (hpack-decode-headers ctx (octets #x82 #x20))
+                   'hpack-compression-error))
+      (ok (= (hpack-context-max-dynamic-table-size ctx) 4096))
+      (ok (= (length (hpack-context-dynamic-table ctx)) 0)))
+    (let ((ctx (make-hpack-context)))
+      (hpack-decode-headers ctx (octets #x40 #x01 #x61 #x01 #x62))
+      (ok (signals (hpack-decode-headers ctx (octets #x3F #xE2 #x1F))
+                   'hpack-compression-error))
+      (ok (= (hpack-context-max-dynamic-table-size ctx) 4096))
+      (ok (= (hpack-context-dynamic-table-size ctx) 34))
+      (ok (= (length (hpack-context-dynamic-table ctx)) 1)))
+    (let ((ctx (make-hpack-context :max-dynamic-table-size 100)))
+      (ok (null (hpack-decode-headers ctx (octets #x3F #x45))))
+      (ok (= (hpack-context-max-dynamic-table-size ctx) 100))
+      (ok (signals (hpack-decode-headers ctx (octets #x3F #x46))
+                   'hpack-compression-error))
+      (ok (= (hpack-context-max-dynamic-table-size ctx) 100)))
+    (let* ((ctx (make-hpack-context))
+           (headers (hpack-decode-headers ctx (octets #x20 #x3F #xE1 #x01 #x82))))
+      (ok (= (length headers) 1))
+      (ok (string= (caar headers) ":method"))
+      (ok (string= (cdar headers) "GET"))
+      (ok (= (hpack-context-max-dynamic-table-size ctx) 256)))))
 
 (deftest prop-http2-frame-roundtrip
   (ok (check-property "http2-frame-bytes-roundtrip"
