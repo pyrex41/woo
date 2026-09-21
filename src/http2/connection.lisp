@@ -79,7 +79,8 @@
         (when create
           (let ((stream (make-http2-stream
                          :id stream-id
-                         :window-size (http2-connection-remote-initial-window-size conn))))
+                         :window-size (http2-connection-remote-initial-window-size conn)
+                         :recv-window-size +default-initial-window-size+))))
             (setf (gethash stream-id streams) stream)
             (when (http2-connection-on-stream conn)
               (funcall (http2-connection-on-stream conn) stream))
@@ -295,17 +296,21 @@
     (unless stream
       (return-from handle-data-frame
         (connection-protocol-error conn +protocol-error+)))
+    (when (or (stream-half-closed-remote-p stream)
+              (stream-closed-p stream))
+      (return-from handle-data-frame
+        (connection-protocol-error conn +stream-closed+)))
     (multiple-value-bind (data pad-error)
         (unpadded-payload (frame-payload frame) flags)
       (when pad-error
         (return-from handle-data-frame
           (connection-protocol-error conn pad-error)))
       (when (or (> raw-len (http2-connection-window-size conn))
-                (> raw-len (http2-stream-window-size stream)))
+                (> raw-len (http2-stream-recv-window-size stream)))
         (return-from handle-data-frame
           (connection-protocol-error conn +flow-control-error+)))
       (decf (http2-connection-window-size conn) raw-len)
-      (decf (http2-stream-window-size stream) raw-len)
+      (decf (http2-stream-recv-window-size stream) raw-len)
       (let* ((buf (http2-stream-body-buffer stream))
              (old-len (length buf))
              (new-len (+ old-len (length data))))
@@ -316,15 +321,7 @@
         (stream-transition stream :recv-end-stream))
       (when (http2-connection-on-data conn)
         (funcall (http2-connection-on-data conn)
-                 stream data end-stream))
-      (let ((increment (length data)))
-        (when (plusp increment)
-          (incf (http2-connection-window-size conn) increment)
-          (incf (http2-stream-window-size stream) increment)
-          (connection-send-frame conn
-            (make-window-update-frame stream-id increment))
-          (connection-send-frame conn
-            (make-window-update-frame 0 increment)))))))
+                 stream data end-stream)))))
 
 (defun handle-ping-frame (conn frame)
   "Handle received PING frame."

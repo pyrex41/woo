@@ -10,6 +10,7 @@
                 :http2-stream-headers
                 :http2-stream-body-buffer
                 :http2-stream-window-size
+                :http2-stream-recv-window-size
                 :http2-stream-content-length
                 :http2-stream-bytes-received
                 :http2-stream-header-buffer
@@ -41,6 +42,7 @@
       (ok (= (http2-stream-state stream) +state-idle+))
       (ok (null (http2-stream-headers stream)))
       (ok (= (http2-stream-window-size stream) +default-initial-window-size+))
+      (ok (= (http2-stream-recv-window-size stream) +default-initial-window-size+))
       (ok (null (http2-stream-content-length stream)))
       (ok (= (http2-stream-bytes-received stream) 0))
       (ok (null (http2-stream-header-buffer stream)))

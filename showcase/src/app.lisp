@@ -45,13 +45,7 @@
         (render-template "websocket.html")))
 
 (defun request-clack-env (request)
-  "Ningle binds *request* to a Lack request object, not a Clack env plist."
-  (cond
-    ((consp request) request)
-    ((and (find-package :lack.request)
-          (fboundp (find-symbol "REQUEST-ENV" :lack.request)))
-     (funcall (find-symbol "REQUEST-ENV" :lack.request) request))
-    (t (error "Cannot extract Clack env from ~S" request))))
+  (woo-showcase.limits:request-clack-env request))
 
 ;; WebSocket upgrade endpoint
 (setf (ningle:route *app* "/ws/echo")
@@ -84,17 +78,10 @@
         (declare (ignore params))
         (render-template "http2.html")))
 
-(defparameter *max-resource-delay-ms* 1000)
+(defparameter *max-resource-delay-ms* woo-showcase.limits:*max-resource-delay-ms*)
 
 (defun clamp-resource-delay (query-delay)
-  "Parse delay query (ms) and clamp to [0, *max-resource-delay-ms*]. Default 100."
-  (let ((n (cond
-             ((null query-delay) 100)
-             ((integerp query-delay) query-delay)
-             (t (or (ignore-errors
-                      (parse-integer (princ-to-string query-delay) :junk-allowed t))
-                    100)))))
-    (max 0 (min *max-resource-delay-ms* n))))
+  (woo-showcase.limits:clamp-resource-delay query-delay))
 
 ;; Simulated slow resource (configurable delay)
 (setf (ningle:route *app* "/api/resource/:id")

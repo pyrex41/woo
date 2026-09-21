@@ -8,6 +8,7 @@
            :http2-stream-headers
            :http2-stream-body-buffer
            :http2-stream-window-size
+           :http2-stream-recv-window-size
            :http2-stream-content-length
            :http2-stream-bytes-received
            :http2-stream-header-buffer
@@ -43,6 +44,7 @@
   (body-buffer (make-array 0 :element-type '(unsigned-byte 8)
                            :adjustable t :fill-pointer 0))
   (window-size +default-initial-window-size+ :type integer)
+  (recv-window-size +default-initial-window-size+ :type integer)
   (content-length nil :type (or null integer))
   (bytes-received 0 :type integer)
   ;; For tracking header continuation

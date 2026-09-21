@@ -13,6 +13,7 @@
   :components ((:module "src"
                 :components
                 ((:file "package")
+                 (:file "limits")
                  (:file "benchmark-data" :depends-on ("package"))
-                 (:file "app" :depends-on ("package" "benchmark-data")))))
+                 (:file "app" :depends-on ("package" "benchmark-data" "limits")))))
   :description "Web app showcasing Woo's performance")

@@ -238,6 +238,35 @@
                       :shrinker #'shrink-vector)
       "Huffman encode/decode round-trip"))
 
+(defun octets (&rest bytes)
+  (make-array (length bytes) :element-type '(unsigned-byte 8)
+              :initial-contents bytes))
+
+(deftest rfc7541-independent-vectors
+  (testing "RFC 7541 C.1 integer encodings (decoder vs published octets)"
+    (multiple-value-bind (v n)
+        (woo.http2.hpack::hpack-decode-integer (octets #x0a) 0 5)
+      (ok (= v 10))
+      (ok (= n 1)))
+    (multiple-value-bind (v n)
+        (woo.http2.hpack::hpack-decode-integer (octets #x1f #x9a #x0a) 0 5)
+      (ok (= v 1337))
+      (ok (= n 3)))
+    (multiple-value-bind (v n)
+        (woo.http2.hpack::hpack-decode-integer (octets #x2a) 0 8)
+      (ok (= v 42))
+      (ok (= n 1))))
+  (testing "RFC 7541 C.4 Huffman www.example.com"
+    (let* ((enc (octets #xf1 #xe3 #xc2 #xe5 #xf2 #x3a #x6b #xa0 #xab #x90 #xf4 #xff))
+           (dec (woo.http2.hpack::huffman-decode-bytes enc 0 (length enc)))
+           (want (map 'vector #'char-code "www.example.com")))
+      (ok (equalp dec want))))
+  (testing "RFC 7541 C.2.1 literal header without Huffman"
+    (let* ((block (octets #x40 #x0a #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x6b #x65 #x79
+                          #x0d #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x68 #x65 #x61 #x64 #x65 #x72))
+           (decoded (hpack-decode-headers (make-hpack-context) block)))
+      (ok (equal decoded '(("custom-key" . "custom-header")))))))
+
 (deftest prop-http2-frame-roundtrip
   (ok (check-property "http2-frame-bytes-roundtrip"
                       #'frame-roundtrip

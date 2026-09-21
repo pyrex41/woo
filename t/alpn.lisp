@@ -232,6 +232,21 @@
           (setf woo.ssl.alpn::*alpn-arg-ptr* nil))))))
 
 (deftest test-alpn-not-queried-before-handshake
-  (testing "looks-like-http2-preface used instead of start-socket ALPN"
+  (testing "start-socket defers ALPN until after pending buffer / ssl-read path"
     (ok (fboundp 'woo:looks-like-http2-preface))
-    (ok (fboundp 'woo:http2-connection-preface-match))))
+    (ok (fboundp 'woo:http2-connection-preface-match))
+    (let* ((path (asdf:system-relative-pathname :woo "src/woo.lisp"))
+           (src (uiop:read-file-string path))
+           (start (search "(start-socket (socket)" src))
+           (next (and start (search "(start-multithread-server" src :start2 start)))
+           (body (and start next (subseq src start next)))
+           (init-pos (and body (search "init-ssl-handle" body)))
+           (pending-pos (and body (search "pending" body)))
+           (alpn-pos (and body (search "get-negotiated-protocol" body))))
+      (ok start "start-socket is defined")
+      (ok (and init-pos pending-pos alpn-pos)
+          "init-ssl-handle, pending buffer, and ALPN all present")
+      (ok (< init-pos pending-pos)
+          "pending buffer is created after init-ssl-handle")
+      (ok (< pending-pos alpn-pos)
+          "get-negotiated-protocol is after the pending buffer, not at handshake init"))))

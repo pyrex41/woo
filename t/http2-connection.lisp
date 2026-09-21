@@ -30,6 +30,7 @@
                 :+settings-initial-window-size+
                 :+settings-max-frame-size+
                 :+protocol-error+
+                :+stream-closed+
                 :+frame-size-error+
                 :+flow-control-error+
                 :+flag-end-stream+
@@ -47,6 +48,7 @@
                 :http2-stream-id
                 :http2-stream-state
                 :http2-stream-window-size
+                :http2-stream-recv-window-size
                 :http2-stream-pending-end-stream
                 :http2-stream-awaiting-continuation
                 :http2-stream-headers
@@ -489,21 +491,45 @@
       (connection-process-frame conn (make-window-update-frame 0 0))
       (ok (= (funcall err) +protocol-error+))))
 
-  (testing "Incoming DATA decrements windows"
+  (testing "Incoming DATA decrements recv windows and leaves send windows"
     (multiple-value-bind (conn err)
         (test-conn)
       (declare (ignore err))
       (connection-process-frame
        conn (make-headers-frame 1 #() :end-headers t))
       (let ((stream (connection-get-stream conn 1))
-            (before (http2-connection-window-size conn)))
+            (before-recv (http2-connection-window-size conn))
+            (before-send (http2-connection-remote-window-size conn)))
         (connection-process-frame
          conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
                                              :initial-element 1)))
-        ;; After receive we credit the window again for the data length
-        (ok (= (http2-connection-window-size conn) before))
+        (ok (= (http2-connection-window-size conn) (- before-recv 10)))
+        (ok (= (http2-stream-recv-window-size stream)
+               (- +default-initial-window-size+ 10)))
+        (ok (= (http2-connection-remote-window-size conn) before-send))
         (ok (= (http2-stream-window-size stream)
                (woo.http2.connection::http2-connection-remote-initial-window-size conn))))))
+
+  (testing "DATA larger than recv window is FLOW_CONTROL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (setf (http2-connection-window-size conn) 5)
+      (connection-process-frame
+       conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
+                                           :initial-element 1)))
+      (ok (= (funcall err) +flow-control-error+))))
+
+  (testing "DATA after END_STREAM is STREAM_CLOSED"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (connection-process-frame
+       conn (make-data-frame 1 (make-array 1 :element-type '(unsigned-byte 8)
+                                           :initial-element 1)))
+      (ok (= (funcall err) +stream-closed+))))
 
   (testing "Empty DATA does not apply increment 0"
     (multiple-value-bind (conn err)
