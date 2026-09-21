@@ -44,6 +44,8 @@
            :+default-header-table-size+
            :+default-initial-window-size+
            :+default-max-frame-size+
+           :+min-max-frame-size+
+           :+max-window-size+
            :+max-frame-size-limit+
            :+connection-preface+
            :+connection-preface-length+))
@@ -96,6 +98,8 @@
 (defconstant +default-header-table-size+ 4096)
 (defconstant +default-initial-window-size+ 65535)
 (defconstant +default-max-frame-size+ 16384)
+(defconstant +min-max-frame-size+ 16384)       ; 2^14
+(defconstant +max-window-size+ 2147483647)     ; 2^31 - 1
 (defconstant +max-frame-size-limit+ 16777215)  ; 2^24 - 1
 
 ;; Connection preface (RFC 9113 Section 3.4)

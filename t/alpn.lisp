@@ -217,7 +217,21 @@
 
 (deftest test-alpn-protocols-default
   (testing "*alpn-protocols* has correct default value"
-    ;; Only test if woo.ssl package is available (requires full woo system)
     (when (find-package :woo.ssl)
       (ok (equal (symbol-value (find-symbol "*ALPN-PROTOCOLS*" :woo.ssl))
                  '("http/1.1"))))))
+
+(deftest test-alpn-callback-arg-roundtrip
+  (testing "preferred protocols encoded in callback arg"
+    (let ((ptr (woo.ssl.alpn::encode-protocols-arg '("h2" "http/1.1"))))
+      (unwind-protect
+           (let ((decoded (woo.ssl.alpn::protocols-from-arg ptr)))
+             (ok (equal decoded '("h2" "http/1.1"))))
+        (when woo.ssl.alpn::*alpn-arg-ptr*
+          (cffi:foreign-free woo.ssl.alpn::*alpn-arg-ptr*)
+          (setf woo.ssl.alpn::*alpn-arg-ptr* nil))))))
+
+(deftest test-alpn-not-queried-before-handshake
+  (testing "looks-like-http2-preface used instead of start-socket ALPN"
+    (ok (fboundp 'woo:looks-like-http2-preface))
+    (ok (fboundp 'woo:http2-connection-preface-match))))

@@ -4,7 +4,7 @@
 (require :asdf)
 
 ;; Add our local Woo to the path
-(push (pathname "/Users/reuben/gauntlet/woo/") asdf:*central-registry*)
+(push (uiop:pathname-directory-pathname *load-truename*) asdf:*central-registry*)
 
 ;; Maximum optimizations
 (declaim (optimize (speed 3) (safety 0) (debug 0) (space 0)))

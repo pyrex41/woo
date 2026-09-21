@@ -65,6 +65,8 @@
                 :+default-header-table-size+
                 :+default-initial-window-size+
                 :+default-max-frame-size+
+                :+min-max-frame-size+
+                :+max-window-size+
                 :+max-frame-size-limit+
                 :+connection-preface+
                 :+connection-preface-length+))
@@ -191,6 +193,14 @@
            (payload (make-array 50 :element-type '(unsigned-byte 8)))
            (data (concatenate-byte-arrays header payload)))
       (ok (null (parse-frame data))))))
+
+(deftest parse-frame-exceeds-max-frame-size
+  (testing "parse-frame signals :frame-size-error when length exceeds max"
+    (let ((header (make-test-frame-header 20000 +frame-data+ 0 1)))
+      (multiple-value-bind (frame status)
+          (parse-frame header :max-frame-size +default-max-frame-size+)
+        (ok (null frame))
+        (ok (eq status :frame-size-error))))))
 
 (deftest parse-frame-with-offset
   (testing "parse-frame with offset"

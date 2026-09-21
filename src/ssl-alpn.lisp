@@ -120,28 +120,62 @@
 (defvar *preferred-protocols* '("http/1.1")
   "List of preferred ALPN protocols in order of preference.")
 
+(defun protocols-from-arg (arg)
+  "Decode length-prefixed protocol list stored as the OpenSSL callback arg."
+  (when (and arg (not (cffi:null-pointer-p arg)))
+    (handler-case
+        (let ((n (cffi:mem-ref arg :unsigned-char)))
+          (loop for i from 0 below n
+                for off = (+ 1 (* i 32))
+                for len = (cffi:mem-aref arg :unsigned-char off)
+                collect (let ((s (make-string len)))
+                          (dotimes (j len)
+                            (setf (char s j)
+                                  (code-char (cffi:mem-aref arg :unsigned-char (+ off 1 j)))))
+                          s)))
+      (error () nil))))
+
 (cffi:defcallback alpn-select-cb :int
     ((ssl :pointer) (out :pointer) (outlen :pointer)
      (in :pointer) (inlen :unsigned-int) (arg :pointer))
   "ALPN selection callback invoked by OpenSSL during TLS handshake."
-  (declare (ignore ssl arg))
+  (declare (ignore ssl))
   (handler-case
-      (let ((client-protocols (parse-alpn-protocols in inlen)))
-        ;; Try each preferred protocol in order
-        (dolist (proto *preferred-protocols*)
+      (let* ((client-protocols (parse-alpn-protocols in inlen))
+             (preferred (or (protocols-from-arg arg) *preferred-protocols*)))
+        (dolist (proto preferred)
           (when (member proto client-protocols :test #'string=)
-            ;; Found a match - point output to the protocol in the input buffer
             (multiple-value-bind (ptr len)
                 (find-protocol-in-buffer in inlen proto)
               (when ptr
                 (setf (cffi:mem-ref out :pointer) ptr)
                 (setf (cffi:mem-ref outlen :unsigned-char) len)
                 (return-from alpn-select-cb +ssl-tlsext-err-ok+)))))
-        ;; No match found - no protocol selected
         +ssl-tlsext-err-noack+)
     (error (e)
       (vom:error "ALPN callback error: ~A" e)
       +ssl-tlsext-err-alert-fatal+)))
+
+(defvar *alpn-arg-ptr* nil)
+
+(defun encode-protocols-arg (preferred-protocols)
+  "Pack protocol list into a small C buffer passed as the ALPN callback arg."
+  (when *alpn-arg-ptr*
+    (cffi:foreign-free *alpn-arg-ptr*)
+    (setf *alpn-arg-ptr* nil))
+  (let* ((n (min 8 (length preferred-protocols)))
+         (ptr (cffi:foreign-alloc :unsigned-char :count (+ 1 (* 32 n)))))
+    (setf (cffi:mem-ref ptr :unsigned-char) n)
+    (loop for proto in preferred-protocols
+          for i from 0 below n
+          for off = (+ 1 (* i 32))
+          for len = (min 31 (length proto))
+          do (setf (cffi:mem-aref ptr :unsigned-char off) len)
+             (dotimes (j len)
+               (setf (cffi:mem-aref ptr :unsigned-char (+ off 1 j))
+                     (char-code (char proto j)))))
+    (setf *alpn-arg-ptr* ptr)
+    ptr))
 
 (defun ssl-ctx-set-alpn-select-callback (ssl-ctx preferred-protocols)
   "Set up ALPN protocol selection on an SSL context.
@@ -150,7 +184,7 @@
   (setf *preferred-protocols* preferred-protocols)
   (%ssl-ctx-set-alpn-select-cb ssl-ctx
                                 (cffi:callback alpn-select-cb)
-                                (cffi:null-pointer)))
+                                (encode-protocols-arg preferred-protocols)))
 
 (defun make-alpn-selector (preferred-protocols)
   "Create an ALPN selector function.

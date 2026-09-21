@@ -14,6 +14,7 @@
            :make-settings-frame
            :make-settings-ack-frame
            :make-headers-frame
+           :make-continuation-frame
            :make-data-frame
            :make-window-update-frame
            :make-ping-frame
@@ -55,13 +56,17 @@
                               (aref data (+ start 8))))))
     (values length type flags stream-id)))
 
-(defun parse-frame (data &key (start 0))
+(defun parse-frame (data &key (start 0) (max-frame-size nil))
   "Parse complete frame from data.
-   Returns (values frame bytes-consumed) or NIL if insufficient data."
+   Returns (values frame bytes-consumed) or NIL if insufficient data.
+   If MAX-FRAME-SIZE is set and the advertised length exceeds it,
+   returns (values nil :frame-size-error advertised-length)."
   (multiple-value-bind (length type flags stream-id)
       (parse-frame-header data :start start)
     (unless length
       (return-from parse-frame nil))
+    (when (and max-frame-size (> length max-frame-size))
+      (return-from parse-frame (values nil :frame-size-error length)))
     (let ((total-len (+ 9 length)))
       (when (< (- (length data) start) total-len)
         (return-from parse-frame nil))
@@ -146,6 +151,15 @@
                 :flags flags
                 :stream-id stream-id
                 :payload header-block)))
+
+(defun make-continuation-frame (stream-id header-block &key (end-headers t))
+  "Create CONTINUATION frame with a header-block fragment."
+  (make-frame :type +frame-continuation+
+              :flags (if end-headers +flag-end-headers+ 0)
+              :stream-id stream-id
+              :payload (if (typep header-block '(simple-array (unsigned-byte 8) (*)))
+                           header-block
+                           (coerce header-block '(simple-array (unsigned-byte 8) (*))))))
 
 (defun make-data-frame (stream-id data &key (end-stream nil) (padded nil) (pad-length 0))
   "Create DATA frame."

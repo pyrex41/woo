@@ -44,11 +44,20 @@
         (declare (ignore params))
         (render-template "websocket.html")))
 
+(defun request-clack-env (request)
+  "Ningle binds *request* to a Lack request object, not a Clack env plist."
+  (cond
+    ((consp request) request)
+    ((and (find-package :lack.request)
+          (fboundp (find-symbol "REQUEST-ENV" :lack.request)))
+     (funcall (find-symbol "REQUEST-ENV" :lack.request) request))
+    (t (error "Cannot extract Clack env from ~S" request))))
+
 ;; WebSocket upgrade endpoint
 (setf (ningle:route *app* "/ws/echo")
       (lambda (params)
         (declare (ignore params))
-        (let* ((env ningle:*request*)
+        (let* ((env (request-clack-env ningle:*request*))
                (socket (getf env :clack.io)))
           (when (woo:websocket-p env)
             (let* ((headers (getf env :headers))
@@ -75,15 +84,25 @@
         (declare (ignore params))
         (render-template "http2.html")))
 
+(defparameter *max-resource-delay-ms* 1000)
+
+(defun clamp-resource-delay (query-delay)
+  "Parse delay query (ms) and clamp to [0, *max-resource-delay-ms*]. Default 100."
+  (let ((n (cond
+             ((null query-delay) 100)
+             ((integerp query-delay) query-delay)
+             (t (or (ignore-errors
+                      (parse-integer (princ-to-string query-delay) :junk-allowed t))
+                    100)))))
+    (max 0 (min *max-resource-delay-ms* n))))
+
 ;; Simulated slow resource (configurable delay)
 (setf (ningle:route *app* "/api/resource/:id")
       (lambda (params)
         (let* ((id (cdr (assoc :id params)))
                (query-delay (cdr (assoc "delay" params :test #'string=)))
-               (delay (if query-delay
-                          (parse-integer query-delay :junk-allowed t)
-                          100)))
-          (sleep (/ (or delay 100) 1000.0))
+               (delay (clamp-resource-delay query-delay)))
+          (sleep (/ delay 1000.0))
           (setf (getf (lack.response:response-headers ningle:*response*) :content-type)
                 "application/json")
           (jonathan:to-json

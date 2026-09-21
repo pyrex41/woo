@@ -14,6 +14,7 @@
                 :http2-stream-bytes-received
                 :http2-stream-header-buffer
                 :http2-stream-awaiting-continuation
+                :http2-stream-pending-end-stream
                 ;; Functions
                 :stream-transition
                 :stream-open-p
@@ -43,7 +44,8 @@
       (ok (null (http2-stream-content-length stream)))
       (ok (= (http2-stream-bytes-received stream) 0))
       (ok (null (http2-stream-header-buffer stream)))
-      (ok (null (http2-stream-awaiting-continuation stream)))))
+      (ok (null (http2-stream-awaiting-continuation stream)))
+      (ok (null (http2-stream-pending-end-stream stream)))))
 
   (testing "Stream creation with custom window size"
     (let ((stream (make-http2-stream :id 3 :window-size 32768)))

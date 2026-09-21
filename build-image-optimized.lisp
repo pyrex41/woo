@@ -2,7 +2,7 @@
 ;; This version caches the Date header and pre-formats responses
 
 (require :asdf)
-(push (pathname "/Users/reuben/gauntlet/woo/") asdf:*central-registry*)
+(push (uiop:pathname-directory-pathname *load-truename*) asdf:*central-registry*)
 
 ;; Maximum optimizations
 (declaim (optimize (speed 3) (safety 0) (debug 0) (space 0)))

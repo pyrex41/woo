@@ -8,12 +8,19 @@ Woo is a fast non-blocking HTTP server built on top of [libev](http://software.s
 
 ## Fork: WebSocket, HTTP/2 & ALPN Support
 
-This fork extends Woo with modern protocol support:
+This fork adds experimental WebSocket, HTTP/2, and ALPN support on top of
+usable HTTP/1.1 Woo. These stacks are not protocol-complete; do not treat
+them as production RFC 6455 / RFC 9113 implementations.
 
-- **WebSocket (RFC 6455)** - Full bidirectional communication
-- **HTTP/2 (RFC 9113)** - Multiplexed streams with HPACK compression
-- **SSL/ALPN** - Automatic protocol negotiation during TLS handshake
-- **High-concurrency** - Backlog increased from 128 to 65,535
+- **WebSocket (RFC 6455)** — upgrade helper and framing (client masking,
+  control-frame limits, RSV, and large-frame handling are still being hardened)
+- **HTTP/2 (RFC 9113)** — frames, HPACK, streams, Clack glue (HPACK Huffman,
+  stream-id rules, CONTINUATION, SETTINGS, padding, and flow control still have
+  known gaps)
+- **SSL/ALPN** — optional TLS with ALPN (protocol must be selected after the
+  handshake, not before)
+- **Listen backlog** — `*default-backlog-size*` remains **128** (the listen
+  `backlog` argument may be set up to 65535; that is not the default)
 
 ### WebSocket Usage
 

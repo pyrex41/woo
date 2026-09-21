@@ -486,6 +486,121 @@
                  (ok (= (logand (aref frame 0) #x0F) opcode)
                      (format nil "Frame should have correct opcode ~X" opcode))))))
 
+;;; B12: RFC 6455 client-frame rules
+(defun apply-mask (payload key)
+  (let ((out (make-array (length payload) :element-type '(unsigned-byte 8))))
+    (dotimes (i (length payload))
+      (setf (aref out i) (logxor (aref payload i) (aref key (mod i 4)))))
+    out))
+
+(defun masked-frame (opcode payload &key (fin t) (rsv 0) (len7 nil))
+  "Build a masked client frame. LEN7 overrides the 7-bit length field."
+  (let* ((payload-len (length payload))
+         (key (make-array 4 :element-type '(unsigned-byte 8)
+                          :initial-contents '(1 2 3 4)))
+         (use-len (or len7 payload-len))
+         (ext (cond ((and (null len7) (< payload-len 126)) 0)
+                    ((or (eql len7 126) (and (null len7) (< payload-len 65536))) 2)
+                    (t 8)))
+         (hdr (+ 2 ext 4))
+         (frame (make-array (+ hdr payload-len) :element-type '(unsigned-byte 8)))
+         (idx 0))
+    (setf (aref frame 0) (logior (if fin #x80 0) rsv (logand opcode #x0F)))
+    (incf idx)
+    (setf (aref frame 1)
+          (logior #x80
+                  (cond (len7 len7)
+                        ((< payload-len 126) payload-len)
+                        ((< payload-len 65536) 126)
+                        (t 127))))
+    (incf idx)
+    (case ext
+      (2 (setf (aref frame idx) (ldb (byte 8 8) payload-len)
+               (aref frame (1+ idx)) (ldb (byte 8 0) payload-len))
+         (incf idx 2))
+      (8 (loop for i from 7 downto 0
+               do (setf (aref frame idx) (ldb (byte 8 (* i 8)) payload-len))
+                  (incf idx))))
+    (replace frame key :start1 idx)
+    (incf idx 4)
+    (let ((masked (apply-mask payload key)))
+      (replace frame masked :start1 idx))
+    frame))
+
+(defun unmasked-frame (opcode payload)
+  (woo.websocket::make-frame opcode payload :fin t :mask nil))
+
+(defun parse-bytes (bytes)
+  (let* ((err nil)
+         (state (woo.websocket::make-ws-state
+                 :on-error (lambda (e) (setf err e))))
+         (buf (woo.websocket::ws-state-buffer state)))
+    (adjust-array buf (length bytes) :fill-pointer (length bytes))
+    (replace buf bytes)
+    (values (woo.websocket::parse-frame state) err state)))
+
+(deftest test-reject-unmasked-client-frames
+  (testing "unmasked client frames are protocol errors"
+    (multiple-value-bind (result err)
+        (parse-bytes (unmasked-frame +opcode-text+ (string-to-utf-8-bytes "hi")))
+      (ok (eq result :error))
+      (ok (typep err 'woo.websocket:websocket-protocol-error)))))
+
+(deftest test-reject-rsv-bits
+  (testing "RSV bits must be zero"
+    (multiple-value-bind (result err)
+        (parse-bytes (masked-frame +opcode-text+ (string-to-utf-8-bytes "x") :rsv #x40))
+      (ok (eq result :error))
+      (ok (typep err 'woo.websocket:websocket-protocol-error)))))
+
+(deftest test-reject-fragmented-control
+  (testing "control frames cannot be fragmented"
+    (multiple-value-bind (result err)
+        (parse-bytes (masked-frame +opcode-ping+ (string-to-utf-8-bytes "ab") :fin nil))
+      (ok (eq result :error))
+      (ok (typep err 'woo.websocket:websocket-protocol-error)))))
+
+(deftest test-reject-oversize-control
+  (testing "control payload > 125 is rejected before 16-bit length"
+    (let ((payload (make-array 130 :element-type '(unsigned-byte 8) :initial-element 1)))
+      (multiple-value-bind (result err)
+          (parse-bytes (masked-frame +opcode-ping+ payload :len7 126))
+        (ok (eq result :error))
+        (ok (typep err 'woo.websocket:websocket-protocol-error))))))
+
+(deftest test-reject-huge-127-payload
+  (testing "opcode 127 with huge length does not allocate"
+    (let ((header (make-array 10 :element-type '(unsigned-byte 8) :initial-element 0)))
+      (setf (aref header 0) #x82
+            (aref header 1) (logior #x80 127)
+            (aref header 2) #x00
+            (aref header 3) #x01) ; 2^48-scale length, still over max
+      (loop for i from 4 to 9 do (setf (aref header i) #xff))
+      (multiple-value-bind (result err)
+          (parse-bytes header)
+        (ok (eq result :error))
+        (ok (typep err 'woo.websocket:websocket-protocol-error))))))
+
+(deftest test-masked-text-accepted
+  (testing "masked client text frame parses"
+    (let ((got nil)
+          (payload (string-to-utf-8-bytes "Hello")))
+      (multiple-value-bind (result err state)
+          (let* ((state (woo.websocket::make-ws-state
+                         :on-message (lambda (op data)
+                                       (setf got (list op data)))
+                         :on-error (lambda (e) (declare (ignore e)))))
+                 (bytes (masked-frame +opcode-text+ payload))
+                 (buf (woo.websocket::ws-state-buffer state)))
+            (adjust-array buf (length bytes) :fill-pointer (length bytes))
+            (replace buf bytes)
+            (values (woo.websocket::parse-frame state) nil state))
+        (declare (ignore err state))
+        (ok (eq result t))
+        (ok got)
+        (ok (equalp (second got) payload))))))
+
+(deftest test-opcode-values-low-nibble
   (testing "Opcode in first byte low nibble"
     (let* ((payload #())
            (frame (woo.websocket::make-frame +opcode-text+ payload :fin t :mask nil)))

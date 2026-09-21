@@ -28,6 +28,11 @@
            :connection-get-stream
            :connection-send-frame
            :connection-send-goaway
+           :connection-process-frame
+           :http2-connection-remote-window-size
+           :http2-connection-remote-max-frame-size
+           :http2-connection-local-max-frame-size
+           :http2-connection-awaiting-continuation-stream-id
            :setup-http2-parser))
 (in-package :woo.http2.connection)
 
@@ -57,6 +62,9 @@
   (remote-settings nil)
   (remote-max-frame-size +default-max-frame-size+ :type integer)
   (remote-initial-window-size +default-initial-window-size+ :type integer)
+  (local-max-frame-size +default-max-frame-size+ :type integer)
+  (local-max-concurrent-streams 100 :type integer)
+  (awaiting-continuation-stream-id nil)
   ;; Callbacks
   on-stream       ; (lambda (stream)) - called for new stream
   on-headers      ; (lambda (stream headers end-stream))
@@ -80,7 +88,7 @@
 (defun connection-send-frame (conn frame)
   "Send a frame on the connection."
   (let ((socket (http2-connection-socket conn)))
-    (when (socket-open-p socket)
+    (when (and socket (socket-open-p socket))
       (with-async-writing (socket)
         (write-socket-data socket (serialize-frame frame))))))
 
@@ -95,154 +103,228 @@
 
 ;;; Frame handlers
 
+(defun connection-protocol-error (conn error-code &optional debug-data)
+  "Record a connection error, send GOAWAY, invoke on-error."
+  (connection-send-goaway conn error-code debug-data)
+  (when (http2-connection-on-error conn)
+    (funcall (http2-connection-on-error conn) error-code debug-data))
+  nil)
+
+(defun connection-open-stream-count (conn)
+  (let ((n 0))
+    (maphash (lambda (id stream)
+               (declare (ignore id))
+               (let ((state (http2-stream-state stream)))
+                 (unless (or (= state +state-idle+)
+                             (= state +state-closed+))
+                   (incf n))))
+             (http2-connection-streams conn))
+    n))
+
+(defun unpadded-payload (payload flags)
+  "Return (values data error-code). error-code is set on illegal padding."
+  (if (logbitp 3 flags)                     ; PADDED
+      (if (zerop (length payload))
+          (values nil +protocol-error+)
+          (let ((pad-length (aref payload 0)))
+            (if (>= pad-length (length payload))
+                (values nil +protocol-error+)
+                (values (subseq payload 1 (- (length payload) pad-length)) nil))))
+      (values payload nil)))
+
 (defun handle-settings-frame (conn frame)
   "Handle received SETTINGS frame."
-  (if (logbitp 0 (frame-flags frame))  ; ACK flag
-      (setf (http2-connection-settings-ack-received conn) t)
-      (let ((settings (parse-settings-payload (frame-payload frame))))
-        ;; Store remote settings
-        (dolist (setting settings)
-          (let ((id (car setting))
-                (value (cdr setting)))
-            (push setting (http2-connection-remote-settings conn))
-            ;; Handle specific settings
-            (case id
-              (#.+settings-header-table-size+
-               (hpack-context-update-size
-                (http2-connection-encoder-context conn) value))
-              (#.+settings-max-frame-size+
-               (setf (http2-connection-remote-max-frame-size conn) value))
-              (#.+settings-initial-window-size+
-               ;; Update window size for all existing streams
-               (let ((delta (- value (http2-connection-remote-initial-window-size conn))))
-                 (setf (http2-connection-remote-initial-window-size conn) value)
-                 (maphash (lambda (id stream)
-                            (declare (ignore id))
-                            (incf (http2-stream-window-size stream) delta))
-                          (http2-connection-streams conn)))))))
-        ;; Send ACK
-        (connection-send-frame conn (make-settings-ack-frame)))))
+  (unless (zerop (frame-stream-id frame))
+    (return-from handle-settings-frame
+      (connection-protocol-error conn +protocol-error+)))
+  (let* ((payload (frame-payload frame))
+         (ack (logbitp 0 (frame-flags frame))))
+    (cond
+      (ack
+       (unless (zerop (length payload))
+         (return-from handle-settings-frame
+           (connection-protocol-error conn +frame-size-error+)))
+       (setf (http2-connection-settings-ack-received conn) t))
+      ((not (zerop (mod (length payload) 6)))
+       (connection-protocol-error conn +frame-size-error+))
+      (t
+       (let ((settings (parse-settings-payload payload)))
+         (dolist (setting settings)
+           (let ((id (car setting))
+                 (value (cdr setting)))
+             (case id
+               (#.+settings-header-table-size+
+                (hpack-context-update-size
+                 (http2-connection-encoder-context conn) value))
+               (#.+settings-max-frame-size+
+                (unless (and (>= value +min-max-frame-size+)
+                             (<= value +max-frame-size-limit+))
+                  (return-from handle-settings-frame
+                    (connection-protocol-error conn +protocol-error+)))
+                (setf (http2-connection-remote-max-frame-size conn) value))
+               (#.+settings-initial-window-size+
+                (when (> value +max-window-size+)
+                  (return-from handle-settings-frame
+                    (connection-protocol-error conn +flow-control-error+)))
+                (let ((delta (- value (http2-connection-remote-initial-window-size conn))))
+                  (maphash (lambda (id stream)
+                             (declare (ignore id))
+                             (let ((new (+ (http2-stream-window-size stream) delta)))
+                               (when (> new +max-window-size+)
+                                 (return-from handle-settings-frame
+                                   (connection-protocol-error conn +flow-control-error+)))
+                               (setf (http2-stream-window-size stream) new)))
+                           (http2-connection-streams conn))
+                  (setf (http2-connection-remote-initial-window-size conn) value)))))
+           (push setting (http2-connection-remote-settings conn)))
+         (connection-send-frame conn (make-settings-ack-frame)))))))
+
+(defun validate-new-stream-id (conn stream-id)
+  "Reject illegal client HEADERS stream IDs. Returns T if ok."
+  (cond
+    ((zerop stream-id)
+     (connection-protocol-error conn +protocol-error+)
+     nil)
+    ((evenp stream-id)
+     (connection-protocol-error conn +protocol-error+)
+     nil)
+    (t
+     (let ((existing (gethash stream-id (http2-connection-streams conn))))
+       (cond
+         ((null existing)
+          (when (<= stream-id (http2-connection-last-stream-id conn))
+            (connection-protocol-error conn +protocol-error+)
+            (return-from validate-new-stream-id nil))
+          (when (>= (connection-open-stream-count conn)
+                    (http2-connection-local-max-concurrent-streams conn))
+            (connection-protocol-error conn +protocol-error+)
+            (return-from validate-new-stream-id nil))
+          t)
+         ((or (stream-closed-p existing)
+              (stream-half-closed-remote-p existing))
+          (connection-protocol-error conn +protocol-error+)
+          nil)
+         (t t))))))
+
+(defun finish-header-block (conn stream stream-id header-block end-stream)
+  (let ((headers (hpack-decode-headers
+                  (http2-connection-decoder-context conn)
+                  header-block)))
+    (setf (http2-stream-headers stream) headers
+          (http2-stream-header-buffer stream) nil
+          (http2-stream-awaiting-continuation stream) nil
+          (http2-stream-pending-end-stream stream) nil
+          (http2-connection-awaiting-continuation-stream-id conn) nil)
+    (stream-transition stream :recv-headers)
+    (when end-stream
+      (stream-transition stream :recv-end-stream))
+    (when (> stream-id (http2-connection-last-stream-id conn))
+      (setf (http2-connection-last-stream-id conn) stream-id))
+    (let ((cl (cdr (assoc "content-length" headers :test #'string=))))
+      (when cl
+        (setf (http2-stream-content-length stream)
+              (parse-integer cl))))
+    (when (http2-connection-on-headers conn)
+      (funcall (http2-connection-on-headers conn)
+               stream headers end-stream))))
 
 (defun handle-headers-frame (conn frame)
   "Handle received HEADERS frame."
   (let* ((stream-id (frame-stream-id frame))
-         (stream (connection-get-stream conn stream-id :create t))
-         (payload (frame-payload frame))
          (flags (frame-flags frame))
-         (end-headers (logbitp 2 flags))  ; END_HEADERS
-         (end-stream (logbitp 0 flags)))  ; END_STREAM
-
-    ;; Handle padding if present
-    (let ((header-start 0)
-          (header-end (length payload)))
-      (when (logbitp 3 flags)  ; PADDED
-        (let ((pad-length (aref payload 0)))
-          (setf header-start 1
-                header-end (- header-end pad-length))))
-
-      ;; Handle priority if present
-      (when (logbitp 5 flags)  ; PRIORITY
-        (incf header-start 5))
-
-      ;; Extract header block fragment
-      (let ((header-block (subseq payload header-start header-end)))
-        (if end-headers
-            ;; Complete header block
-            (let ((headers (hpack-decode-headers
-                            (http2-connection-decoder-context conn)
-                            header-block)))
-              (setf (http2-stream-headers stream) headers)
-              (stream-transition stream :recv-headers)
-              (when end-stream
-                (stream-transition stream :recv-end-stream))
-
-              ;; Update last stream ID
-              (when (> stream-id (http2-connection-last-stream-id conn))
-                (setf (http2-connection-last-stream-id conn) stream-id))
-
-              ;; Extract content-length if present
-              (let ((cl (cdr (assoc "content-length" headers :test #'string=))))
-                (when cl
-                  (setf (http2-stream-content-length stream)
-                        (parse-integer cl))))
-
-              ;; Invoke callback
-              (when (http2-connection-on-headers conn)
-                (funcall (http2-connection-on-headers conn)
-                         stream headers end-stream)))
-
-            ;; Incomplete - store for CONTINUATION
-            (progn
-              (setf (http2-stream-header-buffer stream) header-block
-                    (http2-stream-awaiting-continuation stream) t)))))))
+         (end-headers (logbitp 2 flags))
+         (end-stream (logbitp 0 flags)))
+    (unless (validate-new-stream-id conn stream-id)
+      (return-from handle-headers-frame))
+    (multiple-value-bind (payload pad-error)
+        (unpadded-payload (frame-payload frame) flags)
+      (when pad-error
+        (return-from handle-headers-frame
+          (connection-protocol-error conn pad-error)))
+      (let ((header-start 0)
+            (header-end (length payload)))
+        (when (logbitp 5 flags)             ; PRIORITY
+          (when (< (length payload) 5)
+            (return-from handle-headers-frame
+              (connection-protocol-error conn +frame-size-error+)))
+          (incf header-start 5))
+        (when (> header-start header-end)
+          (return-from handle-headers-frame
+            (connection-protocol-error conn +protocol-error+)))
+        (let ((header-block (subseq payload header-start header-end))
+              (stream (connection-get-stream conn stream-id :create t)))
+          (if end-headers
+              (finish-header-block conn stream stream-id header-block end-stream)
+              (progn
+                (setf (http2-stream-header-buffer stream) header-block
+                      (http2-stream-awaiting-continuation stream) t
+                      (http2-stream-pending-end-stream stream) end-stream
+                      (http2-connection-awaiting-continuation-stream-id conn)
+                      stream-id))))))))
 
 (defun handle-continuation-frame (conn frame)
   "Handle received CONTINUATION frame."
   (let* ((stream-id (frame-stream-id frame))
+         (awaiting (http2-connection-awaiting-continuation-stream-id conn))
          (stream (gethash stream-id (http2-connection-streams conn))))
-    (when (and stream (http2-stream-awaiting-continuation stream))
-      (let* ((payload (frame-payload frame))
-             (end-headers (logbitp 2 (frame-flags frame)))
-             (old-buffer (http2-stream-header-buffer stream))
-             (new-buffer (concatenate '(vector (unsigned-byte 8))
-                                       old-buffer payload)))
-        (if end-headers
-            ;; Header block complete
-            (let ((headers (hpack-decode-headers
-                            (http2-connection-decoder-context conn)
-                            new-buffer)))
-              (setf (http2-stream-headers stream) headers
-                    (http2-stream-header-buffer stream) nil
-                    (http2-stream-awaiting-continuation stream) nil)
-              (stream-transition stream :recv-headers)
-              (when (http2-connection-on-headers conn)
-                (funcall (http2-connection-on-headers conn)
-                         stream headers nil)))
-            ;; More continuation expected
-            (setf (http2-stream-header-buffer stream) new-buffer))))))
+    (unless (and awaiting stream
+                 (= awaiting stream-id)
+                 (http2-stream-awaiting-continuation stream))
+      (return-from handle-continuation-frame
+        (connection-protocol-error conn +protocol-error+)))
+    (let* ((payload (frame-payload frame))
+           (end-headers (logbitp 2 (frame-flags frame)))
+           (old-buffer (http2-stream-header-buffer stream))
+           (new-buffer (concatenate '(vector (unsigned-byte 8))
+                                    old-buffer payload)))
+      (if end-headers
+          (finish-header-block conn stream stream-id new-buffer
+                               (http2-stream-pending-end-stream stream))
+          (setf (http2-stream-header-buffer stream) new-buffer)))))
 
 (defun handle-data-frame (conn frame)
   "Handle received DATA frame."
   (let* ((stream-id (frame-stream-id frame))
          (stream (gethash stream-id (http2-connection-streams conn)))
-         (payload (frame-payload frame))
          (flags (frame-flags frame))
-         (end-stream (logbitp 0 flags)))
-
-    (when stream
-      ;; Handle padding if present
-      (let ((data-start 0)
-            (data-end (length payload)))
-        (when (logbitp 3 flags)  ; PADDED
-          (let ((pad-length (aref payload 0)))
-            (setf data-start 1
-                  data-end (- data-end pad-length))))
-
-        (let ((data (subseq payload data-start data-end)))
-          ;; Append to body buffer
-          (let* ((buf (http2-stream-body-buffer stream))
-                 (old-len (length buf))
-                 (new-len (+ old-len (length data))))
-            (adjust-array buf new-len :fill-pointer new-len)
-            (replace buf data :start1 old-len))
-
-          ;; Update bytes received
-          (incf (http2-stream-bytes-received stream) (length data))
-
-          (when end-stream
-            (stream-transition stream :recv-end-stream))
-
-          ;; Invoke callback
-          (when (http2-connection-on-data conn)
-            (funcall (http2-connection-on-data conn)
-                     stream data end-stream))
-
-          ;; Send WINDOW_UPDATE for stream and connection
-          (let ((increment (length data)))
-            (connection-send-frame conn
-              (make-window-update-frame stream-id increment))
-            (connection-send-frame conn
-              (make-window-update-frame 0 increment))))))))
+         (end-stream (logbitp 0 flags))
+         (raw-len (length (frame-payload frame))))
+    (when (zerop stream-id)
+      (return-from handle-data-frame
+        (connection-protocol-error conn +protocol-error+)))
+    (unless stream
+      (return-from handle-data-frame
+        (connection-protocol-error conn +protocol-error+)))
+    (multiple-value-bind (data pad-error)
+        (unpadded-payload (frame-payload frame) flags)
+      (when pad-error
+        (return-from handle-data-frame
+          (connection-protocol-error conn pad-error)))
+      (when (or (> raw-len (http2-connection-window-size conn))
+                (> raw-len (http2-stream-window-size stream)))
+        (return-from handle-data-frame
+          (connection-protocol-error conn +flow-control-error+)))
+      (decf (http2-connection-window-size conn) raw-len)
+      (decf (http2-stream-window-size stream) raw-len)
+      (let* ((buf (http2-stream-body-buffer stream))
+             (old-len (length buf))
+             (new-len (+ old-len (length data))))
+        (adjust-array buf new-len :fill-pointer new-len)
+        (replace buf data :start1 old-len))
+      (incf (http2-stream-bytes-received stream) (length data))
+      (when end-stream
+        (stream-transition stream :recv-end-stream))
+      (when (http2-connection-on-data conn)
+        (funcall (http2-connection-on-data conn)
+                 stream data end-stream))
+      (let ((increment (length data)))
+        (when (plusp increment)
+          (incf (http2-connection-window-size conn) increment)
+          (incf (http2-stream-window-size stream) increment)
+          (connection-send-frame conn
+            (make-window-update-frame stream-id increment))
+          (connection-send-frame conn
+            (make-window-update-frame 0 increment)))))))
 
 (defun handle-ping-frame (conn frame)
   "Handle received PING frame."
@@ -252,15 +334,27 @@
 
 (defun handle-window-update-frame (conn frame)
   "Handle received WINDOW_UPDATE frame."
+  (unless (= (length (frame-payload frame)) 4)
+    (return-from handle-window-update-frame
+      (connection-protocol-error conn +frame-size-error+)))
   (let ((increment (parse-window-update-payload (frame-payload frame))))
+    (when (zerop increment)
+      (return-from handle-window-update-frame
+        (connection-protocol-error conn +protocol-error+)))
     (if (zerop (frame-stream-id frame))
-        ;; Connection-level window update
-        (incf (http2-connection-remote-window-size conn) increment)
-        ;; Stream-level window update
+        (let ((new (+ (http2-connection-remote-window-size conn) increment)))
+          (when (> new +max-window-size+)
+            (return-from handle-window-update-frame
+              (connection-protocol-error conn +flow-control-error+)))
+          (setf (http2-connection-remote-window-size conn) new))
         (let ((stream (gethash (frame-stream-id frame)
                                (http2-connection-streams conn))))
           (when stream
-            (incf (http2-stream-window-size stream) increment))))))
+            (let ((new (+ (http2-stream-window-size stream) increment)))
+              (when (> new +max-window-size+)
+                (return-from handle-window-update-frame
+                  (connection-protocol-error conn +flow-control-error+)))
+              (setf (http2-stream-window-size stream) new)))))))
 
 (defun handle-rst-stream-frame (conn frame)
   "Handle received RST_STREAM frame."
@@ -286,24 +380,44 @@
 (defun process-frame (conn frame)
   "Process a received frame by dispatching to the appropriate handler."
   (handler-case
-      (case (frame-type frame)
-        (#.+frame-data+ (handle-data-frame conn frame))
-        (#.+frame-headers+ (handle-headers-frame conn frame))
-        (#.+frame-priority+ (handle-priority-frame conn frame))
-        (#.+frame-rst-stream+ (handle-rst-stream-frame conn frame))
-        (#.+frame-settings+ (handle-settings-frame conn frame))
-        (#.+frame-push-promise+ nil)  ; Clients don't receive PUSH_PROMISE from server
-        (#.+frame-ping+ (handle-ping-frame conn frame))
-        (#.+frame-goaway+ (handle-goaway-frame conn frame))
-        (#.+frame-window-update+ (handle-window-update-frame conn frame))
-        (#.+frame-continuation+ (handle-continuation-frame conn frame))
-        (t (vom:warn "Unknown frame type: ~A" (frame-type frame))))
+      (progn
+        (let ((awaiting (http2-connection-awaiting-continuation-stream-id conn)))
+          (when awaiting
+            (unless (and (= (frame-type frame) +frame-continuation+)
+                         (= (frame-stream-id frame) awaiting))
+              (return-from process-frame
+                (connection-protocol-error conn +protocol-error+)))))
+        (case (frame-type frame)
+          (#.+frame-data+ (handle-data-frame conn frame))
+          (#.+frame-headers+ (handle-headers-frame conn frame))
+          (#.+frame-priority+ (handle-priority-frame conn frame))
+          (#.+frame-rst-stream+ (handle-rst-stream-frame conn frame))
+          (#.+frame-settings+ (handle-settings-frame conn frame))
+          (#.+frame-push-promise+ nil)
+          (#.+frame-ping+ (handle-ping-frame conn frame))
+          (#.+frame-goaway+ (handle-goaway-frame conn frame))
+          (#.+frame-window-update+ (handle-window-update-frame conn frame))
+          (#.+frame-continuation+ (handle-continuation-frame conn frame))
+          (t (vom:warn "Unknown frame type: ~A" (frame-type frame)))))
+    (hpack-compression-error (e)
+      (vom:error "HPACK compression error: ~A" e)
+      (connection-send-goaway conn +compression-error+
+                              (trivial-utf-8:string-to-utf-8-bytes
+                               (princ-to-string e)))
+      (when (http2-connection-on-error conn)
+        (funcall (http2-connection-on-error conn)
+                 +compression-error+
+                 (trivial-utf-8:string-to-utf-8-bytes (princ-to-string e)))))
     (error (e)
       (vom:error "Error processing frame: ~A" e)
       (when (http2-connection-on-error conn)
         (funcall (http2-connection-on-error conn)
                  +internal-error+
                  (trivial-utf-8:string-to-utf-8-bytes (princ-to-string e)))))))
+
+(defun connection-process-frame (conn frame)
+  "Public wrapper used by tests and higher layers."
+  (process-frame conn frame))
 
 (defun parse-connection-data (conn data start end)
   "Parse incoming data on HTTP/2 connection."
@@ -334,14 +448,20 @@
     ;; Parse frames
     (loop
       (multiple-value-bind (frame consumed)
-          (parse-frame buf)
-        (unless frame
-          (return))
-        (process-frame conn frame)
-        ;; Remove processed frame from buffer
-        (let ((remaining (- (length buf) consumed)))
-          (replace buf buf :start2 consumed)
-          (setf (fill-pointer buf) remaining))))))
+          (parse-frame buf
+                       :max-frame-size
+                       (http2-connection-local-max-frame-size conn))
+        (cond
+          ((eq consumed :frame-size-error)
+           (connection-protocol-error conn +frame-size-error+)
+           (return))
+          ((null frame)
+           (return))
+          (t
+           (process-frame conn frame)
+           (let ((remaining (- (length buf) consumed)))
+             (replace buf buf :start2 consumed)
+             (setf (fill-pointer buf) remaining))))))))
 
 (defun setup-http2-parser (socket &key on-stream on-headers on-data on-goaway on-error)
   "Set up HTTP/2 handling on socket.

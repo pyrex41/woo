@@ -13,7 +13,11 @@
                 :http2-connection-local-settings
                 :http2-connection-remote-settings
                 :http2-connection-window-size
-                :connection-get-stream)
+                :connection-get-stream
+                :connection-process-frame
+                :http2-connection-remote-window-size
+                :http2-connection-remote-max-frame-size
+                :http2-connection-awaiting-continuation-stream-id)
   (:import-from :woo.http2.constants
                 :+connection-preface+
                 :+connection-preface-length+
@@ -24,12 +28,42 @@
                 :+settings-header-table-size+
                 :+settings-max-concurrent-streams+
                 :+settings-initial-window-size+
-                :+settings-max-frame-size+)
+                :+settings-max-frame-size+
+                :+protocol-error+
+                :+frame-size-error+
+                :+flow-control-error+
+                :+flag-end-stream+
+                :+flag-end-headers+
+                :+flag-padded+
+                :+flag-ack+
+                :+frame-headers+
+                :+frame-data+
+                :+frame-continuation+
+                :+frame-settings+
+                :+min-max-frame-size+
+                :+max-frame-size-limit+
+                :+max-window-size+)
   (:import-from :woo.http2.stream
                 :http2-stream-id
                 :http2-stream-state
                 :http2-stream-window-size
-                :+state-idle+)
+                :http2-stream-pending-end-stream
+                :http2-stream-awaiting-continuation
+                :http2-stream-headers
+                :+state-idle+
+                :+state-closed+
+                :stream-closed-p
+                :stream-half-closed-remote-p)
+  (:import-from :woo.http2.frames
+                :make-frame
+                :make-headers-frame
+                :make-data-frame
+                :make-settings-frame
+                :make-settings-ack-frame
+                :make-window-update-frame
+                :parse-frame
+                :serialize-frame
+                :frame-payload)
   (:import-from :woo.http2.hpack
                 :hpack-context-max-dynamic-table-size))
 (in-package :woo-test.http2-connection)
@@ -285,3 +319,196 @@
       (setf (woo.http2.connection::http2-connection-goaway-sent conn) t)
       (ok (http2-connection-goaway-sent conn)
           "GOAWAY sent flag can be set"))))
+
+(defun test-conn (&optional extra)
+  (let ((conn (apply #'make-http2-connection extra))
+        (err nil))
+    (setf (woo.http2.connection::http2-connection-on-error conn)
+          (lambda (code debug)
+            (declare (ignore debug))
+            (setf err code)))
+    (values conn (lambda () err))))
+
+(deftest b4-illegal-stream-ids
+  (testing "HEADERS on stream 0 is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 0 #() :end-headers t :end-stream t))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "Even stream id is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 2 #() :end-headers t :end-stream t))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "Reused stream id is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (ok (null (funcall err)))
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "Stream id not greater than last-stream-id is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 5 #() :end-headers t :end-stream t))
+      (connection-process-frame
+       conn (make-headers-frame 3 #() :end-headers t :end-stream t))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "Exceeding MAX_CONCURRENT_STREAMS is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (setf (woo.http2.connection::http2-connection-local-max-concurrent-streams conn) 1)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (ok (null (funcall err)))
+      (connection-process-frame
+       conn (make-headers-frame 3 #() :end-headers t))
+      (ok (= (funcall err) +protocol-error+)))))
+
+(deftest b5-continuation-and-end-stream
+  (testing "END_STREAM on HEADERS without END_HEADERS is preserved"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (declare (ignore err))
+      (let ((got-end nil))
+        (setf (woo.http2.connection::http2-connection-on-headers conn)
+              (lambda (stream headers end-stream)
+                (declare (ignore stream headers))
+                (setf got-end end-stream)))
+        (connection-process-frame
+         conn (make-headers-frame 1 #() :end-headers nil :end-stream t))
+        (ok (http2-connection-awaiting-continuation-stream-id conn))
+        (connection-process-frame
+         conn (make-frame :type +frame-continuation+
+                          :flags +flag-end-headers+
+                          :stream-id 1
+                          :payload #()))
+        (ok got-end)
+        (ok (stream-half-closed-remote-p (connection-get-stream conn 1))))))
+
+  (testing "Non-CONTINUATION while awaiting is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers nil))
+      (connection-process-frame
+       conn (make-data-frame 1 #()))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "CONTINUATION when not awaiting is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type +frame-continuation+
+                        :flags +flag-end-headers+
+                        :stream-id 1
+                        :payload #()))
+      (ok (= (funcall err) +protocol-error+)))))
+
+(deftest b6-padding
+  (testing "PADDED HEADERS with pad-length >= payload is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-frame :type +frame-headers+
+                        :flags (logior +flag-end-headers+ +flag-padded+)
+                        :stream-id 1
+                        :payload (make-array 1 :element-type '(unsigned-byte 8)
+                                             :initial-contents '(5))))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "PADDED DATA with pad-length >= payload is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (connection-process-frame
+       conn (make-frame :type +frame-data+
+                        :flags +flag-padded+
+                        :stream-id 1
+                        :payload (make-array 2 :element-type '(unsigned-byte 8)
+                                             :initial-contents '(10 0))))
+      (ok (= (funcall err) +protocol-error+)))))
+
+(deftest b7-settings-and-frame-size
+  (testing "SETTINGS ACK with payload is FRAME_SIZE_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((ack (make-settings-ack-frame)))
+        (setf (frame-payload ack)
+              (make-array 6 :element-type '(unsigned-byte 8) :initial-element 0))
+        (connection-process-frame conn ack)
+        (ok (= (funcall err) +frame-size-error+)))))
+
+  (testing "SETTINGS_MAX_FRAME_SIZE below 16384 is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-settings-frame (list (cons +settings-max-frame-size+ 1000))))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "SETTINGS_MAX_FRAME_SIZE above 2^24-1 is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-settings-frame (list (cons +settings-max-frame-size+ 16777216))))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "SETTINGS_INITIAL_WINDOW_SIZE overflow is FLOW_CONTROL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-settings-frame
+             (list (cons +settings-initial-window-size+ #x80000000))))
+      (ok (= (funcall err) +flow-control-error+))))
+
+  (testing "parse-frame rejects advertised length over max-frame-size"
+    (let ((header (make-array 9 :element-type '(unsigned-byte 8) :initial-element 0)))
+      (setf (aref header 0) 0
+            (aref header 1) #x40
+            (aref header 2) 0)
+      (multiple-value-bind (frame status)
+          (parse-frame header :max-frame-size +default-max-frame-size+)
+        (ok (null frame))
+        (ok (eq status :frame-size-error))))))
+
+(deftest b8-flow-control
+  (testing "WINDOW_UPDATE increment 0 is PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-window-update-frame 0 0))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "Incoming DATA decrements windows"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (declare (ignore err))
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (let ((stream (connection-get-stream conn 1))
+            (before (http2-connection-window-size conn)))
+        (connection-process-frame
+         conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
+                                             :initial-element 1)))
+        ;; After receive we credit the window again for the data length
+        (ok (= (http2-connection-window-size conn) before))
+        (ok (= (http2-stream-window-size stream)
+               (woo.http2.connection::http2-connection-remote-initial-window-size conn))))))
+
+  (testing "Empty DATA does not apply increment 0"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
+      (connection-process-frame conn (make-window-update-frame 1 0))
+      (ok (= (funcall err) +protocol-error+)))))

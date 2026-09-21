@@ -29,29 +29,24 @@
 (defvar *alpn-configured-p* nil
   "Whether ALPN has been configured on the SSL context.")
 
-(defun configure-alpn ()
-  "Configure ALPN on the global SSL context.
-   This should be called once before accepting connections.
-   It's automatically called by init-ssl-handle if not already done."
-  (unless *alpn-configured-p*
-    (handler-case
-        (progn
-          ;; Access the SSL context from cl+ssl's global context
-          ;; The global context stores the raw SSL_CTX pointer
-          (let ((ctx cl+ssl::*ssl-global-context*))
-            (when ctx
-              (ssl-ctx-set-alpn-select-callback ctx *alpn-protocols*)
-              (setf *alpn-configured-p* t)
-              (vom:info "ALPN configured with protocols: ~A" *alpn-protocols*))))
-      (error (e)
-        (vom:warn "Failed to configure ALPN: ~A" e)))))
+(defun configure-alpn (&optional (protocols *alpn-protocols*))
+  "Configure ALPN on the global SSL context with PROTOCOLS (preference order).
+   Always updates the selector so later calls are not first-wins-sticky."
+  (setf *alpn-protocols* protocols)
+  (handler-case
+      (let ((ctx cl+ssl::*ssl-global-context*))
+        (when ctx
+          (ssl-ctx-set-alpn-select-callback ctx protocols)
+          (setf *alpn-configured-p* t)
+          (vom:info "ALPN configured with protocols: ~A" protocols)))
+    (error (e)
+      (vom:warn "Failed to configure ALPN: ~A" e))))
 
 (defun init-ssl-handle (socket ssl-cert-file ssl-key-file ssl-key-password)
   "Initialize SSL handle for a socket.
    Sets up TLS with the provided certificate and key.
    Configures ALPN if not already done."
-  ;; Configure ALPN once on first connection
-  (configure-alpn)
+  (configure-alpn *alpn-protocols*)
 
   (let ((client-fd (socket-fd socket)))
     (with-new-ssl (handle)

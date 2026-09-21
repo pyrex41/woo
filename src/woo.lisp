@@ -37,6 +37,9 @@
                 :write-websocket-upgrade-response)
   (:import-from :woo.http2.clack
                 :make-http2-app-handler)
+  (:import-from :woo.http2.constants
+                :+connection-preface+
+                :+connection-preface-length+)
   (:import-from :woo.util
                 :integer-string-p)
   (:import-from :quri
@@ -83,11 +86,36 @@
            :write-websocket-upgrade-response
            ;; SSL/ALPN exports
            #-woo-no-ssl :*alpn-protocols*
-           #-woo-no-ssl :configure-alpn))
+           #-woo-no-ssl :configure-alpn
+           :http2-connection-preface-match
+           :looks-like-http2-preface))
 (in-package :woo)
 
 (defvar *default-backlog-size* 128)
 (defvar *default-worker-num* nil)
+
+(defun http2-connection-preface-match (data start end)
+  "Return T if DATA[START:END] contains a complete HTTP/2 connection preface."
+  (and (>= (- end start) +connection-preface-length+)
+       (loop for i from 0 below +connection-preface-length+
+             always (= (aref data (+ start i))
+                       (aref +connection-preface+ i)))))
+
+(defun looks-like-http2-preface (data start end)
+  "Classify bytes as :http2, :http1, or :need-more (h2c PRI preface)."
+  (let ((n (- end start)))
+    (cond
+      ((zerop n) :need-more)
+      ((>= n +connection-preface-length+)
+       (if (http2-connection-preface-match data start end)
+           :http2
+           :http1))
+      (t
+       (if (loop for i from 0 below n
+                 always (= (aref data (+ start i))
+                           (aref +connection-preface+ i)))
+           :need-more
+           :http1)))))
 
 (defun run (app &key (debug t)
                      (port 5000) (address "127.0.0.1")
@@ -113,25 +141,57 @@
         (*listener* nil)
         (ssl (or ssl-key-file ssl-cert-file))
         (http2-handler nil))
-    (labels ((start-socket (socket)
+    (labels ((ensure-http2-handler ()
+               (unless http2-handler
+                 (setf http2-handler (make-http2-app-handler *app*)))
+               http2-handler)
+             (install-detected-protocol (socket use-http2)
+               (if use-http2
+                   (funcall (ensure-http2-handler) socket)
+                   (setup-parser socket)))
+             (start-socket (socket)
+               ;; Do not query ALPN here: the TLS handshake has not run yet.
+               ;; Handshake completes on the first successful ssl-read in tcp-read-cb.
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
                                           ssl-cert-file
                                           ssl-key-file
-                                          ssl-key-password)
-                 ;; Check ALPN negotiated protocol for HTTP/2
-                 (let ((proto (get-negotiated-protocol socket)))
-                   (when (and proto (string= proto "h2"))
-                     ;; HTTP/2 connection - use HTTP/2 handler
-                     (unless http2-handler
-                       (setf http2-handler (make-http2-app-handler *app*)))
-                     (funcall http2-handler socket)
-                     (woo.ev.tcp:start-listening-socket socket)
-                     (return-from start-socket))))
-               ;; HTTP/1.1 connection (or non-SSL)
-               (setup-parser socket)
-               (woo.ev.tcp:start-listening-socket socket))
+                                          ssl-key-password))
+               (let ((pending (make-array 0 :element-type '(unsigned-byte 8)
+                                          :adjustable t :fill-pointer 0))
+                     (detected nil))
+                 (setf (wev:socket-data socket)
+                       (lambda (data &key (start 0) (end (length data)))
+                         (if detected
+                             (funcall (wev:socket-data socket) data :start start :end end)
+                             (let ((n (- end start)))
+                               (when (plusp n)
+                                 (let ((old (length pending)))
+                                   (adjust-array pending (+ old n) :fill-pointer (+ old n))
+                                   (replace pending data :start1 old :start2 start :end2 end)))
+                               (let ((use-h2 nil)
+                                     (ready nil))
+                                 #-woo-no-ssl
+                                 (when ssl
+                                   (let ((proto (get-negotiated-protocol socket)))
+                                     (cond
+                                       ((and proto (string= proto "h2"))
+                                        (setf use-h2 t ready t))
+                                       (proto
+                                        (setf use-h2 nil ready t)))))
+                                 (unless ready
+                                   (ecase (looks-like-http2-preface pending 0 (length pending))
+                                     (:http2 (setf use-h2 t ready t))
+                                     (:http1 (setf use-h2 nil ready t))
+                                     (:need-more nil)))
+                                 (when ready
+                                   (setf detected t)
+                                   (install-detected-protocol socket use-h2)
+                                   (when (plusp (length pending))
+                                     (funcall (wev:socket-data socket) pending
+                                              :start 0 :end (length pending)))))))))
+                 (woo.ev.tcp:start-listening-socket socket)))
              (start-multithread-server ()
                (unless (getf vom::*config* :woo.signal)
                  (vom:config :woo.signal :info))

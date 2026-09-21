@@ -1,6 +1,8 @@
 ;; Use local woo, not quicklisp version (local has WebSocket exports)
-(push #P"/Users/reuben/gauntlet/woo/" asdf:*central-registry*)
-(push #P"/Users/reuben/gauntlet/woo/showcase/" asdf:*central-registry*)
+(let* ((here (uiop:pathname-directory-pathname *load-truename*))
+       (woo-root (uiop:pathname-parent-directory-pathname here)))
+  (push woo-root asdf:*central-registry*)
+  (push here asdf:*central-registry*))
 
 (ql:quickload :woo-showcase :silent t)
 

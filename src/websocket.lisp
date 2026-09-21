@@ -31,7 +31,9 @@
            :+opcode-binary+
            :+opcode-close+
            :+opcode-ping+
-           :+opcode-pong+))
+           :+opcode-pong+
+           :websocket-protocol-error
+           :+max-ws-payload+))
 (in-package :woo.websocket)
 
 ;; WebSocket opcodes (RFC 6455 Section 5.2)
@@ -44,6 +46,15 @@
 
 ;; RFC 6455 magic GUID
 (defvar *websocket-guid* "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+
+;; Cap 64-bit payload length so opcode 127 cannot allocate unbounded memory.
+(defconstant +max-ws-payload+ (* 16 1024 1024))
+
+(define-condition websocket-protocol-error (error)
+  ((reason :initarg :reason :reader websocket-protocol-error-reason))
+  (:report (lambda (c s)
+             (format s "WebSocket protocol error: ~A"
+                     (websocket-protocol-error-reason c)))))
 
 (defun websocket-p (env)
   "Check if request is a WebSocket upgrade request."
@@ -117,60 +128,86 @@
       (replace frame payload :start1 idx))
     frame))
 
+(defun control-opcode-p (opcode)
+  (or (= opcode +opcode-close+)
+      (= opcode +opcode-ping+)
+      (= opcode +opcode-pong+)))
+
+(defun ws-fail (state reason)
+  (when (ws-state-on-error state)
+    (funcall (ws-state-on-error state)
+             (make-condition 'websocket-protocol-error :reason reason)))
+  :error)
+
 (defun parse-frame (state)
   "Parse WebSocket frame from state buffer.
-   Returns T if a complete frame was processed, NIL if more data needed."
+   Returns T if a complete frame was processed, NIL if more data needed,
+   or :ERROR on RFC 6455 protocol violation (unmasked, RSV, control rules, oversize)."
   (let* ((buf (ws-state-buffer state))
          (buf-len (length buf)))
 
-    ;; Need at least 2 bytes for minimal frame header
     (when (< buf-len 2)
       (return-from parse-frame nil))
 
     (let* ((byte0 (aref buf 0))
            (byte1 (aref buf 1))
            (fin (logbitp 7 byte0))
+           (rsv (logand byte0 #x70))
            (opcode (logand byte0 #x0F))
            (masked (logbitp 7 byte1))
-           (payload-len (logand byte1 #x7F))
-           (header-len 2))
+           (len7 (logand byte1 #x7F))
+           (header-len 2)
+           (payload-len len7))
 
-      ;; Extended payload length
+      (unless (zerop rsv)
+        (return-from parse-frame (ws-fail state "RSV bits must be 0")))
+
+      (unless masked
+        (return-from parse-frame (ws-fail state "client frames must be masked")))
+
+      (when (and (control-opcode-p opcode) (not fin))
+        (return-from parse-frame (ws-fail state "control frames must not be fragmented")))
+
+      (when (and (control-opcode-p opcode) (> len7 125))
+        (return-from parse-frame (ws-fail state "control frame payload exceeds 125")))
+
       (cond
-        ((= payload-len 126)
+        ((= len7 126)
          (when (< buf-len 4)
            (return-from parse-frame nil))
          (setf payload-len (+ (ash (aref buf 2) 8) (aref buf 3))
                header-len 4))
-        ((= payload-len 127)
+        ((= len7 127)
          (when (< buf-len 10)
            (return-from parse-frame nil))
-         (setf payload-len (loop for i from 2 to 9
-                                 for shift from 56 downto 0 by 8
-                                 sum (ash (aref buf i) shift))
-               header-len 10)))
+         (when (logbitp 7 (aref buf 2))
+           (return-from parse-frame (ws-fail state "invalid 64-bit payload length")))
+         (let ((len 0))
+           (loop for i from 2 to 9
+                 for shift from 56 downto 0 by 8
+                 do (setf len (logior len (ash (aref buf i) shift))))
+           (when (> len +max-ws-payload+)
+             (return-from parse-frame (ws-fail state "payload too large")))
+           (setf payload-len len
+                 header-len 10))))
 
-      ;; Masking key (clients MUST mask, servers expect it)
-      (when masked
-        (incf header-len 4))
+      (when (> payload-len +max-ws-payload+)
+        (return-from parse-frame (ws-fail state "payload too large")))
+
+      (incf header-len 4)
 
       (let ((frame-len (+ header-len payload-len)))
         (when (< buf-len frame-len)
           (return-from parse-frame nil))
 
-        ;; Extract and unmask payload
-        (let ((payload (make-array payload-len :element-type '(unsigned-byte 8))))
-          (if masked
-              (let ((mask-start (- header-len 4)))
-                (dotimes (i payload-len)
-                  (setf (aref payload i)
-                        (logxor (aref buf (+ header-len i))
-                                (aref buf (+ mask-start (mod i 4)))))))
-              (replace payload buf :start2 header-len))
+        (let ((payload (make-array payload-len :element-type '(unsigned-byte 8)))
+              (mask-start (- header-len 4)))
+          (dotimes (i payload-len)
+            (setf (aref payload i)
+                  (logxor (aref buf (+ header-len i))
+                          (aref buf (+ mask-start (mod i 4))))))
 
-          ;; Handle frame based on opcode
           (cond
-            ;; Control frames (ping, pong, close)
             ((= opcode +opcode-ping+)
              (when (ws-state-on-ping state)
                (funcall (ws-state-on-ping state) payload)))
@@ -186,7 +223,6 @@
                                "")))
                (when (ws-state-on-close state)
                  (funcall (ws-state-on-close state) code reason))))
-            ;; Data frames (continuation, text, binary)
             ((= opcode +opcode-continuation+)
              (let ((frag-buf (ws-state-fragment-buffer state))
                    (old-len (length (ws-state-fragment-buffer state))))
@@ -202,17 +238,14 @@
                      (ws-state-fragment-opcode state) nil)))
             ((or (= opcode +opcode-text+) (= opcode +opcode-binary+))
              (if fin
-                 ;; Complete message in single frame
                  (when (ws-state-on-message state)
                    (funcall (ws-state-on-message state) opcode payload))
-                 ;; Start of fragmented message
                  (progn
                    (setf (ws-state-fragment-opcode state) opcode)
                    (let ((frag-buf (ws-state-fragment-buffer state)))
                      (adjust-array frag-buf payload-len :fill-pointer payload-len)
                      (replace frag-buf payload))))))
 
-          ;; Remove processed frame from buffer
           (let ((remaining (- buf-len frame-len)))
             (if (zerop remaining)
                 (setf (fill-pointer buf) 0)

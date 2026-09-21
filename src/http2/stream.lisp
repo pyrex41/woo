@@ -12,6 +12,7 @@
            :http2-stream-bytes-received
            :http2-stream-header-buffer
            :http2-stream-awaiting-continuation
+           :http2-stream-pending-end-stream
            :stream-transition
            :stream-open-p
            :stream-half-closed-remote-p
@@ -46,7 +47,8 @@
   (bytes-received 0 :type integer)
   ;; For tracking header continuation
   (header-buffer nil)
-  (awaiting-continuation nil :type boolean))
+  (awaiting-continuation nil :type boolean)
+  (pending-end-stream nil :type boolean))
 
 (defun stream-open-p (stream)
   "Check if stream is in open state."

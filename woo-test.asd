@@ -10,8 +10,16 @@
    (:file "t/http2-frames")
    (:file "t/http2-stream")
    (:file "t/http2-connection")
+   (:file "t/http2-clack")
    ;; WebSocket tests
    (:file "t/websocket")
+   (:file "t/showcase")
+   ;; Property-based protocol tests (in-repo generator/shrinker)
+   (:module "t-prop"
+    :pathname "t/prop"
+    :components
+    ((:file "core")
+     (:file "properties" :depends-on ("core"))))
    ;; SSL/ALPN tests
    (:file "t/alpn" :if-feature (:not :woo-no-ssl)))
   :perform (test-op (op c) (symbol-call '#:rove '#:run c)))

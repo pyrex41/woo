@@ -9,7 +9,8 @@
                 :hpack-context-dynamic-table-size
                 :hpack-encode-headers
                 :hpack-decode-headers
-                :hpack-context-update-size))
+                :hpack-context-update-size
+                :hpack-compression-error))
 (in-package :woo-test.hpack)
 
 ;;;; HPACK Context Tests
@@ -625,3 +626,57 @@
         (ok (= (length decoded) (length headers)))
         (dolist (original headers)
           (ok (member original decoded :test #'equal)))))))
+
+;;;; B2 Huffman, B3 integer bounds, B10 unknown index
+
+(deftest hpack-integer-truncated
+  (testing "Truncated integer (prefix filled, no continuation) is COMPRESSION_ERROR"
+    ;; 5-bit prefix all ones (0x1F) requires at least one extra octet.
+    (let ((data (make-array 1 :element-type '(unsigned-byte 8)
+                            :initial-contents '(#x1F))))
+      (ok (signals (woo.http2.hpack::hpack-decode-integer data 0 5)
+                   'hpack-compression-error)))))
+
+(deftest hpack-integer-0x80-chain
+  (testing "Unbounded 0x80 continuation chain is COMPRESSION_ERROR"
+    (let ((data (make-array 8 :element-type '(unsigned-byte 8)
+                            :initial-contents '(#x1F #x80 #x80 #x80 #x80 #x80 #x80 #x80))))
+      (ok (signals (woo.http2.hpack::hpack-decode-integer data 0 5)
+                   'hpack-compression-error)))))
+
+(deftest hpack-unknown-index
+  (testing "Unknown static/dynamic index is COMPRESSION_ERROR"
+    (let ((ctx (make-hpack-context)))
+      (ok (signals (woo.http2.hpack::hpack-lookup-index ctx 62)
+                   'hpack-compression-error))
+      (ok (signals (woo.http2.hpack::hpack-lookup-index ctx 1000)
+                   'hpack-compression-error))
+      ;; Indexed header field 62 (0xBE) with empty dynamic table
+      (let ((data (make-array 1 :element-type '(unsigned-byte 8)
+                              :initial-contents '(#xBE))))
+        (ok (signals (hpack-decode-headers ctx data)
+                     'hpack-compression-error))))))
+
+(deftest hpack-huffman-method-get
+  (testing "Huffman-encoded :method GET decodes correctly"
+    (let* ((ctx (make-hpack-context))
+           (name-enc (woo.http2.hpack::hpack-encode-string ":method" :huffman t))
+           (value-enc (woo.http2.hpack::hpack-encode-string "GET" :huffman t))
+           (data (make-array (+ 1 (length name-enc) (length value-enc))
+                             :element-type '(unsigned-byte 8))))
+      (ok (logbitp 7 (aref name-enc 0)))
+      (ok (logbitp 7 (aref value-enc 0)))
+      (setf (aref data 0) #x00)
+      (replace data name-enc :start1 1)
+      (replace data value-enc :start1 (1+ (length name-enc)))
+      (let ((headers (hpack-decode-headers ctx data)))
+        (ok (= (length headers) 1))
+        (ok (string= (caar headers) ":method"))
+        (ok (string= (cdar headers) "GET")))))
+  (testing "Huffman string roundtrip"
+    (dolist (s '("GET" "POST" "/" "www.example.com" ":method" "hello"))
+      (let ((encoded (woo.http2.hpack::hpack-encode-string s :huffman t)))
+        (multiple-value-bind (decoded consumed)
+            (woo.http2.hpack::hpack-decode-string encoded 0)
+          (ok (string= decoded s))
+          (ok (= consumed (length encoded))))))))
