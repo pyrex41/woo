@@ -13,6 +13,7 @@ benchmark/benchmark.log
 qlfile
 qlfile.lock
 t/certs/
+t/prop/.qc-failures
 
 # SCUD
 .scud/

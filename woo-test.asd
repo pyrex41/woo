@@ -20,7 +20,14 @@
     :pathname "t/prop"
     :components
     ((:file "core")
-     (:file "properties" :depends-on ("core"))))
+     (:file "quickcheck" :depends-on ("core"))
+     (:file "properties" :depends-on ("core"))
+     (:file "qc" :depends-on ("quickcheck"))))
+   ;; Differential oracle against Go's HTTP/2 stack.
+   (:file "t/diff/diff")
+   ;; Coverage-guided fuzz and mutation testing of the pure codecs.
+   (:file "t/fuzz/guided")
+   (:file "t/mutate/mutate")
    ;; SSL/ALPN tests
    (:file "t/alpn" :if-feature (:not :woo-no-ssl)))
   :perform (test-op (op c) (symbol-call '#:rove '#:run c)))

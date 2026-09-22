@@ -13,6 +13,7 @@
            :shrink-int
            :shrink-list
            :shrink-vector
+           :try-shrink
            :bytes-equal-p
            :prop-iters))
 (in-package :woo-test.prop)
