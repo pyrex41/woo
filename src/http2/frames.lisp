@@ -150,7 +150,9 @@
     (make-frame :type +frame-headers+
                 :flags flags
                 :stream-id stream-id
-                :payload header-block)))
+                :payload (if (typep header-block '(simple-array (unsigned-byte 8) (*)))
+                             header-block
+                             (coerce header-block '(simple-array (unsigned-byte 8) (*)))))))
 
 (defun make-continuation-frame (stream-id header-block &key (end-headers t))
   "Create CONTINUATION frame with a header-block fragment."

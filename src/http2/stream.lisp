@@ -14,6 +14,7 @@
            :http2-stream-header-buffer
            :http2-stream-awaiting-continuation
            :http2-stream-pending-end-stream
+           :http2-stream-refused
            :stream-transition
            :stream-state-error
            :stream-state-error-stream
@@ -56,7 +57,10 @@
   ;; For tracking header continuation
   (header-buffer nil)
   (awaiting-continuation nil :type boolean)
-  (pending-end-stream nil :type boolean))
+  (pending-end-stream nil :type boolean)
+  ;; Set when the stream id is consumed but the request is refused.
+  ;; The header block is still decoded; :recv-headers is not run.
+  (refused nil :type boolean))
 
 (defun stream-open-p (stream)
   "Check if stream is in open state."

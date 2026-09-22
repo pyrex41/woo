@@ -374,15 +374,20 @@
        conn (make-headers-frame 2 #() :end-headers t :end-stream t))
       (ok (= (funcall err) +protocol-error+))))
 
-  (testing "Reused stream id is PROTOCOL_ERROR"
+  (testing "HEADERS after the remote half-close is RST STREAM_CLOSED"
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
        conn (make-headers-frame 1 #() :end-headers t :end-stream t))
       (ok (null (funcall err)))
+      (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))
       (connection-process-frame
        conn (make-headers-frame 1 #() :end-headers t :end-stream t))
-      (ok (= (funcall err) +protocol-error+))))
+      (ok (= (funcall err) +stream-closed+))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +stream-closed+)))
+      (ok (stream-closed-p (connection-get-stream conn 1)))))
 
   (testing "Stream id not greater than last-stream-id is PROTOCOL_ERROR"
     (multiple-value-bind (conn err)
@@ -402,7 +407,39 @@
       (ok (null (funcall err)))
       (connection-process-frame
        conn (make-headers-frame 3 #() :end-headers t))
-      (ok (= (funcall err) +protocol-error+)))))
+      (ok (= (funcall err) +protocol-error+))))
+
+  (testing "A refused HEADERS block is still applied to the dynamic table"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (setf (woo.http2.connection::http2-connection-local-max-concurrent-streams conn) 1)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (ok (null (funcall err)))
+      (let ((block (make-array 26 :element-type '(unsigned-byte 8)
+                               :initial-contents
+                               '(#x40 #x0a #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x6b #x65 #x79
+                                 #x0d #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x68 #x65 #x61 #x64 #x65 #x72))))
+        (connection-process-frame
+         conn (make-headers-frame 3 block :end-headers t :end-stream t)))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (let ((open (connection-get-stream conn 1)))
+        (stream-transition open :send-end-stream)
+        (woo.http2.connection::connection-drop-closed-stream conn open))
+      (let ((got nil))
+        (setf (woo.http2.connection::http2-connection-on-headers conn)
+              (lambda (stream headers end-stream)
+                (declare (ignore stream end-stream))
+                (setf got headers)))
+        (connection-process-frame
+         conn (make-headers-frame
+               5
+               (make-array 1 :element-type '(unsigned-byte 8) :initial-element #xbe)
+               :end-headers t :end-stream t))
+        (ok (not (http2-connection-goaway-sent conn))
+            "indexed lookup of the refused block is not a compression error")
+        (ok (equal got '(("custom-key" . "custom-header"))))))))
 
 (deftest b5-continuation-and-end-stream
   (testing "END_STREAM on HEADERS without END_HEADERS is preserved"
@@ -570,9 +607,24 @@
           "DATA after END_STREAM is RST, not GOAWAY")
       (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
                  (cons 1 +stream-closed+)))
-      (ok (= (http2-connection-window-size conn) +default-initial-window-size+)
-          "rejected DATA does not debit the recv window")
+      (ok (= (http2-connection-window-size conn)
+             (- +default-initial-window-size+ 1))
+          "a fitting DATA frame debits the connection window")
       (ok (stream-closed-p (connection-get-stream conn 1)))))
+
+  (testing "DATA after END_STREAM that exceeds the connection window is FLOW_CONTROL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (setf (http2-connection-window-size conn) 5)
+      (connection-process-frame
+       conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
+                                           :initial-element 1)))
+      (ok (= (funcall err) +flow-control-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (woo.http2.connection::http2-connection-last-rst conn)))
+      (ok (= (http2-connection-window-size conn) 5)))))
 
   (testing "Empty DATA does not apply increment 0"
     (multiple-value-bind (conn err)
@@ -618,13 +670,11 @@
   (testing "HEADERS on half-closed-remote is RST STREAM_CLOSED, not GOAWAY"
     (multiple-value-bind (conn err)
         (test-conn)
-      (let ((stream (connection-get-stream conn 1 :create t)))
-        (stream-transition stream :recv-headers)
-        (stream-transition stream :recv-end-stream)
-        (setf (http2-stream-awaiting-continuation stream) t)
-        (setf (http2-connection-awaiting-continuation-stream-id conn) 1))
       (connection-process-frame
-       conn (make-continuation-frame 1 #()))
+       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+      (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))
+      (connection-process-frame
+       conn (make-headers-frame 1 #() :end-headers t))
       (ok (= (funcall err) +stream-closed+))
       (ok (/= (funcall err) +internal-error+))
       (ok (not (http2-connection-goaway-sent conn)))
@@ -1070,7 +1120,8 @@
           (ok (= (funcall err) +stream-closed+))
           (ok (not (http2-connection-goaway-sent conn)))
           (ok (equal (last-rst conn) (cons 1 +stream-closed+)))
-          (ok (= (http2-connection-window-size conn) recv))
+          (ok (= (http2-connection-window-size conn) (- recv 4))
+              "a fitting DATA frame debits the connection window")
           (ok (= (http2-connection-remote-window-size conn) send))
           (connection-process-frame
            conn (make-headers-frame 3 #() :end-headers t))

@@ -253,23 +253,19 @@
           (when (<= stream-id (http2-connection-last-stream-id conn))
             (connection-protocol-error conn +protocol-error+)
             (return-from validate-new-stream-id nil))
-          ;; RFC 9113 §5.1.2: exceeding the advertised limit is a stream
-          ;; error (RST), not a connection GOAWAY. The id is still consumed.
+          ;; The id is consumed, but the header block is still decoded.
+          ;; RST happens after that decode, not here.
           (when (>= (connection-open-stream-count conn)
                     (http2-connection-local-max-concurrent-streams conn))
             (setf (http2-connection-last-stream-id conn) stream-id)
             (let ((stream (make-http2-stream
                            :id stream-id
                            :window-size (http2-connection-remote-initial-window-size conn)
-                           :recv-window-size +default-initial-window-size+)))
-              (setf (gethash stream-id (http2-connection-streams conn)) stream)
-              (connection-stream-error conn stream +protocol-error+))
-            (return-from validate-new-stream-id nil))
+                           :recv-window-size +default-initial-window-size+
+                           :refused t)))
+              (setf (gethash stream-id (http2-connection-streams conn)) stream))
+            (return-from validate-new-stream-id t))
           t)
-         ((or (stream-closed-p existing)
-              (stream-half-closed-remote-p existing))
-          (connection-protocol-error conn +protocol-error+)
-          nil)
          (t t))))))
 
 (defun connection-header-list-limit (conn)
@@ -352,6 +348,11 @@
              (connection-header-list-limit conn))
       (return-from finish-header-block
         (connection-protocol-error conn +enhance-your-calm+)))
+    ;; Refused streams stay out of the state machine. :recv-headers on a
+    ;; stream we then RST would be a connection error from closed.
+    (when (http2-stream-refused stream)
+      (connection-stream-error conn stream +protocol-error+)
+      (return-from finish-header-block nil))
     (stream-transition stream :recv-headers)
     (when (> stream-id (http2-connection-last-stream-id conn))
       (setf (http2-connection-last-stream-id conn) stream-id))
@@ -443,19 +444,23 @@
     (unless stream
       (return-from handle-data-frame
         (connection-protocol-error conn +protocol-error+)))
-    ;; Already ended: stream error, not a connection GOAWAY.
-    ;; Flow-control overflow below stays a connection error.
-    (when (or (stream-half-closed-remote-p stream)
-              (stream-closed-p stream))
-      (return-from handle-data-frame
-        (connection-stream-error conn stream +stream-closed+)))
     (multiple-value-bind (data pad-error)
         (unpadded-payload (frame-payload frame) flags)
       (when pad-error
         (return-from handle-data-frame
           (connection-protocol-error conn pad-error)))
-      (when (or (> raw-len (http2-connection-window-size conn))
-                (> raw-len (http2-stream-recv-window-size stream)))
+      ;; Connection window is connection state. A frame that does not fit
+      ;; is a connection error and is not debited. A frame that fits is
+      ;; debited even when the stream itself is already finished.
+      (when (> raw-len (http2-connection-window-size conn))
+        (return-from handle-data-frame
+          (connection-protocol-error conn +flow-control-error+)))
+      (when (or (stream-half-closed-remote-p stream)
+                (stream-closed-p stream))
+        (decf (http2-connection-window-size conn) raw-len)
+        (return-from handle-data-frame
+          (connection-stream-error conn stream +stream-closed+)))
+      (when (> raw-len (http2-stream-recv-window-size stream))
         (return-from handle-data-frame
           (connection-protocol-error conn +flow-control-error+)))
       (decf (http2-connection-window-size conn) raw-len)

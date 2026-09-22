@@ -67,12 +67,19 @@
               name)))
 
 (defun field-value-ok-p (value)
-  "RFC 9113 §8.2.1: no NUL, CR, or LF in a field value."
-  (not (find-if (lambda (char)
-                  (or (char= char #\Nul)
-                      (char= char #\Return)
-                      (char= char #\Newline)))
-                value)))
+  "RFC 9113 §8.2.1: no NUL, CR, or LF, and no leading or trailing SP/HTAB.
+   An empty value is legal here; missing pseudo-header values are separate."
+  (and (not (find-if (lambda (char)
+                       (or (char= char #\Nul)
+                           (char= char #\Return)
+                           (char= char #\Newline)))
+                     value))
+       (or (zerop (length value))
+           (let ((first (char value 0))
+                 (last (char value (1- (length value)))))
+             (flet ((ws (char)
+                      (or (char= char #\Space) (char= char #\Tab))))
+               (not (or (ws first) (ws last))))))))
 
 (defun valid-request-path-p (path)
   ":path is \"*\" or an absolute path (RFC 9113 §8.3.1)."

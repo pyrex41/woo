@@ -225,6 +225,18 @@
       (ng (validate-request-headers
            (valid-request-headers (cons "x-a" bad)))
           bad)))
+  (testing "Leading or trailing SP/HTAB is a malformed field value"
+    (dolist (bad (list " x" "x " (format nil "~Cx" #\Tab) (format nil "x~C" #\Tab)
+                       " "))
+      (ng (validate-request-headers
+           (valid-request-headers (cons "x-a" bad)))
+          bad))
+    (ok (validate-request-headers
+         (valid-request-headers (cons "x-a" "a b")))
+        "interior space stays legal")
+    (ok (validate-request-headers
+         (valid-request-headers (cons "x-a" "")))
+        "empty value is not leading whitespace"))
   (testing "Non-token field names are rejected"
     (ng (validate-request-headers
          (valid-request-headers (cons "bad name" "x"))))
