@@ -136,10 +136,32 @@
       (replace frame payload :start1 idx))
     frame))
 
+(defun gen-code-point (rng)
+  "A Unicode scalar value from each UTF-8 length class, never a surrogate."
+  (case (rng-uint rng 4)
+    (0 (rng-int rng #x20 #x7E))
+    (1 (rng-int rng #x80 #x7FF))
+    (2 (if (rng-bool rng)
+           (rng-int rng #x800 #xD7FF)
+           (rng-int rng #xE000 #xFFFD)))
+    (t (rng-int rng #x10000 #x10FFFF))))
+
+(defun gen-utf8-payload (rng size)
+  "Valid UTF-8 octets, as a TEXT message must carry (RFC 6455 §8.1)."
+  (let* ((n (rng-int rng 0 (min 20 size)))
+         (s (make-string n)))
+    (dotimes (i n)
+      (setf (char s i) (code-char (gen-code-point rng))))
+    (coerce (trivial-utf-8:string-to-utf-8-bytes s)
+            '(simple-array (unsigned-byte 8) (*)))))
+
 (defun gen-legal-ws-frame (rng size)
-  (let ((opcode (rng-choose rng (list +opcode-text+ +opcode-binary+)))
-        (payload (gen-ws-payload rng size))
-        (key (make-array 4 :element-type '(unsigned-byte 8))))
+  "TEXT frames carry valid UTF-8; BINARY frames carry arbitrary octets."
+  (let* ((opcode (rng-choose rng (list +opcode-text+ +opcode-binary+)))
+         (payload (if (= opcode +opcode-text+)
+                      (gen-utf8-payload rng size)
+                      (gen-ws-payload rng size)))
+         (key (make-array 4 :element-type '(unsigned-byte 8))))
     (dotimes (i 4) (setf (aref key i) (rng-uint rng 256)))
     (encode-ws-frame opcode payload :mask t :mask-key key)))
 
