@@ -958,3 +958,41 @@
             (woo.http2.hpack::hpack-decode-string encoded 0)
           (ok (string= decoded s))
           (ok (= consumed (length encoded))))))))
+
+(defun indexed-bomb-block (value-length refs)
+  "x: <VALUE-LENGTH a's> with incremental indexing, then REFS references
+   (#xbe, dynamic index 62) to it. Small on the wire, large decoded."
+  (let* ((len (woo.http2.hpack::hpack-encode-integer value-length 7 0))
+         (out (make-array (+ 3 (length len) value-length refs)
+                          :element-type '(unsigned-byte 8)
+                          :initial-element #xbe)))
+    (replace out '(#x40 #x01 #x78))
+    (replace out len :start1 3)
+    (fill out 97 :start (+ 3 (length len)) :end (+ 3 (length len) value-length))
+    out))
+
+(deftest hpack-header-list-limit-while-decoding
+  (testing "decoding stops at the field that crosses the limit"
+    ;; Each field is 32 + 1 + 4000 = 4033 octets. 16 fields are 64,528;
+    ;; the 17th crosses 65,536, so 984 of the 1000 references are never expanded.
+    (let* ((block (indexed-bomb-block 4000 1000))
+           (fields nil))
+      (handler-case
+          (hpack-decode-headers (make-hpack-context) block
+                                :max-header-list-size 65536)
+        (woo.http2.hpack:hpack-header-list-too-large (e)
+          (setf fields (woo.http2.hpack:hpack-header-list-too-large-fields e))))
+      (ok (eql fields 17))))
+
+  (testing "the limit counts name + value + 32 per field"
+    (let ((block (indexed-bomb-block 10 1)))
+      ;; Two fields of 32 + 1 + 10 = 43 octets.
+      (ok (= 2 (length (hpack-decode-headers (make-hpack-context) block
+                                             :max-header-list-size 86))))
+      (ok (signals (hpack-decode-headers (make-hpack-context) block
+                                         :max-header-list-size 85)
+                   'woo.http2.hpack:hpack-header-list-too-large))))
+
+  (testing "without a limit the whole block decodes"
+    (ok (= 1001 (length (hpack-decode-headers (make-hpack-context)
+                                              (indexed-bomb-block 4000 1000)))))))
