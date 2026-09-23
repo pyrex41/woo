@@ -94,6 +94,10 @@
                 :hpack-context-max-dynamic-table-size))
 (in-package :woo-test.http2-connection)
 
+(defun empty-octets ()
+  "Empty frame payload. A literal #() is a simple-vector, not octets."
+  (make-array 0 :element-type '(unsigned-byte 8)))
+
 (deftest connection-preface-constant
   (testing "Connection preface is exactly 24 bytes"
     (ok (= +connection-preface-length+ 24)))
@@ -363,7 +367,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 0 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 0 (empty-octets) :end-headers t :end-stream t))
       (ok (= (funcall err) +protocol-error+))
       (ok (http2-connection-goaway-sent conn))))
 
@@ -371,18 +375,18 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 2 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 2 (empty-octets) :end-headers t :end-stream t))
       (ok (= (funcall err) +protocol-error+))))
 
   (testing "HEADERS after the remote half-close is RST STREAM_CLOSED"
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (null (funcall err)))
       (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (= (funcall err) +stream-closed+))
       (ok (not (http2-connection-goaway-sent conn)))
       (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
@@ -393,9 +397,9 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 5 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 5 (empty-octets) :end-headers t :end-stream t))
       (connection-process-frame
-       conn (make-headers-frame 3 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 3 (empty-octets) :end-headers t :end-stream t))
       (ok (= (funcall err) +protocol-error+))))
 
   (testing "Exceeding MAX_CONCURRENT_STREAMS is PROTOCOL_ERROR"
@@ -403,10 +407,10 @@
         (test-conn)
       (setf (woo.http2.connection::http2-connection-local-max-concurrent-streams conn) 1)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (ok (null (funcall err)))
       (connection-process-frame
-       conn (make-headers-frame 3 #() :end-headers t))
+       conn (make-headers-frame 3 (empty-octets) :end-headers t))
       (ok (= (funcall err) +protocol-error+))))
 
   (testing "A refused HEADERS block is still applied to the dynamic table"
@@ -414,7 +418,7 @@
         (test-conn)
       (setf (woo.http2.connection::http2-connection-local-max-concurrent-streams conn) 1)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (null (funcall err)))
       (let ((block (make-array 26 :element-type '(unsigned-byte 8)
                                :initial-contents
@@ -452,13 +456,13 @@
                 (declare (ignore stream headers))
                 (setf got-end end-stream)))
         (connection-process-frame
-         conn (make-headers-frame 1 #() :end-headers nil :end-stream t))
+         conn (make-headers-frame 1 (empty-octets) :end-headers nil :end-stream t))
         (ok (http2-connection-awaiting-continuation-stream-id conn))
         (connection-process-frame
          conn (make-frame :type +frame-continuation+
                           :flags +flag-end-headers+
                           :stream-id 1
-                          :payload #()))
+                          :payload (empty-octets)))
         (ok got-end)
         (ok (stream-half-closed-remote-p (connection-get-stream conn 1))))))
 
@@ -466,9 +470,9 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers nil))
+       conn (make-headers-frame 1 (empty-octets) :end-headers nil))
       (connection-process-frame
-       conn (make-data-frame 1 #()))
+       conn (make-data-frame 1 (empty-octets)))
       (ok (= (funcall err) +protocol-error+))))
 
   (testing "CONTINUATION when not awaiting is PROTOCOL_ERROR"
@@ -478,7 +482,7 @@
        conn (make-frame :type +frame-continuation+
                         :flags +flag-end-headers+
                         :stream-id 1
-                        :payload #()))
+                        :payload (empty-octets)))
       (ok (= (funcall err) +protocol-error+)))))
 
 (deftest b6-padding
@@ -497,7 +501,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (connection-process-frame
        conn (make-frame :type +frame-data+
                         :flags +flag-padded+
@@ -540,9 +544,10 @@
 
   (testing "parse-frame rejects advertised length over max-frame-size"
     (let ((header (make-array 9 :element-type '(unsigned-byte 8) :initial-element 0)))
+      ;; 16385: one octet over the default. 16384 itself is legal.
       (setf (aref header 0) 0
             (aref header 1) #x40
-            (aref header 2) 0)
+            (aref header 2) 1)
       (multiple-value-bind (frame status)
           (parse-frame header :max-frame-size +default-max-frame-size+)
         (ok (null frame))
@@ -560,7 +565,7 @@
         (test-conn)
       (declare (ignore err))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (let ((stream (connection-get-stream conn 1))
             (before-recv (http2-connection-window-size conn))
             (before-send (http2-connection-remote-window-size conn)))
@@ -578,7 +583,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (setf (http2-connection-window-size conn) 5)
       (connection-process-frame
        conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
@@ -598,7 +603,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (connection-process-frame
        conn (make-data-frame 1 (make-array 1 :element-type '(unsigned-byte 8)
                                            :initial-element 1)))
@@ -616,7 +621,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (setf (http2-connection-window-size conn) 5)
       (connection-process-frame
        conn (make-data-frame 1 (make-array 10 :element-type '(unsigned-byte 8)
@@ -630,7 +635,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (connection-process-frame conn (make-window-update-frame 1 0))
       (ok (= (funcall err) +protocol-error+)))))
 
@@ -644,10 +649,10 @@
                 (declare (ignore stream headers))
                 (push end-stream ends)))
         (connection-process-frame
-         conn (make-headers-frame 1 #() :end-headers t))
+         conn (make-headers-frame 1 (empty-octets) :end-headers t))
         (ok (stream-open-p (connection-get-stream conn 1)))
         (connection-process-frame
-         conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+         conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
         (ok (null (funcall err)))
         (ok (not (http2-connection-goaway-sent conn)))
         (ok (null (woo.http2.connection::http2-connection-last-rst conn)))
@@ -661,7 +666,7 @@
         (stream-transition stream :send-push-promise)
         (ok (= (http2-stream-state stream) +state-reserved-local+)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (= (funcall err) +protocol-error+))
       (ok (/= (funcall err) +internal-error+))
       (ok (http2-connection-goaway-sent conn))
@@ -671,10 +676,10 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (ok (= (funcall err) +stream-closed+))
       (ok (/= (funcall err) +internal-error+))
       (ok (not (http2-connection-goaway-sent conn)))
@@ -731,7 +736,7 @@
           (ok (equal (last-rst conn) (cons 1 +protocol-error+)) bad)
           (ok (stream-closed-p (connection-get-stream conn 1)) bad)
           (connection-process-frame
-           conn (make-headers-frame 3 #() :end-headers t))
+           conn (make-headers-frame 3 (empty-octets) :end-headers t))
           (ok (not (http2-connection-goaway-sent conn)) bad)
           (ok (stream-open-p (connection-get-stream conn 3)) bad)))))
 
@@ -869,7 +874,7 @@
       (ok (http2-connection-goaway-sent conn))
       (ok (null (last-rst conn)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (ok (null (connection-get-stream conn 1)))))
 
   (testing "PING with a non-zero stream id is PROTOCOL_ERROR"
@@ -931,7 +936,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (let ((stream (connection-get-stream conn 1))
             (recv (http2-stream-recv-window-size
                    (connection-get-stream conn 1))))
@@ -945,7 +950,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (let ((stream (connection-get-stream conn 1)))
         (connection-process-frame conn (make-window-update-frame 1 10))
         (ok (null (funcall err)))
@@ -983,7 +988,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (connection-process-frame conn (make-rst-stream-frame 1 +cancel+))
       (ok (null (funcall err)))
       (ok (not (http2-connection-goaway-sent conn)))
@@ -1071,13 +1076,13 @@
                     (serialize-frame (make-frame :type +frame-ping+
                                                  :flags 0 :stream-id 0
                                                  :payload (ub8 8)))
-                    (serialize-frame (make-headers-frame 1 #()
+                    (serialize-frame (make-headers-frame 1 (empty-octets)
                                                         :end-headers t
                                                         :end-stream t))))
       (ok (= (funcall err) +protocol-error+))
       (ok (http2-connection-goaway-sent conn))
       (ok (null (connection-get-stream conn 1)))
-      (parse-bytes conn (serialize-frame (make-headers-frame 3 #() :end-headers t)))
+      (parse-bytes conn (serialize-frame (make-headers-frame 3 (empty-octets) :end-headers t)))
       (ok (null (connection-get-stream conn 3)))))
 
   (testing "SETTINGS ACK is not a valid first frame"
@@ -1097,7 +1102,7 @@
                     +connection-preface+
                     (serialize-frame (make-settings-frame nil))
                     (serialize-frame (make-ping-frame (ub8 8)))
-                    (serialize-frame (make-headers-frame 1 #() :end-headers t))))
+                    (serialize-frame (make-headers-frame 1 (empty-octets) :end-headers t))))
       (ok (null (funcall err)))
       (ok (not (http2-connection-goaway-sent conn)))
       (ok (woo.http2.connection::http2-connection-preface-received conn))
@@ -1109,7 +1114,7 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (let ((stream (connection-get-stream conn 1)))
         (stream-transition stream :send-end-stream)
         (ok (stream-closed-p stream))
@@ -1124,7 +1129,7 @@
               "a fitting DATA frame debits the connection window")
           (ok (= (http2-connection-remote-window-size conn) send))
           (connection-process-frame
-           conn (make-headers-frame 3 #() :end-headers t))
+           conn (make-headers-frame 3 (empty-octets) :end-headers t))
           (ok (not (http2-connection-goaway-sent conn)))
           (ok (stream-open-p (connection-get-stream conn 3))))))))
 
@@ -1172,7 +1177,7 @@
       (ok (http2-connection-goaway-sent conn))
       (ok (null (http2-connection-awaiting-continuation-stream-id conn)))
       (connection-process-frame
-       conn (make-headers-frame 3 #() :end-headers t))
+       conn (make-headers-frame 3 (empty-octets) :end-headers t))
       (ok (null (connection-get-stream conn 3)))))
 
   (testing "uncompressed header list at the cap is accepted and one octet over is not"

@@ -181,9 +181,10 @@
          (bytes-equal-p bytes (serialize-frame frame)))))
 
 (defun process-error-code (frame)
-  (let ((code nil)
-        (conn (make-http2-connection
-               :on-error (lambda (c d) (declare (ignore d)) (setf code c)))))
+  ;; LET* so the on-error closure captures CODE, not a free variable.
+  (let* ((code nil)
+         (conn (make-http2-connection
+                :on-error (lambda (c d) (declare (ignore d)) (setf code c)))))
     (connection-process-frame conn frame)
     (values code (http2-connection-goaway-sent conn))))
 
@@ -416,7 +417,7 @@
                         (declare (ignore sid))
                         (multiple-value-bind (code goaway)
                             (process-error-code
-                             (make-headers-frame 0 #() :end-headers t))
+                             (make-headers-frame 0 (octets) :end-headers t))
                           (and goaway (eql code +protocol-error+))))
                       (lambda (rng size) (declare (ignore rng size)) 0))
       "HEADERS on stream 0 is PROTOCOL_ERROR")
@@ -424,7 +425,7 @@
                       (lambda (sid)
                         (multiple-value-bind (code goaway)
                             (process-error-code
-                             (make-headers-frame sid #() :end-headers t))
+                             (make-headers-frame sid (octets) :end-headers t))
                           (and goaway (eql code +protocol-error+))))
                       (lambda (rng size)
                         (let ((n (rng-int rng 1 (max 2 size))))
@@ -495,11 +496,11 @@
 (deftest prop-pad-overflow
   (ok (check-property "padded-data-overflow"
                       (lambda (pad)
-                        (let ((code nil)
-                              (conn (make-http2-connection
-                                     :on-error (lambda (c d)
-                                                 (declare (ignore d))
-                                                 (setf code c)))))
+                        (let* ((code nil)
+                               (conn (make-http2-connection
+                                      :on-error (lambda (c d)
+                                                  (declare (ignore d))
+                                                  (setf code c)))))
                           (connection-process-frame
                            conn
                            (make-headers-frame

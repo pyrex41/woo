@@ -48,6 +48,10 @@
                 :+stream-closed+))
 (in-package :woo-test.http2-clack)
 
+(defun empty-octets ()
+  "Empty frame payload. A literal #() is a simple-vector, not octets."
+  (make-array 0 :element-type '(unsigned-byte 8)))
+
 (defun valid-request-headers (&rest extra)
   (append (list (cons ":method" "GET")
                 (cons ":scheme" "https")
@@ -359,11 +363,11 @@
               (declare (ignore debug))
               (setf err code)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (ok (null err))
       (let ((window (http2-stream-window-size (connection-get-stream conn 1))))
         (connection-process-frame
-         conn (make-headers-frame 3 #() :end-headers t))
+         conn (make-headers-frame 3 (empty-octets) :end-headers t))
         (ok (= err +protocol-error+))
         (ok (not (http2-connection-goaway-sent conn)))
         (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
@@ -379,13 +383,13 @@
     (let ((conn (make-http2-connection)))
       (setf (woo.http2.connection::http2-connection-local-max-concurrent-streams conn) 1)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (let ((stream (connection-get-stream conn 1)))
         (ok (stream-half-closed-remote-p stream))
         (ok (send-http2-response conn stream 200 nil "ok")))
       (ok (null (gethash 1 (http2-connection-streams conn))))
       (connection-process-frame
-       conn (make-headers-frame 3 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 3 (empty-octets) :end-headers t :end-stream t))
       (ok (not (http2-connection-goaway-sent conn)))
       (ok (stream-half-closed-remote-p (connection-get-stream conn 3)))))
   (testing "DATA after a completed response is RST STREAM_CLOSED, not GOAWAY"
@@ -396,7 +400,7 @@
               (declare (ignore debug))
               (setf err code)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (send-http2-response conn (connection-get-stream conn 1) 200 nil nil))
       (connection-process-frame
        conn (make-data-frame 1 (make-array 1 :element-type '(unsigned-byte 8)
