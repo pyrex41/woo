@@ -195,7 +195,7 @@
           ((string= name ":scheme")
            (setf (getf env :url-scheme) value))
           ((string= name ":authority")
-           (apply-authority env value))
+           (setf env (apply-authority env value)))
           ((string= name "content-type")
            (setf (getf env :content-type) value)
            (setf (gethash name http-headers) value))
@@ -205,7 +205,7 @@
           ((string= name "host")
            (setf (gethash name http-headers) value)
            (unless (getf env :server-name)
-             (apply-authority env value)))
+             (setf env (apply-authority env value))))
           ((not (pseudo-header-p name))
            (setf (gethash name http-headers) value)))))
 
@@ -255,11 +255,15 @@
              (values authority nil)))))))
 
 (defun apply-authority (env value)
+  "Return ENV with :server-name and :server-port from VALUE.
+   The caller must use the result: SETF GETF on a new key conses onto the
+   front of the plist, which a callee's parameter cannot hand back."
   (multiple-value-bind (host port) (split-authority value)
     (setf (getf env :server-name) host)
     ;; Port 0 is a real port. Only NIL means "absent".
     (when (integerp port)
-      (setf (getf env :server-port) port))))
+      (setf (getf env :server-port) port))
+    env))
 
 (defun send-header-block (conn stream-id header-block &key end-stream)
   "Send HEADER-BLOCK as HEADERS plus CONTINUATION frames at max frame size."

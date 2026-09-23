@@ -33,7 +33,8 @@
   (type 0 :type (unsigned-byte 8))
   (flags 0 :type (unsigned-byte 8))
   (stream-id 0 :type (unsigned-byte 32))
-  (payload #() :type (simple-array (unsigned-byte 8) (*))))
+  (payload (make-array 0 :element-type '(unsigned-byte 8))
+   :type (simple-array (unsigned-byte 8) (*))))
 
 (defun frame-length (frame)
   "Get the payload length of a frame."
