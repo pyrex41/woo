@@ -105,35 +105,86 @@
                  new
                  (subseq text (+ pos (length old))))))
 
-(defun compile-string (text label)
-  (let* ((dir (uiop:temporary-directory))
-         (src (merge-pathnames label dir))
+(define-condition invalid-mutant (error)
+  ((label :initarg :label :reader invalid-mutant-label)
+   (reason :initarg :reason :reader invalid-mutant-reason))
+  (:report (lambda (c s)
+             (format s "mutant ~S did not compile/load: ~A"
+                     (invalid-mutant-label c) (invalid-mutant-reason c)))))
+
+(defun compile-and-load (src fasl label)
+  "Compile SRC to FASL and load it. Any compile error, failure-p result, or
+   load error signals INVALID-MUTANT: a mutant that does not build is a bug in
+   the mutant string, not a kill."
+  (handler-case
+      (multiple-value-bind (out warnings-p failure-p)
+          (compile-file src :output-file fasl :verbose nil :print nil)
+        (declare (ignore warnings-p))
+        (when (or (null out) failure-p)
+          (error 'invalid-mutant :label label :reason "compile-file failed"))
+        ;; Reloading redefines every HPACK function; that is the point.
+        (handler-bind (#+sbcl (sb-kernel:redefinition-warning #'muffle-warning))
+          (load out)))
+    (invalid-mutant (c) (error c))
+    (error (e)
+      (error 'invalid-mutant :label label :reason (princ-to-string e)))))
+
+(defun compile-string (text dir name label)
+  (let* ((src (merge-pathnames (make-pathname :name name :type "lisp") dir))
          (fasl (make-pathname :type "fasl" :defaults src)))
     (with-open-file (out src :direction :output :if-exists :supersede)
       (write-string text out))
-    (compile-file src :output-file fasl :verbose nil :print nil)
-    (load fasl)))
+    (compile-and-load src fasl label)))
 
-(defun restore-original ()
-  (compile-string (file-string (hpack-source)) "hpack-restore.lisp"))
+(defun restore-original (dir)
+  "Compile the untouched on-disk source (fasl into DIR) and load it."
+  (compile-and-load (hpack-source)
+                    (merge-pathnames "hpack-restore.fasl" dir)
+                    "original"))
+
+(defun run-mutant (text old new label dir index)
+  "Load one mutant, run the oracle, and always restore the original code.
+   Returns :killed, :survived, :pattern-missing, or :invalid (with the
+   condition as the second value)."
+  (unless (search old text)
+    (return-from run-mutant :pattern-missing))
+  (let ((result nil)
+        (invalid nil))
+    (unwind-protect
+         (handler-case
+             (progn
+               (compile-string (replace-first text old new) dir
+                               (format nil "hpack-mutant-~D" index) label)
+               (setf result (if (oracle) :survived :killed)))
+           (invalid-mutant (c)
+             (setf result :invalid invalid c)))
+      (restore-original dir))
+    (values result invalid)))
 
 (deftest mutation-kills-hpack-mutants
   (ok (oracle) "unmutated HPACK passes the oracle")
-  (let ((survived nil))
-    (dolist (mutant *mutants*)
-      (destructuring-bind (label old new) mutant
-        (let ((text (file-string (hpack-source))))
-          (unless (search old text)
-            (push (list label :pattern-missing) survived))
-          (when (search old text)
-            (handler-case
-                (progn
-                  (compile-string (replace-first text old new)
-                                  "hpack-mutant.lisp")
-                  (when (oracle)
-                    (push label survived)))
-              (error () nil))))))
-    (restore-original)
-    (ok (oracle) "original HPACK restored after mutants")
+  (let* ((source (hpack-source))
+         (original (file-string source))
+         (survived nil)
+         (invalid nil)
+         (killed 0))
+    (woo-test.prop:with-unique-temp-directory (dir "mutate")
+      (loop for (label old new) in *mutants*
+            for index from 0
+            do (multiple-value-bind (result condition)
+                   (run-mutant original old new label dir index)
+                 (ecase result
+                   (:killed (incf killed))
+                   (:survived (push label survived))
+                   (:pattern-missing (push (list label :pattern-missing) survived))
+                   (:invalid (push (princ-to-string condition) invalid)))
+                 (ok (oracle)
+                     (format nil "original HPACK restored after mutant ~S" label)))))
+    (ok (string= original (file-string source))
+        "on-disk HPACK source unchanged by mutation run")
+    (ok (null invalid)
+        (format nil "invalid (non-compiling) mutants: ~S" invalid))
     (ok (null survived)
-        (format nil "surviving mutants: ~S" survived))))
+        (format nil "surviving mutants: ~S" survived))
+    (ok (= killed (length *mutants*))
+        (format nil "~A/~A mutants killed by the oracle" killed (length *mutants*)))))
