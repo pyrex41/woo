@@ -468,7 +468,7 @@ setTimeout(() => { out(false, 'timeout'); process.exit(2); }, 20000);
 
 (defmacro with-showcase ((port) &body body)
   `(if (not (showcase-loaded-p))
-       (skip "woo-showcase does not load in this image; showcase e2e tests skipped")
+       (skip "woo-showcase is not loadable (missing dependency); run (ql:quickload :woo-showcase) once. Showcase e2e tests skipped")
        (with-server (,port (showcase-handler))
          ,@body)))
 

@@ -64,22 +64,57 @@ them as production RFC 6455 / RFC 9113 implementations.
 
 ```common-lisp
 (push #P"path/to/woo/" asdf:*central-registry*)
+(push #P"path/to/woo/showcase/" asdf:*central-registry*) ; for the showcase tests
 (ql:quickload :woo-test)
 (asdf:test-system :woo-test)
 ```
 
-### Test Coverage
+Prerequisites:
 
-All tests pass. The fork adds ~2,800 lines of test code:
+- **libev** and **OpenSSL** (e.g. `brew install libev openssl@3`). If CFFI
+  cannot find them, push their `lib/` directory onto
+  `cffi:*foreign-library-directories*` before loading.
+- **Test certificates** for the TLS/ALPN tests: run `sh t/generate-certificates.sh`
+  from the repo root once (creates the gitignored `t/certs/`).
 
-| Test Suite | Lines | Coverage |
-|------------|-------|----------|
-| `t/hpack.lisp` | 627 | HPACK header compression (RFC 7541) |
-| `t/http2-frames.lisp` | 726 | HTTP/2 frame parsing & serialization |
-| `t/websocket.lisp` | 495 | WebSocket protocol (RFC 6455) |
-| `t/http2-stream.lisp` | 451 | HTTP/2 stream state machine |
-| `t/http2-connection.lisp` | 287 | HTTP/2 connection management |
-| `t/alpn.lisp` | 223 | ALPN protocol negotiation |
+Optional; each suite prints a visible rove `skip` when its tool is missing:
+
+| Needs | Suites | Notes |
+|-------|--------|-------|
+| `curl` built with HTTP/2 | `t/http2-e2e.lisp` | h2c and TLS+ALPN against a live server |
+| Node.js 22+ (`http2`, global `WebSocket`) | `t/http2-e2e.lisp`, `t/websocket-e2e.lisp` | independent client implementations |
+| Go (1.23+) | `t/diff/diff.lisp` | differential oracle against `golang.org/x/net/http2`; first build may download modules |
+| `woo-showcase` deps (ningle, djula, jonathan, …) | `t/showcase.lisp`, showcase part of `t/websocket-e2e.lisp` | fetch once with `(ql:quickload :woo-showcase)`; a real load error fails, only a missing system skips |
+
+Environment variables:
+
+| Variable | Effect |
+|----------|--------|
+| `WOO_SKIP_GO=1` | skip the Go differential tests |
+| `WOO_GO_BUILD_TIMEOUT` | seconds allowed for building the Go oracle |
+| `WOO_PROP_SEED`, `WOO_PROP_ITERS` | seed and iterations for `t/prop/properties.lisp`; a failure prints the seed to replay |
+| `WOO_QC_SEED` | seed for the Quickcheck-style properties (`t/prop/qc.lisp`) |
+| `WOO_QC_FAILURE_FILE` | where failing Quickcheck cases are saved for replay (default under the XDG cache) |
+| `WOO_FUZZ_ITERS` | iterations for the coverage-guided fuzzer (`t/fuzz/guided.lisp`) |
+
+### Test Suites
+
+| Suite | Coverage |
+|-------|----------|
+| `t/hpack.lisp` | HPACK (RFC 7541): RFC Appendix C vectors, Huffman, integer bounds, dynamic-table eviction, header-list cap |
+| `t/http2-frames.lisp` | frame parsing and serialization, size limits |
+| `t/http2-stream.lisp` | stream state machine |
+| `t/http2-connection.lisp` | connection rules, flow control and WINDOW_UPDATE, CONTINUATION, SETTINGS, GOAWAY/RST, DoS limits |
+| `t/http2-clack.lisp` | Clack env and responses, streaming responder, file bodies, trailers, raw sockets |
+| `t/http2-e2e.lisp` | live server driven by curl and Node over h2c and TLS |
+| `t/websocket.lisp` | RFC 6455 framing, UTF-8, close codes, close handshake, buffer growth |
+| `t/websocket-e2e.lisp` | live server driven by Node and raw sockets; showcase `/ws/echo` |
+| `t/alpn.lisp` | ALPN parsing and an end-to-end TLS negotiation |
+| `t/showcase.lisp` | showcase JSON, limits, and request handling |
+| `t/prop/` | property-based tests with shrinking, including random HTTP/2 frame sequences |
+| `t/diff/` | differential tests against Go's HTTP/2 and HPACK |
+| `t/fuzz/` | coverage-guided fuzzing of the codecs (SBCL `sb-cover`) |
+| `t/mutate/` | mutation testing: each HPACK mutant must be caught |
 
 ### Showcase Demo
 

@@ -163,7 +163,7 @@
 
 (deftest showcase-benchmarks-json-shape
   (if (not (showcase-loaded-p))
-      (skip "woo-showcase does not load in this image; /api/benchmarks JSON not checked")
+      (skip "woo-showcase is not loadable (missing dependency); run (ql:quickload :woo-showcase) once. /api/benchmarks JSON not checked")
       (let* ((json (showcase-call "BENCHMARKS-JSON"))
              (parsed (uiop:symbol-call :jonathan :parse json :as :hash-table))
              (charts-js (uiop:read-file-string
