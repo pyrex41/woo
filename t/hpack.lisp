@@ -636,10 +636,11 @@
   (testing "Encode/decode headers with special characters"
     (let ((ctx-enc (make-hpack-context))
           (ctx-dec (make-hpack-context))
-          (headers '(("x-test" . "value with spaces")
+          (headers `(("x-test" . "value with spaces")
                      ("x-symbols" . "!@#$%^&*()")
                      ("x-quotes" . "\"quoted\"")
-                     ("x-newline" . "line1\nline2"))))
+                     ;; HPACK itself carries any octets; field validation is elsewhere.
+                     ("x-newline" . ,(format nil "line1~%line2")))))
       (let* ((encoded (hpack-encode-headers ctx-enc headers))
              (decoded (hpack-decode-headers ctx-dec encoded)))
         (ok (= (length decoded) (length headers)))
