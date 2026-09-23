@@ -19,8 +19,15 @@
 
 ;; Quickcheck (for-all / generators / shrink) and Hypothesis (given / assume /
 ;; note / example replay) on the same runner. Seeds are deterministic unless
-;; WOO_QC_SEED is set. Failures are appended to t/prop/.qc-failures and replayed
-;; on the next run.
+;; WOO_QC_SEED is set. Shrunk failures are appended to a replay file and tried
+;; first on the next run. The file lives outside the source tree so a test run
+;; never dirties (or needs write access to) the checkout: WOO_QC_FAILURE_FILE
+;; if set, else $XDG_CACHE_HOME/woo/qc-failures.sexp. Delete it to forget
+;; recorded failures.
+;;
+;; A property whose assumptions reject too much is a broken test, not a pass:
+;; qc-run fails when discards exceed +qc-max-discard-ratio+ times the trial
+;; count or when fewer than the requested trials were accepted.
 
 (defvar *qc-seed* nil)
 (defvar *qc-notes* nil)
@@ -111,18 +118,13 @@
                             (push copy out))))
                out))))
 
-(defvar *woo-root*
-  (let ((here (or *load-truename* *compile-file-truename*)))
-    (dotimes (i 2)
-      (setf here (uiop:pathname-parent-directory-pathname here)))
-    here))
-
-(defun woo-root ()
-  (or (ignore-errors (asdf:system-source-directory :woo))
-      *woo-root*))
+(defconstant +qc-max-discard-ratio+ 10)
 
 (defun failure-file ()
-  (merge-pathnames "t/prop/.qc-failures" (woo-root)))
+  (let ((env (ignore-errors (uiop:getenv "WOO_QC_FAILURE_FILE"))))
+    (if (and env (plusp (length env)))
+        (uiop:parse-native-namestring env)
+        (uiop:xdg-cache-home "woo" "qc-failures.sexp"))))
 
 (defun read-failures (name)
   (let ((path (failure-file))
@@ -137,6 +139,9 @@
 
 (defun record-failure (name value)
   (ignore-errors
+    (when (member value (read-failures name) :test #'equalp)
+      (return-from record-failure))
+    (ensure-directories-exist (failure-file))
     (with-open-file (out (failure-file)
                          :direction :output
                          :if-exists :append
@@ -175,15 +180,17 @@
                                              (assumption-failed () t)
                                              (error () nil))))))
                  (record-failure name shrunk)
-                 (format t "~&~A failed seed=~A~%  value=~S~%  shrunk=~S~%  notes=~S~%~@[  error=~A~%~]"
-                         name seed value shrunk (reverse *qc-notes*) err)
+                 (format t "~&~A failed seed=~A~%  value=~S~%  shrunk=~S~%  notes=~S~%~@[  error=~A~%~]  replay: WOO_QC_SEED=~A (shrunk value saved to ~A)~%"
+                         name seed value shrunk (reverse *qc-notes*) err
+                         base (uiop:native-namestring (failure-file)))
                  (return-from qc-run nil))))
       (dolist (saved (read-failures name))
         (trial saved :replay))
       (dolist (ex examples)
         (trial ex :example))
-      (loop for i from 0 below (* n 20)
-            while (< tried n)
+      (loop for i from 0
+            while (and (< tried n)
+                       (<= discards (* +qc-max-discard-ratio+ n)))
             for seed = (logand (+ base (* i 1103515245) 12345) #xFFFFFFFF)
             for rng = (make-prop-rng seed)
             for size = (1+ (mod i 32))
@@ -191,8 +198,9 @@
             for result = (trial value seed)
             do (when (eq result t)
                  (incf tried)))
-      (when (zerop tried)
-        (format t "~&~A discarded every trial (~A discards)~%" name discards)
+      (when (< tried n)
+        (format t "~&~A accepted only ~A/~A trials (~A discards, cap ~A); the assumptions reject too much~%"
+                name tried n discards (* +qc-max-discard-ratio+ n))
         (return-from qc-run nil))
       t)))
 
