@@ -46,7 +46,11 @@
            :*http2-frame-sink*
            :*max-request-body-size*
            :*max-connection-body-buffer*
-           :*max-closed-stream-data-resets*))
+           :*max-closed-stream-data-resets*
+           :*connection-specific-headers*
+           :connection-specific-header-p
+           :http-token-name-p
+           :field-value-ok-p))
 (in-package :woo.http2.connection)
 
 (defun default-local-settings ()
@@ -394,6 +398,56 @@
                  (length (string-to-utf-8-bytes (car header)))
                  (length (string-to-utf-8-bytes (cdr header))))))))
 
+(defparameter *connection-specific-headers*
+  '("connection" "keep-alive" "proxy-connection" "transfer-encoding" "upgrade"))
+
+(defun connection-specific-header-p (name value)
+  (let ((n (string-downcase name)))
+    (or (member n *connection-specific-headers* :test #'string=)
+        (and (string= n "te")
+             (not (string-equal (string-trim '(#\Space #\Tab) value) "trailers"))))))
+
+(defparameter *http-tchar-extra* "!#$%&'*+-.^_`|~"
+  "tchar bytes that are not DIGIT or lowercase ALPHA (RFC 9110).")
+
+(defun http-token-name-p (name)
+  "HTTP/2 field names are lowercase tokens."
+  (and (plusp (length name))
+       (every (lambda (char)
+                (or (char<= #\0 char #\9)
+                    (char<= #\a char #\z)
+                    (find char *http-tchar-extra* :test #'char=)))
+              name)))
+
+(defun field-value-ok-p (value)
+  "RFC 9113 §8.2.1: no NUL, CR, or LF, and no leading or trailing SP/HTAB.
+   An empty value is legal here; missing pseudo-header values are separate."
+  (and (not (find-if (lambda (char)
+                       (or (char= char #\Nul)
+                           (char= char #\Return)
+                           (char= char #\Newline)))
+                     value))
+       (or (zerop (length value))
+           (let ((first (char value 0))
+                 (last (char value (1- (length value)))))
+             (flet ((ws (char)
+                      (or (char= char #\Space) (char= char #\Tab))))
+               (not (or (ws first) (ws last))))))))
+
+(defun trailer-field-ok-p (field)
+  "A trailer field is a regular request field (RFC 9113 §8.2): a lowercase
+   token name, so no pseudo-header, a clean value, and nothing
+   connection-specific. content-length frames the body and cannot be a
+   trailer (RFC 9110 §6.5.1)."
+  (let ((name (car field))
+        (value (cdr field)))
+    (and (stringp name)
+         (stringp value)
+         (http-token-name-p name)
+         (field-value-ok-p value)
+         (not (connection-specific-header-p name value))
+         (not (string= name "content-length")))))
+
 (defun parse-content-length-token (value)
   "HTTP content-length is 1*DIGIT (RFC 9110). NIL if it is not."
   (when (and (stringp value)
@@ -445,12 +499,6 @@
     (hpack-header-list-too-large ()
       (values nil nil))))
 
-(defun pseudo-header-field-p (header)
-  (let ((name (car header)))
-    (and (stringp name)
-         (plusp (length name))
-         (char= (char name 0) #\:))))
-
 (defun body-size-over-limit-p (size)
   (and *max-request-body-size*
        (> size *max-request-body-size*)))
@@ -479,12 +527,11 @@
 
 (defun finish-trailers (conn stream trailers end-stream)
   "A later HEADERS on an open stream is a trailer section (RFC 9113 §8.1).
-   It must carry END_STREAM and no pseudo-headers, or the request is
-   malformed. content-length frames the body and cannot be a trailer
-   (RFC 9110 §6.5.1). The request headers are kept; trailers are stored apart."
+   It must carry END_STREAM, and each field must pass trailer-field-ok-p,
+   or the request is malformed. The request headers are kept; trailers are
+   stored apart."
   (when (or (not end-stream)
-            (some #'pseudo-header-field-p trailers)
-            (assoc "content-length" trailers :test #'equal))
+            (notevery #'trailer-field-ok-p trailers))
     (connection-stream-error conn stream +protocol-error+)
     (return-from finish-trailers nil))
   (setf (http2-stream-trailers stream) trailers

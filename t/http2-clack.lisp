@@ -579,7 +579,9 @@
           (ok (equal (getf env :query-string) "x=1"))
           (ok (equal (map 'string #'code-char (getf env :raw-body)) "hello"))
           (ok (equal (woo.http2.stream:http2-stream-trailers (getf env :http2.stream))
-                     '(("x-checksum" . "abc")))))
+                     '(("x-checksum" . "abc"))))
+          (ok (equal (getf env :http2.trailers) '(("x-checksum" . "abc")))
+              "the app sees the trailers in the env"))
         (ok (null (woo.http2.connection::http2-connection-last-rst conn))
             "no RST PROTOCOL_ERROR")
         (ok (not (http2-connection-goaway-sent conn)))
@@ -604,6 +606,49 @@
       (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
                  (cons 1 +protocol-error+)))
       (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "a request without trailers has :http2.trailers NIL"
+    (let* ((envs nil)
+           (conn (adapter-conn (lambda (env)
+                                 (push env envs)
+                                 '(200 () "ok")))))
+      (connection-process-frame
+       conn (make-headers-frame 1 (request-block (valid-request-headers))
+                                :end-headers t))
+      (connection-process-frame
+       conn (make-data-frame 1 (map '(vector (unsigned-byte 8)) #'char-code "x")
+                             :end-stream t))
+      (connection-process-frame
+       conn (make-headers-frame 3 (request-block (valid-request-headers))
+                                :end-headers t :end-stream t))
+      (ok (= (length envs) 2))
+      (dolist (env envs)
+        (ok (member :http2.trailers env))
+        (ok (null (getf env :http2.trailers))))))
+
+  (testing "trailers with connection-specific or malformed fields do not reach the app"
+    (dolist (field (list '("connection" . "close")
+                         '("transfer-encoding" . "chunked")
+                         '("te" . "gzip")
+                         '("X-Upper" . "v")
+                         (cons "x-a" (format nil "a~Cb" #\Return))
+                         '("x-a" . " lead")))
+      (let* ((called nil)
+             (conn (adapter-conn (lambda (env)
+                                   (declare (ignore env))
+                                   (setf called t)
+                                   '(200 () "no")))))
+        (connection-process-frame
+         conn (make-headers-frame 1 (request-block (valid-request-headers))
+                                  :end-headers t))
+        (connection-process-frame
+         conn (make-headers-frame 1 (request-block (list field))
+                                  :end-headers t :end-stream t))
+        (ok (not called) (car field))
+        (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                   (cons 1 +protocol-error+))
+            (car field))
+        (ok (not (http2-connection-goaway-sent conn))))))
 
   (testing "trailers without END_STREAM are malformed"
     (let* ((called nil)

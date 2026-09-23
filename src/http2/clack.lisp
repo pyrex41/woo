@@ -40,44 +40,8 @@
        (> (length name) 0)
        (char= (char name 0) #\:)))
 
-(defparameter *connection-specific-headers*
-  '("connection" "keep-alive" "proxy-connection" "transfer-encoding" "upgrade"))
-
-(defun connection-specific-header-p (name value)
-  (let ((n (string-downcase name)))
-    (or (member n *connection-specific-headers* :test #'string=)
-        (and (string= n "te")
-             (not (string-equal (string-trim '(#\Space #\Tab) value) "trailers"))))))
-
 (defun request-pseudo-name-p (name)
   (member name '(":method" ":scheme" ":path" ":authority") :test #'string=))
-
-(defparameter *http-tchar-extra* "!#$%&'*+-.^_`|~"
-  "tchar bytes that are not DIGIT or lowercase ALPHA (RFC 9110).")
-
-(defun http-token-name-p (name)
-  "HTTP/2 field names are lowercase tokens."
-  (and (plusp (length name))
-       (every (lambda (char)
-                (or (char<= #\0 char #\9)
-                    (char<= #\a char #\z)
-                    (find char *http-tchar-extra* :test #'char=)))
-              name)))
-
-(defun field-value-ok-p (value)
-  "RFC 9113 §8.2.1: no NUL, CR, or LF, and no leading or trailing SP/HTAB.
-   An empty value is legal here; missing pseudo-header values are separate."
-  (and (not (find-if (lambda (char)
-                       (or (char= char #\Nul)
-                           (char= char #\Return)
-                           (char= char #\Newline)))
-                     value))
-       (or (zerop (length value))
-           (let ((first (char value 0))
-                 (last (char value (1- (length value)))))
-             (flet ((ws (char)
-                      (or (char= char #\Space) (char= char #\Tab))))
-               (not (or (ws first) (ws last))))))))
 
 (defun valid-request-path-p (path)
   ":path is \"*\" or an absolute path (RFC 9113 §8.3.1)."
@@ -483,7 +447,8 @@
        (connection-stream-error conn stream +protocol-error+))
       (end-stream
        (setf (getf env :http2.connection) conn
-             (getf env :raw-body) nil)
+             (getf env :raw-body) nil
+             (getf env :http2.trailers) nil)
        (invoke-http2-app conn socket stream app env)))))
 
 (defun handle-http2-data-end (conn socket stream app)
@@ -494,7 +459,9 @@
        (connection-stream-error conn stream +protocol-error+))
       (t
        (setf (getf env :http2.connection) conn
-             (getf env :raw-body) (if (> (length body) 0) body nil))
+             (getf env :raw-body) (if (> (length body) 0) body nil)
+             ;; Trailer fields as received, an alist of (name . value).
+             (getf env :http2.trailers) (http2-stream-trailers stream))
        (invoke-http2-app conn socket stream app env)))))
 
 (defun attach-http2-app (conn socket app)

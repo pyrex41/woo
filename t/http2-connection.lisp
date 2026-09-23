@@ -1663,3 +1663,60 @@
 
   (testing "the default limit leaves ordinary stragglers alone"
     (ok (>= woo.http2.connection:*max-closed-stream-data-resets* 100))))
+
+;;; Trailer field validation
+
+(defun send-trailers (trailers)
+  "Open stream 1, send TRAILERS with END_STREAM. Returns (values conn err called)."
+  (multiple-value-bind (conn err)
+      (test-conn)
+    (let ((calls 0))
+      (setf (woo.http2.connection::http2-connection-on-headers conn)
+            (lambda (stream headers end-stream)
+              (declare (ignore stream headers end-stream))
+              (incf calls)))
+      (connection-process-frame
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
+      (connection-process-frame conn (headers-of 1 trailers :end-stream t))
+      (values conn err calls))))
+
+(deftest trailer-field-validation
+  (testing "malformed trailer fields are RST PROTOCOL_ERROR, not GOAWAY"
+    (dolist (field `(("X-Upper" . "v")
+                     ("connection" . "close")
+                     ("keep-alive" . "5")
+                     ("proxy-connection" . "keep-alive")
+                     ("transfer-encoding" . "chunked")
+                     ("upgrade" . "h2c")
+                     ("te" . "gzip")
+                     ("x-a" . ,(format nil "a~Cb" #\Return))
+                     ("x-a" . ,(format nil "a~Cb" #\Newline))
+                     ("x-a" . ,(format nil "a~Cb" #\Nul))
+                     ("x-a" . " lead")
+                     ("x-a" . "trail ")
+                     ("x-a" . ,(format nil "trail~C" #\Tab))
+                     ("bad name" . "v")
+                     (":path" . "/")))
+      (multiple-value-bind (conn err calls)
+          (send-trailers (list field))
+        (ok (= (funcall err) +protocol-error+) (car field))
+        (ok (equal (last-rst conn) (cons 1 +protocol-error+)) (car field))
+        (ok (= calls 1) "only the request headers reached on-headers")
+        (ok (not (http2-connection-goaway-sent conn)) (car field)))))
+
+  (testing "content-length in trailers is RST PROTOCOL_ERROR"
+    (multiple-value-bind (conn err calls)
+        (send-trailers '(("content-length" . "0")))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (equal (last-rst conn) (cons 1 +protocol-error+)))
+      (ok (= calls 1))
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "well-formed trailers, including TE: trailers, are accepted"
+    (multiple-value-bind (conn err calls)
+        (send-trailers '(("x-checksum" . "abc") ("te" . "trailers") ("x-empty" . "")))
+      (ok (null (funcall err)))
+      (ok (null (last-rst conn)))
+      (ok (= calls 2))
+      (ok (equal (woo.http2.stream:http2-stream-trailers (connection-get-stream conn 1))
+                 '(("x-checksum" . "abc") ("te" . "trailers") ("x-empty" . "")))))))
