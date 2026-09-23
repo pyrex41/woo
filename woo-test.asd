@@ -15,6 +15,7 @@
    (:file "t/websocket")
    (:file "showcase-limits" :pathname "showcase/src/limits")
    (:file "t/showcase" :depends-on ("showcase-limits"))
+   (:file "t/websocket-e2e")
    ;; Property-based protocol tests (in-repo generator/shrinker)
    (:module "t-prop"
     :pathname "t/prop"
