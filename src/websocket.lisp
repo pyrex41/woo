@@ -26,6 +26,7 @@
            :send-pong
            :send-close
            :write-websocket-upgrade-response
+           :socket-upgraded-p
            :+opcode-continuation+
            :+opcode-text+
            :+opcode-binary+
@@ -96,6 +97,21 @@
   "The WS-CLOSE of SOCKET, created on first use."
   (or (gethash socket *socket-close-states*)
       (setf (gethash socket *socket-close-states*) (make-ws-close))))
+
+(defvar *upgraded-sockets*
+  #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized t)
+  #+ccl (make-hash-table :test 'eq :weak :key)
+  #+lispworks (make-hash-table :test 'eq :weak-kind :key)
+  #-(or sbcl ccl lispworks) (make-hash-table :test 'eq))
+
+(defun socket-upgraded-p (socket)
+  "True once SOCKET has been handed to WebSocket: the 101 response was
+   written or SETUP-WEBSOCKET installed its reader. The HTTP response path
+   must write nothing more to it, whatever the application returned."
+  (values (gethash socket *upgraded-sockets*)))
+
+(defun mark-socket-upgraded (socket)
+  (setf (gethash socket *upgraded-sockets*) t))
 
 (defstruct ws-state
   "WebSocket connection state."
@@ -553,6 +569,7 @@
                                                        code
                                                        1000))))
                 :on-error on-error)))
+    (mark-socket-upgraded socket)
     ;; Replace socket's data with our state and install frame parser
     (setf (socket-data socket)
           (lambda (data &key (start 0) (end (length data)))
@@ -584,11 +601,19 @@
 
 (defun write-websocket-upgrade-response (socket accept-key &optional extra-headers)
   "Write a 101 Switching Protocols response for WebSocket upgrade.
-   EXTRA-HEADERS is a plist of additional headers to include."
+   EXTRA-HEADERS is a plist of additional headers to include.
+   The socket then belongs to WebSocket: woo writes no HTTP response for
+   this request (see SOCKET-UPGRADED-P)."
+  (mark-socket-upgraded socket)
   (with-async-writing (socket)
-    (write-socket-data socket #.(string-to-utf-8-bytes "HTTP/1.1 101 Switching Protocols\r\n"))
-    (write-socket-data socket #.(string-to-utf-8-bytes "Upgrade: websocket\r\n"))
-    (write-socket-data socket #.(string-to-utf-8-bytes "Connection: Upgrade\r\n"))
+    ;; "\r\n" in a Lisp string is the letters r and n, not CR LF: end each
+    ;; line with WRITE-SOCKET-CRLF.
+    (write-socket-data socket #.(string-to-utf-8-bytes "HTTP/1.1 101 Switching Protocols"))
+    (write-socket-crlf socket)
+    (write-socket-data socket #.(string-to-utf-8-bytes "Upgrade: websocket"))
+    (write-socket-crlf socket)
+    (write-socket-data socket #.(string-to-utf-8-bytes "Connection: Upgrade"))
+    (write-socket-crlf socket)
     (write-socket-data socket #.(string-to-utf-8-bytes "Sec-WebSocket-Accept: "))
     (write-socket-string socket accept-key)
     (write-socket-crlf socket)

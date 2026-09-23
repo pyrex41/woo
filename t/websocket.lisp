@@ -1312,3 +1312,86 @@
           (ok (equalp (fake-flush socket) (server-close-frame 1002))
               "the 1002 close frame is written")
           (ok closed "the flush closes the socket"))))))
+
+;;; The 101 handshake must be real CR LF lines. "\r\n" in a Lisp string is
+;;; the letters r and n, which no client can parse.
+
+(defun octets-string (octets)
+  (map 'string #'code-char octets))
+
+(defun split-crlf (string)
+  "Lines of STRING split on CR LF. A bare CR or LF stays inside a line."
+  (loop with start = 0
+        for pos = (search (coerce '(#\Return #\Newline) 'string) string :start2 start)
+        collect (subseq string start (or pos (length string)))
+        while pos
+        do (setf start (+ pos 2))))
+
+(deftest test-upgrade-response-bytes
+  (testing "the 101 response for the RFC 6455 sample key, byte for byte"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (write-websocket-upgrade-response
+         socket (compute-accept-key "dGhlIHNhbXBsZSBub25jZQ=="))
+        (let* ((bytes (queued-octets socket))
+               (text (octets-string bytes))
+               (lines (split-crlf text)))
+          (ok (equal text
+                     (format nil "HTTP/1.1 101 Switching Protocols~C~C~
+                                  Upgrade: websocket~C~C~
+                                  Connection: Upgrade~C~C~
+                                  Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=~C~C~C~C"
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline))
+              "exact handshake bytes")
+          (ok (equal (first lines) "HTTP/1.1 101 Switching Protocols")
+              "status line ends at CR LF")
+          (ok (equal (last lines 2) '("" ""))
+              "the header block ends with an empty line")
+          (ok (notany (lambda (line) (find #\\ line)) lines)
+              "no backslash escapes leaked into the response")
+          (ok (notany (lambda (line) (or (find #\Return line) (find #\Newline line))) lines)
+              "no bare CR or LF")
+          (let ((headers (loop for line in (subseq lines 1 (- (length lines) 2))
+                               for colon = (position #\: line)
+                               collect (cons (string-downcase (subseq line 0 colon))
+                                             (string-trim " " (subseq line (1+ colon)))))))
+            (ok (equal (cdr (assoc "upgrade" headers :test #'string=)) "websocket"))
+            (ok (equal (cdr (assoc "connection" headers :test #'string=)) "Upgrade"))
+            (ok (equal (cdr (assoc "sec-websocket-accept" headers :test #'string=))
+                       "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")))))))
+  (testing "extra headers are CR LF lines before the blank line"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (write-websocket-upgrade-response socket "abc=" '(:sec-websocket-protocol "chat"))
+        (let ((lines (split-crlf (octets-string (queued-octets socket)))))
+          (ok (equal lines '("HTTP/1.1 101 Switching Protocols"
+                             "Upgrade: websocket"
+                             "Connection: Upgrade"
+                             "Sec-WebSocket-Accept: abc="
+                             "Sec-Websocket-Protocol: chat"
+                             "" ""))))))))
+
+;;; After the upgrade woo must not write the app's HTTP response (NIL turns
+;;; into a 500; a framework finalizes a 200) onto the WebSocket stream.
+
+(deftest test-no-http-response-after-upgrade
+  (testing "handle-response writes nothing to an upgraded socket"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (ok (not (woo.websocket:socket-upgraded-p socket)))
+        (write-websocket-upgrade-response socket "abc=")
+        (ok (woo.websocket:socket-upgraded-p socket))
+        (let ((handshake (queued-octets socket)))
+          (dolist (res (list '(500 nil nil)
+                             '(200 (:content-type "text/html") (""))
+                             (lambda (responder)
+                               (funcall responder '(200 nil ("late"))))))
+            (ok (null (woo::handle-response nil socket res)))
+            (ok (equalp (queued-octets socket) handshake)
+                (format nil "nothing follows the 101 for ~S" res)))))))
+  (testing "setup-websocket alone marks the socket"
+    (let ((socket (make-bare-socket)))
+      (setup-websocket socket)
+      (ok (woo.websocket:socket-upgraded-p socket)))))
+
