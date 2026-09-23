@@ -115,3 +115,90 @@
         (dex:*not-verify-ssl* t)
         (clack.test:*use-https* t))
     (clack.test.suite:run-server-tests :woo)))
+
+;;; The HTTP/1 reader splits its input at CR LF CR LF only while fast-http
+;;; reads a request head. A body goes to fast-http whole, however many
+;;; CR LF CR LFs it holds: split, each piece was another body write, and
+;;; past smart-buffer's 1 MB memory limit each write reopened a temp file.
+
+(defun bare-socket ()
+  (woo.ev.socket::%make-socket
+   :fd 0
+   :last-activity 0.0d0
+   :open-p t
+   :watchers (make-array 3 :initial-element (cffi:null-pointer))))
+
+(deftest http1-body-is-not-split
+  (testing "a 1.2 MB body of CR LF CR LFs reaches the body buffer once per read"
+    (let* ((n (* 1200 1024))
+           (body (let ((v (make-array n :element-type '(unsigned-byte 8))))
+                   (dotimes (i n v) (setf (aref v i) (if (evenp i) 13 10)))))
+           (request (concatenate '(simple-array (unsigned-byte 8) (*))
+                                 (trivial-utf-8:string-to-utf-8-bytes
+                                  (format nil "POST /p HTTP/1.1~C~CHost: x~C~CContent-Length: ~D~C~C~C~C"
+                                          #\Return #\Newline #\Return #\Newline n
+                                          #\Return #\Newline #\Return #\Newline))
+                                 body))
+           (read-size 65536)
+           (reads (ceiling (length request) read-size))
+           (writes 0)
+           (received nil)
+           (socket (bare-socket))
+           (write-fn (symbol-function 'smart-buffer:write-to-buffer))
+           (elapsed nil))
+      (unwind-protect
+           (let ((woo.specials:*app*
+                   (lambda (env)
+                     (let* ((in (getf env :raw-body))
+                            (buf (make-array n :element-type '(unsigned-byte 8))))
+                       (setf received (and in (subseq buf 0 (read-sequence buf in)))))
+                     ;; A delayed response that never comes: nothing to write.
+                     (lambda (responder) (declare (ignore responder)))))
+                 (woo.specials:*debug* t)
+                 (start (get-internal-real-time)))
+             (setf (symbol-function 'smart-buffer:write-to-buffer)
+                   (lambda (&rest args)
+                     (incf writes)
+                     (apply write-fn args)))
+             (woo::setup-parser socket)
+             (loop for s from 0 below (length request) by read-size
+                   do (woo::read-cb socket (subseq request s (min (length request)
+                                                                  (+ s read-size)))))
+             (setf elapsed (/ (- (get-internal-real-time) start)
+                              internal-time-units-per-second)))
+        (setf (symbol-function 'smart-buffer:write-to-buffer) write-fn))
+      (ok (equalp received body) "the app gets the whole body")
+      (ok (<= writes (1+ reads))
+          (format nil "~D body writes for ~D reads" writes reads))
+      (ok (< elapsed 10) (format nil "parsed in ~,2Fs" elapsed)))))
+
+(deftest http1-only-upgrade-heads-are-split
+  (testing "a read of pipelined ordinary requests is scanned only to its first head's end"
+    (let* ((head (trivial-utf-8:string-to-utf-8-bytes
+                  (format nil "GET /a HTTP/1.1~C~CHost: x~C~CUpgrade-Insecure-Requests: 1~C~C~C~C"
+                          #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                          #\Return #\Newline)))
+           (read (apply #'concatenate '(simple-array (unsigned-byte 8) (*))
+                        (make-list 16 :initial-element head)))
+           (scanned 0)
+           (requests 0)
+           (socket (bare-socket))
+           (scan-fn (symbol-function 'woo::find-header-end)))
+      (unwind-protect
+           (let ((woo.specials:*app* (lambda (env)
+                                       (declare (ignore env))
+                                       (incf requests)
+                                       (lambda (responder) (declare (ignore responder)))))
+                 (woo.specials:*debug* t))
+             (setf (symbol-function 'woo::find-header-end)
+                   (lambda (data start end match)
+                     (multiple-value-bind (split m found upgrade)
+                         (funcall scan-fn data start end match)
+                       (incf scanned (- split start))
+                       (values split m found upgrade))))
+             (woo::setup-parser socket)
+             (woo::read-cb socket read))
+        (setf (symbol-function 'woo::find-header-end) scan-fn))
+      (ok (= requests 16) "every request is parsed")
+      (ok (= scanned (length head))
+          (format nil "~D octets scanned of ~D" scanned (length read))))))
