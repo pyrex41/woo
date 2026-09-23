@@ -8,7 +8,9 @@
 ;; Coverage-guided fuzzing of the pure codecs. SBCL sb-cover records which
 ;; source branches ran. An input is kept when it hits a branch the corpus has
 ;; not hit. The campaign seed is fixed so the run is reproducible.
-;; WOO_FUZZ_ITERS overrides the mutation budget (default 60).
+;; WOO_FUZZ_ITERS overrides the mutation budget (default 60). SBCL only: other
+;; implementations report a rove skip. The instrumented build lives in a
+;; unique temp directory and the plain build is always reloaded afterwards.
 
 (defun fuzz-iters ()
   (let ((env (ignore-errors (uiop:getenv "WOO_FUZZ_ITERS"))))
@@ -30,27 +32,37 @@
               "src/http2/frames.lisp"
               "src/http2/hpack.lisp"))))
 
-(defun proclaim-coverage (on)
-  (require :sb-cover)
-  (let ((quality (find-symbol "STORE-COVERAGE-DATA" :sb-cover)))
-    (if on
-        (proclaim `(optimize ,quality))
-        (proclaim `(optimize (,quality 0))))))
+(defun sb-cover-symbol (name)
+  (or (find-symbol name :sb-cover)
+      (error "sb-cover has no ~A" name)))
 
-(defun compile-codecs (&key coverage)
-  (proclaim-coverage coverage)
-  (let ((out (uiop:temporary-directory)))
-    (dolist (src (source-files))
-      (let ((fasl (merge-pathnames (make-pathname :name (pathname-name src)
-                                                   :type "fasl")
-                                   out)))
-        (compile-file src :output-file fasl :verbose nil :print nil)
-        (handler-bind ((error
-                        (lambda (c)
-                          (when (and (search "constant" (princ-to-string c))
-                                     (find-restart 'continue c))
-                            (invoke-restart (find-restart 'continue c))))))
-          (load fasl))))))
+#+sbcl
+(defun compile-codecs (dir &key coverage)
+  "Compile and load the codec sources into DIR. The coverage policy is bound
+   with WITH-COMPILATION-UNIT :POLICY for this extent only, never proclaimed
+   globally."
+  (require :sb-cover)
+  (let ((quality (sb-cover-symbol "STORE-COVERAGE-DATA")))
+    (with-compilation-unit (:policy `(optimize (,quality ,(if coverage 3 0))))
+      (dolist (src (source-files))
+        (let ((fasl (merge-pathnames
+                     (make-pathname :name (format nil "~A-~:[plain~;cover~]"
+                                                  (pathname-name src) coverage)
+                                    :type "fasl")
+                     dir)))
+          (compile-file src :output-file fasl :verbose nil :print nil)
+          (handler-bind ((sb-kernel:redefinition-warning #'muffle-warning)
+                         (error
+                          (lambda (c)
+                            (when (and (search "constant" (princ-to-string c))
+                                       (find-restart 'continue c))
+                              (invoke-restart (find-restart 'continue c))))))
+            (load fasl)))))))
+
+#+sbcl
+(defun current-policy ()
+  ;; Proclaim replaces the policy object, so EQ detects any global change.
+  sb-c::*policy*)
 
 (defun coverage-key ()
   (let ((get-coverage (find-symbol "GET-COVERAGE" :sb-cover)))
@@ -112,16 +124,16 @@
         (serialize-frame
          (make-data-frame 1 (ub8 '(1 2 3)) :end-stream t))))
 
-(deftest coverage-guided-fuzz
-  (compile-codecs :coverage t)
-  (funcall (find-symbol "RESET-COVERAGE" :sb-cover))
+#+sbcl
+(defun run-campaign ()
+  (funcall (sb-cover-symbol "RESET-COVERAGE"))
   (let ((seen (make-hash-table :test 'equal))
         (corpus nil)
         (from-mutation 0)
         (crashes nil)
         (rng (woo-test.prop:make-prop-rng 1)))
     (dolist (seed (seed-corpus))
-      (funcall (find-symbol "RESET-COVERAGE" :sb-cover))
+      (funcall (sb-cover-symbol "RESET-COVERAGE"))
       (let ((status (execute seed)))
         (when (eq status :crash)
           (push seed crashes))
@@ -131,7 +143,7 @@
       (loop repeat (fuzz-iters)
             for parent = (nth (mod (woo-test.prop:rng-next rng) (length corpus)) corpus)
             for child = (mutate rng parent corpus)
-            do (funcall (find-symbol "RESET-COVERAGE" :sb-cover))
+            do (funcall (sb-cover-symbol "RESET-COVERAGE"))
                (let ((status (execute child))
                      (key (coverage-key)))
                  (when (eq status :crash)
@@ -144,5 +156,27 @@
       (ok (> seed-cover 1) "seeds themselves cover more than one path")
       (ok (> from-mutation 0)
           (format nil "mutations discovered ~A new coverage paths" from-mutation))
-      (ok (> (hash-table-count seen) seed-cover))))
-  (compile-codecs :coverage nil))
+      (ok (> (hash-table-count seen) seed-cover)))))
+
+(deftest coverage-guided-fuzz
+  #+sbcl
+  (progn
+    (require :sb-cover)
+    (let ((policy-before (current-policy)))
+      (woo-test.prop:with-unique-temp-directory (dir "fuzz")
+        (unwind-protect
+             (progn
+               (compile-codecs dir :coverage t)
+               (run-campaign))
+          ;; Always put uninstrumented production code back.
+          (compile-codecs dir :coverage nil)
+          (let ((clear (find-symbol "CLEAR-COVERAGE" :sb-cover)))
+            (when clear (funcall clear)))))
+      (ok (eq policy-before (current-policy))
+          "global compiler policy unchanged by the coverage campaign")
+      (ok (equal (woo.http2.hpack:hpack-decode-headers
+                  (woo.http2.hpack:make-hpack-context) (ub8 '(#x82)))
+                 '((":method" . "GET")))
+          "reloaded uninstrumented HPACK still decodes")))
+  #-sbcl
+  (skip "coverage-guided fuzz needs SBCL sb-cover; skipped on this implementation"))
