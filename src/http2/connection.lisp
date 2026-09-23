@@ -608,6 +608,16 @@
     (unless ok
       (return-from finish-header-block
         (connection-protocol-error conn +enhance-your-calm+)))
+    ;; HEADERS the peer sent before it saw our RST_STREAM are decoded, which
+    ;; keeps the dynamic table in sync, and then ignored (RFC 9113 §5.1).
+    ;; A stream that closed any other way still fails below with
+    ;; STREAM_CLOSED.
+    (let ((in-flight (gethash stream-id (http2-connection-closed-streams conn))))
+      (when (and (stream-closed-p stream) (integerp in-flight))
+        ;; After END_STREAM the peer can send no more DATA either.
+        (when end-stream
+          (setf (gethash stream-id (http2-connection-closed-streams conn)) t))
+        (return-from finish-header-block nil)))
     ;; Refused streams stay out of the state machine. :recv-headers on a
     ;; stream we then RST would be a connection error from closed.
     (when (http2-stream-refused stream)

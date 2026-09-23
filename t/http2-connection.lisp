@@ -1895,3 +1895,86 @@
           (ok (<= (woo.http2.connection::http2-connection-header-octets-copied conn)
                   (* 4 frames chunk))
               "the connection's own count agrees"))))))
+
+;;; HEADERS in flight when we reset a stream (RFC 9113 §5.1)
+
+(defun reset-open-stream-1 (conn)
+  "Open stream 1 and have us RST it CANCEL for its body size, as happens
+   while the peer may still be sending trailers."
+  (connection-process-frame conn (make-headers-frame 1 (empty-octets) :end-headers t))
+  (connection-process-frame conn (make-data-frame 1 (ub8 5 1)))
+  (ok (equal (last-rst conn) (cons 1 +cancel+))))
+
+(defun check-dynamic-table-in-sync (conn)
+  "Stream 3 references dynamic index 62, the entry custom-header-literal inserts."
+  (let ((got nil))
+    (setf (woo.http2.connection::http2-connection-on-headers conn)
+          (lambda (stream headers end-stream)
+            (declare (ignore stream end-stream))
+            (setf got headers)))
+    (connection-process-frame
+     conn (make-headers-frame 3 (make-array 1 :element-type '(unsigned-byte 8)
+                                              :initial-element #xbe)
+                              :end-headers t :end-stream t))
+    (ok (not (http2-connection-goaway-sent conn)))
+    (ok (equal got '(("custom-key" . "custom-header")))
+        "the ignored block was decoded into the dynamic table")))
+
+(deftest trailers-in-flight-after-our-rst-are-ignored
+  (testing "one HEADERS frame of trailers after our RST is decoded and ignored"
+    (let ((woo.http2.connection:*max-request-body-size* 3))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (with-sent-frames (sent)
+          (reset-open-stream-1 conn)
+          (connection-process-frame
+           conn (make-headers-frame 1 (custom-header-literal)
+                                    :end-headers t :end-stream t))
+          (ok (= (funcall err) +cancel+) "no new error")
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (= (count-rsts (sent) 1) 1) "no second RST")
+          (ok (eq t (gethash 1 (woo.http2.connection::http2-connection-closed-streams conn)))
+              "after END_STREAM no DATA allowance is left")
+          (check-dynamic-table-in-sync conn)))))
+
+  (testing "trailers split over HEADERS and CONTINUATION after our RST are ignored"
+    (let ((woo.http2.connection:*max-request-body-size* 3))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (with-sent-frames (sent)
+          (reset-open-stream-1 conn)
+          (let ((block (custom-header-literal)))
+            (connection-process-frame
+             conn (make-headers-frame 1 (subseq block 0 10)
+                                      :end-headers nil :end-stream t))
+            (ok (= 1 (http2-connection-awaiting-continuation-stream-id conn)))
+            (connection-process-frame
+             conn (make-continuation-frame 1 (subseq block 10 20) :end-headers nil))
+            (connection-process-frame
+             conn (make-continuation-frame 1 (subseq block 20) :end-headers t)))
+          (ok (= (funcall err) +cancel+))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (null (http2-connection-awaiting-continuation-stream-id conn)))
+          (ok (= (count-rsts (sent) 1) 1))
+          (check-dynamic-table-in-sync conn)))))
+
+  (testing "HEADERS on a stream that closed normally is still GOAWAY STREAM_CLOSED"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (complete-stream conn 1)
+      (connection-process-frame
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
+      (ok (= (funcall err) +stream-closed+))
+      (ok (http2-connection-goaway-sent conn))))
+
+  (testing "split HEADERS on a stream that closed normally is GOAWAY STREAM_CLOSED"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (complete-stream conn 1)
+      (connection-process-frame
+       conn (make-headers-frame 1 (empty-octets) :end-headers nil :end-stream t))
+      (ok (null (funcall err)))
+      (connection-process-frame
+       conn (make-continuation-frame 1 (empty-octets) :end-headers t))
+      (ok (= (funcall err) +stream-closed+))
+      (ok (http2-connection-goaway-sent conn)))))
