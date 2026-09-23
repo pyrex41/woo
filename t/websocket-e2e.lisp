@@ -3,7 +3,9 @@
   (:use :cl :rove)
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes
-                :utf-8-bytes-to-string))
+                :utf-8-bytes-to-string)
+  (:import-from :woo-test.showcase
+                :showcase-loaded-p))
 (in-package :woo-test.websocket-e2e)
 
 ;;; End-to-end WebSocket tests: a real woo server, driven over real sockets
@@ -456,22 +458,6 @@ setTimeout(() => { out(false, 'timeout'); process.exit(2); }, 20000);
                               "server-close")))))
 
 ;;; The showcase app: /ws/echo and /api/benchmarks over a real server.
-
-(defun showcase-loaded-p ()
-  "Load woo-showcase from the repository's showcase/ directory. NIL if it
-   (or one of its dependencies) cannot be loaded."
-  (or (find-package :woo-showcase)
-      (let ((dir (asdf:system-relative-pathname :woo "showcase/")))
-        (pushnew dir asdf:*central-registry* :test #'equal)
-        (handler-case
-            (handler-bind ((warning #'muffle-warning))
-              (let ((*standard-output* (make-broadcast-stream))
-                    (*error-output* (make-broadcast-stream)))
-                (asdf:load-system :woo-showcase))
-              t)
-          (error (e)
-            (format *error-output* "~&woo-showcase did not load: ~A~%" e)
-            nil)))))
 
 (defun showcase-handler ()
   ;; Drop the access log middleware's output from the test log.

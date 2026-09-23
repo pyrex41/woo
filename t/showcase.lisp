@@ -5,7 +5,8 @@
   (:import-from :woo-showcase.limits
                 :*max-resource-delay-ms*
                 :clamp-resource-delay
-                :request-clack-env))
+                :request-clack-env)
+  (:export :showcase-loaded-p))
 (in-package :woo-test.showcase)
 
 (defun make-ws-env ()
@@ -75,21 +76,70 @@
 ;;; The showcase itself (ningle, djula, jonathan) is not a woo-test
 ;;; dependency. Load it when it is available; otherwise skip visibly.
 
+(defun load-system-unless-missing (system &optional directory)
+  "Load SYSTEM, with DIRECTORY on the ASDF registry. Returns T, or NIL when
+   a system it needs is not installed (ASDF's missing-component). Any other
+   error, a compile error in SYSTEM itself say, is signalled: a broken
+   showcase must fail its tests, not skip them."
+  (when directory
+    (pushnew directory asdf:*central-registry* :test #'equal))
+  (handler-case
+      (handler-bind ((warning #'muffle-warning))
+        (let ((*standard-output* (make-broadcast-stream))
+              (*error-output* (make-broadcast-stream)))
+          (asdf:load-system system))
+        t)
+    (asdf:missing-component (e)
+      (format *error-output* "~&~A not loaded, a system it needs is missing: ~A~%"
+              system e)
+      nil)))
+
 (defun showcase-loaded-p ()
-  "Load woo-showcase from the repository's showcase/ directory. NIL if it
-   (or one of its dependencies) cannot be loaded."
-  (or (find-package :woo-showcase)
-      (let ((dir (asdf:system-relative-pathname :woo "showcase/")))
-        (pushnew dir asdf:*central-registry* :test #'equal)
-        (handler-case
-            (handler-bind ((warning #'muffle-warning))
-              (let ((*standard-output* (make-broadcast-stream))
-                    (*error-output* (make-broadcast-stream)))
-                (asdf:load-system :woo-showcase))
-              t)
-          (error (e)
-            (format *error-output* "~&woo-showcase did not load: ~A~%" e)
-            nil)))))
+  "Load woo-showcase from the repository's showcase/ directory. NIL if one
+   of its dependencies is not installed; see load-system-unless-missing."
+  (or (and (find-package :woo-showcase) t)
+      (load-system-unless-missing :woo-showcase
+                                  (asdf:system-relative-pathname :woo "showcase/"))))
+
+(defun call-with-temporary-system (files fn)
+  "Write FILES, a list of (name . contents), to a fresh directory and call FN
+   with a system name unique to this call. \"SYS\" in a file name or its
+   contents is replaced by that name."
+  (let* ((name (format nil "woo-test-tmp-~36R" (random (expt 36 8))))
+         (dir (uiop:ensure-directory-pathname
+               (merge-pathnames name (uiop:temporary-directory))))
+         (asdf:*central-registry* (list* dir asdf:*central-registry*)))
+    (flet ((fill-in (string)
+             (with-output-to-string (out)
+               (loop with start = 0
+                     for pos = (search "SYS" string :start2 start)
+                     do (write-string string out :start start :end pos)
+                     while pos
+                     do (write-string name out)
+                        (setf start (+ pos 3))))))
+      (unwind-protect
+           (progn
+             (ensure-directories-exist dir)
+             (loop for (file . contents) in files
+                   do (with-open-file (out (merge-pathnames (fill-in file) dir)
+                                           :direction :output :if-exists :supersede)
+                        (write-string (fill-in contents) out)))
+             (funcall fn name))
+        (asdf:clear-system name)
+        (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore)))))
+
+(deftest optional-system-loading
+  (testing "a missing dependency means skip"
+    (call-with-temporary-system
+     '(("SYS.asd" . "(asdf:defsystem \"SYS\" :depends-on (\"SYS-no-such-dependency\"))"))
+     (lambda (name)
+       (ok (null (load-system-unless-missing name))))))
+  (testing "any other load error is signalled, not a skip"
+    (call-with-temporary-system
+     '(("SYS.asd" . "(asdf:defsystem \"SYS\" :components ((:file \"broken\")))")
+       ("broken.lisp" . "(defun broken (x) (+ x"))
+     (lambda (name)
+       (ok (signals (load-system-unless-missing name) 'error))))))
 
 (defun showcase-call (name &rest args)
   (apply (symbol-function (find-symbol name :woo-showcase)) args))
