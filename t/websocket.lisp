@@ -1459,3 +1459,46 @@
           (format nil "~D reallocations for ~D reads" growths
                   (ceiling (length frame) 1000))))))
 
+;;; A close frame's payload is at most 125 octets: 2 for the code, 123 for
+;;; the reason, cut at a UTF-8 character boundary.
+
+(defun close-frame-payload-sent (socket)
+  "Payload of the single unmasked close frame queued on SOCKET."
+  (let* ((frame (queued-octets socket))
+         (len7 (logand (aref frame 1) #x7F)))
+    (ok (= (aref frame 0) (logior #x80 +opcode-close+)))
+    (ok (< len7 126) "a control frame uses the 7-bit length")
+    (subseq frame 2 (+ 2 len7))))
+
+(deftest test-send-close-caps-reason
+  (testing "a short reason is sent whole"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (send-close socket 1000 "bye")
+        (ok (equalp (close-frame-payload-sent socket)
+                    (concat-octets (close-frame-payload 1000)
+                                   (string-to-utf-8-bytes "bye")))))))
+  (testing "an ASCII reason is cut to 123 octets"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (send-close socket 1001 (make-string 300 :initial-element #\x))
+        (let ((payload (close-frame-payload-sent socket)))
+          (ok (= (length payload) 125))
+          (ok (= (+ (ash (aref payload 0) 8) (aref payload 1)) 1001))))))
+  (testing "a multi-byte reason is cut before a split character"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        ;; U+00E9 is 2 octets; octet 123 is the second half of the 62nd.
+        (send-close socket 1000 (make-string 100 :initial-element (code-char #xE9)))
+        (let* ((payload (close-frame-payload-sent socket))
+               (reason (subseq payload 2)))
+          (ok (= (length reason) 122))
+          (ok (woo.websocket::valid-utf-8-p reason))
+          (ok (equal (utf-8-bytes-to-string reason)
+                     (make-string 61 :initial-element (code-char #xE9))))))))
+  (testing "4-octet characters"
+    (let ((reason (woo.websocket::truncate-close-reason
+                   (string-to-utf-8-bytes
+                    (make-string 40 :initial-element (code-char #x1F600))))))
+      (ok (= (length reason) 120))
+      (ok (woo.websocket::valid-utf-8-p reason)))))

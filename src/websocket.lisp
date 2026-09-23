@@ -538,11 +538,28 @@
   "Send a pong frame."
   (send-frame socket +opcode-pong+ payload))
 
+(defconstant +max-close-reason-octets+ 123
+  "A control frame payload is at most 125 octets (RFC 6455 5.5); the close
+   status code takes two.")
+
+(defun truncate-close-reason (octets)
+  "OCTETS cut to +MAX-CLOSE-REASON-OCTETS+ at a UTF-8 character boundary."
+  (if (<= (length octets) +max-close-reason-octets+)
+      octets
+      (let ((end +max-close-reason-octets+))
+        ;; Back up over continuation octets (10xxxxxx) so the character
+        ;; starting at END is dropped whole.
+        (loop while (and (plusp end)
+                         (= (logand (aref octets end) #xC0) #x80))
+              do (decf end))
+        (subseq octets 0 end))))
+
 (defun send-close (socket &optional (code 1000) (reason ""))
   "Start the closing handshake. Later frames, and a second close, are
    dropped. The socket stays open for the peer's close; receiving it closes
-   the socket (the connection timeout bounds a peer that never answers)."
-  (let* ((reason-bytes (string-to-utf-8-bytes reason))
+   the socket (the connection timeout bounds a peer that never answers).
+   A REASON over 123 UTF-8 octets is truncated at a character boundary."
+  (let* ((reason-bytes (truncate-close-reason (string-to-utf-8-bytes reason)))
          (payload (make-array (+ 2 (length reason-bytes))
                               :element-type '(unsigned-byte 8))))
     (setf (aref payload 0) (ldb (byte 8 8) code)
