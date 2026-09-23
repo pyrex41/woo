@@ -634,11 +634,32 @@
                      (symbol (symbol-name name)))))
 
 (defun response-header-fields (status headers)
-  "The response field list: :status, then HEADERS with lowercase names."
-  (cons (cons ":status" (write-to-string status))
-        (loop for (name value) on headers by #'cddr
-              unless (null value)
-                collect (cons (header-name-string name) (princ-to-string value)))))
+  "The response field list: :status, then HEADERS with lowercase names.
+   Connection-specific fields, and fields the connection header names, are
+   dropped: HTTP/2 must not carry them (RFC 9113 §8.2.2)."
+  (let ((named-by-connection nil)
+        (fields nil))
+    (loop for (name value) on headers by #'cddr
+          when (and value (string= (header-name-string name) "connection"))
+            do (dolist (token (split-comma-list (princ-to-string value)))
+                 (push (string-downcase token) named-by-connection)))
+    (loop for (name value) on headers by #'cddr
+          for name-str = (header-name-string name)
+          unless (or (null value)
+                     (member name-str *connection-specific-headers* :test #'string=)
+                     (member name-str named-by-connection :test #'string=))
+            do (push (cons name-str (princ-to-string value)) fields))
+    (cons (cons ":status" (write-to-string status))
+          (nreverse fields))))
+
+(defun split-comma-list (string)
+  (loop with start = 0
+        for comma = (position #\, string :start start)
+        for token = (string-trim '(#\Space #\Tab) (subseq string start comma))
+        when (plusp (length token))
+          collect token
+        while comma
+        do (setf start (1+ comma))))
 
 (defun begin-response (conn stream status headers pending)
   "Send HEADERS, then as much of PENDING as the window allows. The rest

@@ -1186,6 +1186,34 @@
                  "no DATA after the reset"))
         (when (probe-file path) (delete-file path))))))
 
+;;; Connection-specific response fields
+
+(deftest connection-specific-response-headers
+  (testing "hop-by-hop fields from the app are not sent; names are lowercase"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+
+                                      :window-size 100)))
+      (multiple-value-bind (sent frames)
+          (capture-response conn stream 200
+                            (list :connection "close, X-Hop"
+                                  :keep-alive "timeout=5"
+                                  "Proxy-Connection" "keep-alive"
+                                  :transfer-encoding "chunked"
+                                  :upgrade "websocket"
+                                  :x-hop "1"
+                                  "X-Mixed-Case" "v"
+                                  :content-type "text/plain")
+                            "ok")
+        (ok sent)
+        (let ((names (mapcar #'car (hpack-decode-headers (make-hpack-context)
+                                                         (header-block-bytes frames)))))
+          (dolist (bad '("connection" "keep-alive" "proxy-connection"
+                         "transfer-encoding" "upgrade" "x-hop"))
+            (ok (not (member bad names :test #'string-equal)) bad))
+          (ok (member "x-mixed-case" names :test #'string=))
+          (ok (member "content-type" names :test #'string=))
+          (ok (every (lambda (n) (string= n (string-downcase n))) names)))))))
+
 (deftest h2c-socket-responder-from-another-thread
   (let ((clack.test:*clack-test-handler* :woo))
     (clack.test:testing-app "a responder and writer used from another thread write on the loop"
