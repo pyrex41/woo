@@ -557,11 +557,12 @@
         (ok (eq status :frame-size-error))))))
 
 (deftest b8-flow-control
-  (testing "WINDOW_UPDATE increment 0 is PROTOCOL_ERROR"
+  (testing "WINDOW_UPDATE increment 0 on stream 0 is a connection PROTOCOL_ERROR"
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame conn (make-window-update-frame 0 0))
-      (ok (= (funcall err) +protocol-error+))))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (http2-connection-goaway-sent conn))))
 
   (testing "Incoming DATA decrements recv windows and leaves send windows"
     (multiple-value-bind (conn err)
@@ -634,13 +635,36 @@
       (ok (null (woo.http2.connection::http2-connection-last-rst conn)))
       (ok (= (http2-connection-window-size conn) 5))))
 
-  (testing "Empty DATA does not apply increment 0"
+  (testing "WINDOW_UPDATE increment 0 on an open stream is RST PROTOCOL_ERROR (RFC 9113 §6.9)"
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame
        conn (make-headers-frame 1 (empty-octets) :end-headers t))
+      (connection-process-frame
+       conn (make-headers-frame 3 (empty-octets) :end-headers t))
       (connection-process-frame conn (make-window-update-frame 1 0))
-      (ok (= (funcall err) +protocol-error+)))))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +protocol-error+))
+          "stream 1 is reset")
+      (ok (not (http2-connection-goaway-sent conn)) "not a connection error")
+      (ok (stream-closed-p (connection-get-stream conn 1)))
+      (connection-process-frame conn (make-window-update-frame 3 25))
+      (ok (= (http2-stream-window-size (connection-get-stream conn 3))
+             (+ +default-initial-window-size+ 25))
+          "stream 3 still takes credit")
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "WINDOW_UPDATE increment 0 on a half-closed (remote) stream is RST PROTOCOL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
+      (connection-process-frame conn (make-window-update-frame 1 0))
+      (ok (= (funcall err) +protocol-error+))
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +protocol-error+)))
+      (ok (not (http2-connection-goaway-sent conn))))))
 
 (deftest b4-trailers-and-state-errors
   (testing "HEADERS in open with END_STREAM are trailers and half-close remote"
@@ -2031,9 +2055,55 @@
         (ok (null (funcall err)))
         (ok (null (sent)) "no RST_STREAM or GOAWAY"))))
 
-  (testing "an open stream still overflows at 2^31-1"
+  (testing "an open stream still overflows at 2^31-1, as RST FLOW_CONTROL_ERROR (§6.9.1)"
     (multiple-value-bind (conn err)
         (test-conn)
       (connection-process-frame conn (make-headers-frame 1 (empty-octets) :end-headers t))
+      (connection-process-frame conn (make-headers-frame 3 (empty-octets) :end-headers t))
+      (with-sent-frames (sent)
+        (connection-process-frame conn (make-window-update-frame 1 +max-window-size+))
+        (ok (= (funcall err) +flow-control-error+))
+        (ok (equal (mapcar #'woo.http2.frames:frame-type (sent))
+                   (list woo.http2.constants:+frame-rst-stream+))
+            "one RST_STREAM and no GOAWAY")
+        (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                   (cons 1 +flow-control-error+))))
+      (ok (not (http2-connection-goaway-sent conn)) "the connection stays up")
+      (ok (stream-closed-p (connection-get-stream conn 1)))
+      (ok (null (gethash 1 (http2-connection-streams conn))) "stream 1 is dropped")
+      (connection-process-frame conn (make-window-update-frame 3 1000))
+      (ok (= (http2-stream-window-size (connection-get-stream conn 3))
+             (+ +default-initial-window-size+ 1000))
+          "stream 3 still works")
       (connection-process-frame conn (make-window-update-frame 1 +max-window-size+))
-      (ok (= (funcall err) +flow-control-error+)))))
+      (ok (not (http2-connection-goaway-sent conn))
+          "a later WINDOW_UPDATE on the reset stream is ignored")))
+
+  (testing "the connection window still overflows as a connection error"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-window-update-frame 0 +max-window-size+))
+      (ok (= (funcall err) +flow-control-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (woo.http2.connection::http2-connection-last-rst conn)))))
+
+  (testing "INITIAL_WINDOW_SIZE that pushes a stream past 2^31-1 is a connection error (§6.9.2)"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-headers-frame 1 (empty-octets) :end-headers t))
+      (connection-process-frame conn (make-headers-frame 3 (empty-octets) :end-headers t))
+      (connection-process-frame
+       conn (make-window-update-frame 1 (- +max-window-size+ +default-initial-window-size+)))
+      (ok (= (http2-stream-window-size (connection-get-stream conn 1)) +max-window-size+))
+      (ok (null (funcall err)))
+      (connection-process-frame
+       conn (make-settings-frame
+             (list (cons +settings-initial-window-size+ (1+ +default-initial-window-size+)))))
+      (ok (= (funcall err) +flow-control-error+))
+      (ok (http2-connection-goaway-sent conn))
+      (ok (null (woo.http2.connection::http2-connection-last-rst conn)) "not a stream RST")
+      (ok (= (http2-stream-window-size (connection-get-stream conn 3))
+             +default-initial-window-size+)
+          "no stream window is changed")
+      (ok (= (woo.http2.connection::http2-connection-remote-initial-window-size conn)
+             +default-initial-window-size+)))))

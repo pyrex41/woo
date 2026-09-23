@@ -37,6 +37,7 @@
            :http2-connection-awaiting-continuation-stream-id
            :http2-connection-send-queue
            :http2-connection-flush-sends
+           :http2-connection-discard-sends
            :http2-connection-on-headers
            :http2-connection-on-data
            :http2-connection-on-goaway
@@ -114,10 +115,13 @@
   (closed-streams (make-hash-table) :type hash-table)
   ;; Set once a connection error has queued GOAWAY and the socket close.
   (closing nil :type boolean)
-  ;; stream-id -> (cons unsent-octets end-stream-p). Flushed on WINDOW_UPDATE.
+  ;; stream-id -> the response writer's unsent body. Flushed on WINDOW_UPDATE.
   (send-queue (make-hash-table) :type hash-table)
   ;; (lambda (conn &optional stream)) installed by the response writer.
   (flush-sends nil)
+  ;; (lambda (entry)) installed by the response writer. Called with a
+  ;; send-queue entry when its stream is dropped, to let go of its octets.
+  (discard-sends nil)
   ;; Callbacks
   on-stream       ; (lambda (stream)) - called for new stream
   on-headers      ; (lambda (stream headers end-stream))
@@ -190,6 +194,12 @@
                 (make-array 0 :element-type '(unsigned-byte 8)
                               :adjustable t :fill-pointer 0))))
       (remhash id (http2-connection-streams conn))
+      ;; A writer may still hold the entry: empty it, so its octets and
+      ;; its share of the queue budgets go now, not at its next write.
+      (let ((entry (gethash id (http2-connection-send-queue conn)))
+            (discard (http2-connection-discard-sends conn)))
+        (when (and entry discard)
+          (funcall discard entry)))
       (remhash id (http2-connection-send-queue conn))
       (setf (gethash id (http2-connection-closed-streams conn)) t)
       (prune-closed-stream-ids conn)))
@@ -350,13 +360,19 @@
                   (return-from handle-settings-frame
                     (connection-protocol-error conn +flow-control-error+)))
                 (let ((delta (- value (http2-connection-remote-initial-window-size conn))))
+                  ;; A stream window pushed past 2^31-1 is a connection
+                  ;; error (RFC 9113 §6.9.2). Check every stream before
+                  ;; changing any, so no window is left half-applied.
                   (maphash (lambda (id stream)
                              (declare (ignore id))
-                             (let ((new (+ (http2-stream-window-size stream) delta)))
-                               (when (> new +max-window-size+)
-                                 (return-from handle-settings-frame
-                                   (connection-protocol-error conn +flow-control-error+)))
-                               (setf (http2-stream-window-size stream) new)))
+                             (when (> (+ (http2-stream-window-size stream) delta)
+                                      +max-window-size+)
+                               (return-from handle-settings-frame
+                                 (connection-protocol-error conn +flow-control-error+))))
+                           (http2-connection-streams conn))
+                  (maphash (lambda (id stream)
+                             (declare (ignore id))
+                             (incf (http2-stream-window-size stream) delta))
                            (http2-connection-streams conn))
                   (setf (http2-connection-remote-initial-window-size conn) value)))))
            (record-remote-setting conn (car setting) (cdr setting)))
@@ -848,13 +864,16 @@
             ;; real window to overflow. RFC 9113 §5.1: MUST ignore.
             ((stream-closed-p stream)
              nil)
+            ;; On a stream these are stream errors (RFC 9113 §6.9, §6.9.1):
+            ;; the RST drops the stream and its queued response, and the
+            ;; connection and its other streams carry on.
             ((zerop increment)
-             (connection-protocol-error conn +protocol-error+))
+             (connection-stream-error conn stream +protocol-error+))
             (t
              (let ((new (+ (http2-stream-window-size stream) increment)))
                (when (> new +max-window-size+)
                  (return-from handle-window-update-frame
-                   (connection-protocol-error conn +flow-control-error+)))
+                   (connection-stream-error conn stream +flow-control-error+)))
                (setf (http2-stream-window-size stream) new)
                (connection-flush-pending-sends conn stream))))))))
 

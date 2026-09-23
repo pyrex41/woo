@@ -1330,6 +1330,77 @@
         (ok (end-stream-p (car (last frames))))
         (ok (null (gethash 1 (http2-connection-streams conn))) "the stream is closed")))))
 
+;;; A pathname body whose file changes mid-send is reset, not sent mixed
+
+(defun replace-file-by-rename (path size)
+  "Write a new file of SIZE octets, different from write-pattern-file's,
+   and rename it over PATH, so PATH names a new inode."
+  (let ((tmp (make-pathname :type "new" :defaults path))
+        (bytes (make-array size :element-type '(unsigned-byte 8) :initial-element #xEE)))
+    (with-open-file (out tmp :direction :output :if-exists :supersede
+                             :element-type '(unsigned-byte 8))
+      (write-sequence bytes out))
+    (rename-file tmp path)))
+
+(defun append-to-file (path size)
+  (with-open-file (out path :direction :output :if-exists :append
+                            :element-type '(unsigned-byte 8))
+    (write-sequence (make-array size :element-type '(unsigned-byte 8) :initial-element #xAA)
+                    out)))
+
+(defun check-changed-file-resets (name change)
+  "Send a 200000-octet file on stream 1 and a small body on stream 3, call
+   CHANGE with the path once the first window is used, then open the windows."
+  (let* ((path (merge-pathnames name (uiop:temporary-directory)))
+         (conn (make-http2-connection))
+         (file-stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+         (other (make-http2-stream :id 3 :state +state-half-closed-remote+))
+         (body (make-array 1000 :element-type '(unsigned-byte 8) :initial-element 5)))
+    (register-stream conn file-stream)
+    (register-stream conn other)
+    (setf (woo.http2.connection::http2-connection-last-stream-id conn) 3)
+    (unwind-protect
+         (let ((expected (write-pattern-file path 200000))
+               (first-part nil))
+           (multiple-value-bind (sent frames) (capture-response conn file-stream 200 nil path)
+             (ok (not sent))
+             (setf first-part (data-bytes frames)))
+           (ok (equalp first-part (subseq expected 0 (length first-part)))
+               "the first window comes from the original file")
+           (ok (not (send-http2-response conn other 200 nil body)))
+           (funcall change path)
+           (let* ((frames (capture-frames
+                           (lambda ()
+                             (connection-process-frame conn (make-window-update-frame 1 300000))
+                             (connection-process-frame conn (make-window-update-frame 0 300000)))))
+                  (rst (rst-frames frames 1)))
+             (ok (= (length rst) 1) "stream 1 is reset")
+             (when rst
+               (ok (= (rst-code (first rst)) woo.http2.constants:+internal-error+)))
+             (ok (null (frames-of-type (frames-on-stream frames 1) +frame-data+))
+                 "no octets of the changed file are sent")
+             (ok (equalp (data-bytes (frames-on-stream frames 3)) body)
+                 "stream 3 gets its whole body"))
+           (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))
+               "the entry is dropped")
+           (ok (null (capture-frames
+                      (lambda ()
+                        (connection-process-frame conn (make-window-update-frame 0 100)))))
+               "a later WINDOW_UPDATE sends nothing")
+           (ok (not (http2-connection-goaway-sent conn))))
+      (when (probe-file path) (delete-file path)))))
+
+(deftest changed-pathname-bodies
+  (testing "a file replaced by one of equal size mid-send is reset"
+    (check-changed-file-resets "woo-h2-replace-equal.bin"
+                               (lambda (path) (replace-file-by-rename path 200000))))
+  (testing "a file replaced by a larger one mid-send is reset"
+    (check-changed-file-resets "woo-h2-replace-larger.bin"
+                               (lambda (path) (replace-file-by-rename path 300000))))
+  (testing "a file appended to in place mid-send is reset"
+    (check-changed-file-resets "woo-h2-append.bin"
+                               (lambda (path) (append-to-file path 1000)))))
+
 ;;; Streamed writes are bounded
 
 (defun writer-conn (&key (stream-ids '(1)))
@@ -1412,6 +1483,58 @@
       (ok (<= queued 11) (format nil "at most the limit is queued (~D thunks)" queued))
       (ok (notany #'identity (subseq results 10)) "writes over the limit return NIL")
       (ok (rst-frames frames 1) "the stream is reset once the loop runs"))))
+
+;;; A stream error from WINDOW_UPDATE drops that stream's queued response
+
+(deftest window-update-stream-error-drops-queued-response
+  (testing "a stream window overflow resets only that stream and releases its queued octets"
+    (multiple-value-bind (conn writers) (writer-conn :stream-ids '(1 3))
+      (let ((chunk (make-array 5000 :element-type '(unsigned-byte 8) :initial-element 9)))
+        (ok (funcall (first writers) chunk))
+        (ok (funcall (second writers) chunk :close t))
+        (let ((pending (gethash 1 (woo.http2.connection:http2-connection-send-queue conn))))
+          (ok (= (woo.http2.clack::connection-queued-bytes conn) 10000))
+          (let* ((frames (capture-frames
+                          (lambda ()
+                            (connection-process-frame
+                             conn (make-window-update-frame
+                                   1 woo.http2.constants:+max-window-size+)))))
+                 (rst (rst-frames frames 1)))
+            (ok (= (length rst) 1) "stream 1 is reset")
+            (when rst
+              (ok (= (rst-code (first rst)) woo.http2.constants:+flow-control-error+)))
+            (ok (null (frames-of-type frames woo.http2.constants:+frame-goaway+))
+                "no GOAWAY"))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))
+              "the queue entry is gone")
+          (ok (and pending (zerop (woo.http2.clack::pending-queued pending))
+                   (null (woo.http2.clack::pending-chunks pending)))
+              "the writer's entry no longer holds the octets")
+          (ok (= (woo.http2.clack::connection-queued-bytes conn) 5000)
+              "only stream 3 counts against the connection budget"))
+        (ok (null (funcall (first writers) "late")) "later writes on stream 1 are dropped")
+        (let ((frames (capture-frames
+                       (lambda ()
+                         (connection-process-frame conn (make-window-update-frame 0 100000))))))
+          (ok (null (frames-on-stream frames 1)) "nothing more on stream 1")
+          (ok (equalp (data-bytes (frames-on-stream frames 3)) chunk)
+              "stream 3 still gets its whole body")
+          (ok (end-stream-p (car (last (frames-on-stream frames 3))))))
+        (ok (zerop (woo.http2.clack::connection-queued-bytes conn))))))
+
+  (testing "increment 0 on a stream with a queued response is RST PROTOCOL_ERROR"
+    (multiple-value-bind (conn writers) (writer-conn)
+      (ok (funcall (first writers) (make-array 100 :element-type '(unsigned-byte 8))))
+      (let ((rst (rst-frames (capture-frames
+                              (lambda ()
+                                (connection-process-frame conn (make-window-update-frame 1 0))))
+                             1)))
+        (ok (= (length rst) 1))
+        (when rst
+          (ok (= (rst-code (first rst)) +protocol-error+))))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (zerop (woo.http2.clack::connection-queued-bytes conn))))))
 
 ;;; Event-loop dispatch: order, and shutdown
 
