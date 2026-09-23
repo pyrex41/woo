@@ -213,6 +213,17 @@
 (defun end-stream-p (frame)
   (plusp (logand (frame-flags frame) +flag-end-stream+)))
 
+(defun raw-body-octets (env)
+  "Read the :raw-body input stream to the end, as an application would."
+  (let ((in (getf env :raw-body))
+        (out (make-array 0 :element-type '(unsigned-byte 8)
+                           :adjustable t :fill-pointer 0)))
+    (when in
+      (loop for byte = (read-byte in nil nil)
+            while byte
+            do (vector-push-extend byte out)))
+    out))
+
 (defun register-stream (conn stream)
   (setf (gethash (http2-stream-id stream) (http2-connection-streams conn)) stream))
 
@@ -577,7 +588,7 @@
           (ok (eq (getf env :request-method) :post))
           (ok (equal (getf env :path-info) "/upload"))
           (ok (equal (getf env :query-string) "x=1"))
-          (ok (equal (map 'string #'code-char (getf env :raw-body)) "hello"))
+          (ok (equal (map 'string #'code-char (raw-body-octets env)) "hello"))
           (ok (equal (woo.http2.stream:http2-stream-trailers (getf env :http2.stream))
                      '(("x-checksum" . "abc"))))
           (ok (equal (getf env :http2.trailers) '(("x-checksum" . "abc")))
@@ -773,12 +784,12 @@
   (let ((clack.test:*clack-test-handler* :woo))
     (clack.test:testing-app "an upload over 64 KB with trailers gets a response"
         (lambda (env)
-          (let ((body (getf env :raw-body)))
+          (let ((body (raw-body-octets env)))
             `(200 (:content-type "text/plain")
                   (,(format nil "~A ~A ~D"
                             (getf env :request-method)
                             (getf env :path-info)
-                            (if body (length body) 0))))))
+                            (length body))))))
       (let ((client (h2c-connect))
             (bytes (make-array 200000 :element-type '(unsigned-byte 8)
                                       :initial-element 120)))
@@ -849,4 +860,406 @@
                                         (frame-payload goaway)))
                           +protocol-error+)))
                  (ok (h2c-client-closed client) "the server closed the TCP connection")))
+          (usocket:socket-close (h2c-client-socket client)))))))
+
+;;; Streaming and delayed responses (the Clack responder protocol)
+
+(defun octets (string)
+  (map '(vector (unsigned-byte 8)) #'char-code string))
+
+(defun frames-on-stream (frames stream-id)
+  (remove-if-not (lambda (f) (= (woo.http2.frames:frame-stream-id f) stream-id))
+                 frames))
+
+(defun run-adapter-request (conn stream-id &key (headers (valid-request-headers)) body)
+  "Send a request on CONN and return the frames written, oldest first."
+  (let ((frames nil))
+    (let ((*http2-frame-sink* (lambda (f) (push f frames))))
+      (connection-process-frame
+       conn (make-headers-frame stream-id (request-block headers)
+                                :end-headers t :end-stream (null body)))
+      (when body
+        (connection-process-frame
+         conn (make-data-frame stream-id (octets body) :end-stream t))))
+    (nreverse frames)))
+
+(defun capture-frames (thunk)
+  (let ((frames nil))
+    (let ((*http2-frame-sink* (lambda (f) (push f frames))))
+      (funcall thunk))
+    (nreverse frames)))
+
+(defun response-status (frames)
+  (cdr (assoc ":status" (hpack-decode-headers (make-hpack-context)
+                                              (header-block-bytes frames))
+              :test #'string=)))
+
+(deftest streaming-responder
+  (testing "(status headers) returns a writer; chunks go out as DATA, :close ends the stream"
+    (let* ((writer nil)
+           (conn (adapter-conn
+                  (lambda (env)
+                    (declare (ignore env))
+                    (lambda (responder)
+                      (setf writer (funcall responder '(200 (:content-type "text/plain"))))
+                      (funcall writer "one ")
+                      (funcall writer (octets "two "))
+                      (funcall writer "three" :close t)))))
+           (frames (run-adapter-request conn 1))
+           (headers (frames-of-type frames +frame-headers+))
+           (data (frames-of-type frames +frame-data+)))
+      (ok (functionp writer) "the responder returns a writer function")
+      (ok (= (length headers) 1) "exactly one HEADERS: no second 500 response")
+      (ok (equal (response-status frames) "200"))
+      (ok (not (end-stream-p (first headers))) "HEADERS does not end the stream")
+      (ok (equal (map 'string #'code-char (data-bytes frames)) "one two three"))
+      (ok (= (count-if #'end-stream-p data) 1) "one END_STREAM")
+      (ok (end-stream-p (car (last data))) "on the last DATA frame")
+      (ok (not (find woo.http2.constants:+frame-rst-stream+ frames :key #'frame-type)))
+      (ok (null (gethash 1 (http2-connection-streams conn))) "the stream is closed and dropped")))
+
+  (testing "a writer kept by the app writes later, and nil :close sends an empty END_STREAM"
+    (let* ((writer nil)
+           (conn (adapter-conn
+                  (lambda (env)
+                    (declare (ignore env))
+                    (lambda (responder)
+                      (setf writer (funcall responder '(200 ())))))))
+           (first-frames (run-adapter-request conn 1)))
+      (ok (= (length (frames-of-type first-frames +frame-headers+)) 1))
+      (ok (null (frames-of-type first-frames +frame-data+)))
+      (ok (gethash 1 (http2-connection-streams conn)) "the stream stays open for the writer")
+      (let ((later (capture-frames (lambda ()
+                                     (funcall writer "abc")
+                                     (funcall writer "defgh" :start 1 :end 3)
+                                     (funcall writer nil :close t)))))
+        (ok (equal (map 'string #'code-char (data-bytes later)) "abcef"))
+        (ok (end-stream-p (car (last later))))
+        (ok (zerop (frame-length (car (last later)))) "END_STREAM on an empty DATA frame"))
+      (ok (null (gethash 1 (http2-connection-streams conn))))
+      (ok (null (capture-frames (lambda () (funcall writer "late"))))
+          "writes after :close send nothing")))
+
+  (testing "a streaming write past the send window is queued and flushed on WINDOW_UPDATE"
+    (let* ((writer nil)
+           (conn (adapter-conn
+                  (lambda (env)
+                    (declare (ignore env))
+                    (lambda (responder)
+                      (setf writer (funcall responder '(200 ()))))))))
+      (run-adapter-request conn 1)
+      (let ((stream (gethash 1 (http2-connection-streams conn))))
+        (setf (http2-stream-window-size stream) 5)
+        (let ((frames (capture-frames (lambda () (funcall writer "0123456789" :close t)))))
+          (ok (equal (map 'string #'code-char (data-bytes frames)) "01234"))
+          (ok (notany #'end-stream-p frames)))
+        (let ((frames (capture-frames
+                       (lambda ()
+                         (connection-process-frame conn (make-window-update-frame 1 100))))))
+          (ok (equal (map 'string #'code-char (data-bytes frames)) "56789"))
+          (ok (end-stream-p (car (last frames))))))))
+
+  (testing "a second response on the same stream is refused"
+    (let* ((conn (adapter-conn
+                  (lambda (env)
+                    (declare (ignore env))
+                    (lambda (responder)
+                      (let ((writer (funcall responder '(200 ()))))
+                        (funcall responder '(201 () "again"))
+                        (funcall writer "only" :close t))))))
+           (frames (run-adapter-request conn 1)))
+      (ok (= (length (frames-of-type frames +frame-headers+)) 1))
+      (ok (equal (response-status frames) "200"))
+      (ok (equal (map 'string #'code-char (data-bytes frames)) "only"))))
+
+  (testing "an app error after streaming began resets the stream instead of a second response"
+    (let* ((conn (adapter-conn
+                  (lambda (env)
+                    (declare (ignore env))
+                    (lambda (responder)
+                      (funcall (funcall responder '(200 ())) "partial")
+                      (error "boom")))))
+           (frames (run-adapter-request conn 1))
+           (rst (find woo.http2.constants:+frame-rst-stream+ frames :key #'frame-type)))
+      (ok (= (length (frames-of-type frames +frame-headers+)) 1) "no second HEADERS")
+      (ok rst "RST_STREAM ends the unfinished response")
+      (when rst
+        (ok (= (woo.http2.frames:parse-rst-stream-payload (frame-payload rst))
+               woo.http2.constants:+internal-error+)))))
+
+  (testing "writes after the peer resets the stream send nothing"
+    (let* ((writer nil)
+           (conn (adapter-conn
+                  (lambda (env)
+                    (declare (ignore env))
+                    (lambda (responder)
+                      (setf writer (funcall responder '(200 ()))))))))
+      (run-adapter-request conn 1)
+      (connection-process-frame conn (woo.http2.frames:make-rst-stream-frame
+                                      1 woo.http2.constants:+cancel+))
+      (ok (null (capture-frames (lambda ()
+                                  (funcall writer "x")
+                                  (funcall writer "y" :close t))))))))
+
+(deftest no-frames-on-closed-streams
+  (testing "send-http2-response on a closed stream sends nothing"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state woo.http2.stream:+state-closed+
+                                      :window-size 100)))
+      (multiple-value-bind (sent frames) (capture-response conn stream 200 nil "x")
+        (ok (not sent))
+        (ok (null frames)))))
+  (testing "a response after the stream ended is not sent"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-open+ :window-size 100)))
+      (register-stream conn stream)
+      (ok (send-http2-response conn stream 200 nil "first"))
+      (multiple-value-bind (sent frames) (capture-response conn stream 500 nil "second")
+        (ok (not sent))
+        (ok (null frames)))))
+  (testing "a queued body is dropped, not sent, once the peer resets the stream"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+
+                                      :window-size 0)))
+      (register-stream conn stream)
+      (setf (woo.http2.connection::http2-connection-last-stream-id conn) 1)
+      (ok (not (send-http2-response conn stream 200 nil "queued")))
+      (connection-process-frame conn (woo.http2.frames:make-rst-stream-frame
+                                      1 woo.http2.constants:+cancel+))
+      (ok (null (frames-of-type
+                 (capture-frames
+                  (lambda ()
+                    (connection-process-frame conn (make-window-update-frame 0 100))))
+                 +frame-data+))))))
+
+;;; :raw-body is an input stream, as Lack requires
+
+(deftest raw-body-is-a-stream
+  (testing "a form POST reads through lack.request"
+    (let* ((envs nil)
+           (conn (adapter-conn (lambda (env)
+                                 (push env envs)
+                                 '(200 () "ok")))))
+      (run-adapter-request
+       conn 1
+       :headers (list (cons ":method" "POST")
+                      (cons ":scheme" "https")
+                      (cons ":path" "/form?q=1")
+                      (cons ":authority" "example.com")
+                      (cons "content-type" "application/x-www-form-urlencoded")
+                      (cons "accept" "*/*"))
+       :body "name=Ada+Lovelace&n=3")
+      (ok (= (length envs) 1))
+      (let* ((env (first envs))
+             (req (lack.request:make-request env)))
+        (ok (typep (getf env :raw-body) 'stream) ":raw-body is a stream")
+        (ok (= (getf env :content-length) 21)
+            "content-length is the body length when the client omits it")
+        (ok (equal (lack.request:request-body-parameters req)
+                   '(("name" . "Ada Lovelace") ("n" . "3"))))
+        (ok (equal (lack.request:request-query-parameters req) '(("q" . "1"))))
+        (ok (equal (map 'string #'code-char (lack.request:request-content req))
+                   "name=Ada+Lovelace&n=3")))))
+  (testing "a request without a body gets an empty stream"
+    (let* ((envs nil)
+           (conn (adapter-conn (lambda (env)
+                                 (push env envs)
+                                 '(200 () "ok")))))
+      (run-adapter-request conn 1 :headers (valid-request-headers (cons "accept" "*/*")))
+      (let ((env (first envs)))
+        (ok (typep (getf env :raw-body) 'stream))
+        (ok (null (read-byte (getf env :raw-body) nil nil)))
+        (ok (null (getf env :content-length)))
+        (ok (lack.request:make-request env))))))
+
+;;; Request methods are never interned
+
+(deftest unknown-methods-are-not-interned
+  (testing "known methods map to keywords"
+    (ok (eq (woo.http2.clack:request-method-keyword "GET") :get))
+    (ok (eq (woo.http2.clack:request-method-keyword "PROPFIND") :propfind))
+    (ok (null (woo.http2.clack:request-method-keyword "get"))
+        "methods are case-sensitive"))
+  (testing "unknown methods get 501 and create no symbols"
+    (let* ((called 0)
+           (conn (adapter-conn (lambda (env)
+                                 (declare (ignore env))
+                                 (incf called)
+                                 '(200 () "ok"))))
+           (names (loop for i from 0 below 200
+                        collect (format nil "WOOTESTMETHOD~D~D" i (random 1000000))))
+           (statuses nil))
+      (loop for name in names
+            for id from 1 by 2
+            do (push (response-status
+                      (frames-on-stream
+                       (run-adapter-request
+                        conn id
+                        :headers (list (cons ":method" name)
+                                       (cons ":scheme" "https")
+                                       (cons ":path" "/")
+                                       (cons ":authority" "example.com")))
+                       id))
+                     statuses))
+      (ok (zerop called) "the app never sees an unknown method")
+      (ok (every (lambda (s) (equal s "501")) statuses) "every one is 501")
+      (ok (notany (lambda (name) (find-symbol name :keyword)) names)
+          "no keyword was interned"))))
+
+;;; Pathname bodies are streamed, not read whole
+
+(defun queued-octets (conn stream-id)
+  "Octets held in memory for STREAM-ID's unsent response body."
+  (let ((entry (gethash stream-id (woo.http2.connection:http2-connection-send-queue conn))))
+    (cond
+      ((null entry) 0)
+      ((consp entry) (length (car entry)))
+      (t (reduce #'+ (woo.http2.clack::pending-chunks entry) :key #'length)))))
+
+(defun write-pattern-file (path size)
+  (let ((bytes (make-array size :element-type '(unsigned-byte 8))))
+    (dotimes (i size) (setf (aref bytes i) (mod (* i 7) 256)))
+    (with-open-file (out path :direction :output :if-exists :supersede
+                              :element-type '(unsigned-byte 8))
+      (write-sequence bytes out))
+    bytes))
+
+(deftest pathname-body-streams
+  (testing "a file over the send window arrives whole, held in memory a chunk at a time"
+    (let* ((path (merge-pathnames "woo-h2-big.bin" (uiop:temporary-directory)))
+           (size 300000)
+           (opened nil)
+           (conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+)))
+      (register-stream conn stream)
+      (setf (woo.http2.connection::http2-connection-last-stream-id conn) 1)
+      (unwind-protect
+           (let ((expected (write-pattern-file path size))
+                 (woo.http2.clack:*pathname-body-open-hook* (lambda (in) (push in opened)))
+                 (received nil)
+                 (max-held 0))
+             (multiple-value-bind (sent frames) (capture-response conn stream 200 nil path)
+               (ok (not sent) "the file does not fit in the initial window")
+               (push (data-bytes frames) received)
+               (ok (every (lambda (f) (<= (frame-length f) woo.http2.clack:*pathname-chunk-size*))
+                          (frames-of-type frames +frame-data+))))
+             (ok (= (reduce #'+ received :key #'length) 65535) "the window is filled")
+             (ok opened "the file was opened")
+             (ok (notany #'open-stream-p opened) "and is not held open while waiting")
+             (loop repeat 50
+                   while (gethash 1 (http2-connection-streams conn))
+                   do (setf max-held (max max-held (queued-octets conn 1)))
+                      (push (data-bytes
+                             (capture-frames
+                              (lambda ()
+                                (connection-process-frame conn (make-window-update-frame 0 40000))
+                                (connection-process-frame conn (make-window-update-frame 1 40000)))))
+                            received))
+             (ok (<= max-held woo.http2.clack:*pathname-chunk-size*)
+                 (format nil "at most one chunk of the file in memory (held ~D)" max-held))
+             (ok (equalp (concat-octets (reverse received)) expected) "every byte arrives")
+             (ok (stream-closed-p stream))
+             (ok (notany #'open-stream-p opened) "the file is closed when done"))
+        (when (probe-file path) (delete-file path)))))
+
+  (testing "a reset mid-file closes the file and stops sending"
+    (let* ((path (merge-pathnames "woo-h2-reset.bin" (uiop:temporary-directory)))
+           (opened nil)
+           (conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+)))
+      (register-stream conn stream)
+      (setf (woo.http2.connection::http2-connection-last-stream-id conn) 1)
+      (unwind-protect
+           (let ((woo.http2.clack:*pathname-body-open-hook* (lambda (in) (push in opened))))
+             (write-pattern-file path 200000)
+             (capture-response conn stream 200 nil path)
+             (ok (<= (queued-octets conn 1) woo.http2.clack:*pathname-chunk-size*))
+             (connection-process-frame conn (woo.http2.frames:make-rst-stream-frame
+                                             1 woo.http2.constants:+cancel+))
+             (ok (notany #'open-stream-p opened) "no file stream is left open")
+             (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn))))
+             (ok (null (frames-of-type
+                        (capture-frames
+                         (lambda ()
+                           (connection-process-frame conn (make-window-update-frame 0 100000))))
+                        +frame-data+))
+                 "no DATA after the reset"))
+        (when (probe-file path) (delete-file path))))))
+
+;;; Connection-specific response fields
+
+(deftest connection-specific-response-headers
+  (testing "hop-by-hop fields from the app are not sent; names are lowercase"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+
+                                      :window-size 100)))
+      (multiple-value-bind (sent frames)
+          (capture-response conn stream 200
+                            (list :connection "close, X-Hop"
+                                  :keep-alive "timeout=5"
+                                  "Proxy-Connection" "keep-alive"
+                                  :transfer-encoding "chunked"
+                                  :upgrade "websocket"
+                                  :x-hop "1"
+                                  "X-Mixed-Case" "v"
+                                  :content-type "text/plain")
+                            "ok")
+        (ok sent)
+        (let ((names (mapcar #'car (hpack-decode-headers (make-hpack-context)
+                                                         (header-block-bytes frames)))))
+          (dolist (bad '("connection" "keep-alive" "proxy-connection"
+                         "transfer-encoding" "upgrade" "x-hop"))
+            (ok (not (member bad names :test #'string-equal)) bad))
+          (ok (member "x-mixed-case" names :test #'string=))
+          (ok (member "content-type" names :test #'string=))
+          (ok (every (lambda (n) (string= n (string-downcase n))) names)))))))
+
+(deftest h2c-socket-responder-from-another-thread
+  (let ((clack.test:*clack-test-handler* :woo))
+    (clack.test:testing-app "a responder and writer used from another thread write on the loop"
+        (lambda (env)
+          (let ((full (string= (getf env :path-info) "/full")))
+            (lambda (responder)
+              (bt2:make-thread
+               (lambda ()
+                 (sleep 0.05)
+                 (if full
+                     (funcall responder '(200 (:content-type "text/plain") ("full body")))
+                     (let ((writer (funcall responder '(200 (:content-type "text/plain")))))
+                       (dotimes (i 5)
+                         (sleep 0.02)
+                         (funcall writer (format nil "c~D;" i)))
+                       (funcall writer nil :close t))))
+               :name "woo-test h2 responder"))))
+      (let ((client (h2c-connect)))
+        (unwind-protect
+             (flet ((request (id path)
+                      (h2c-send client
+                                (make-headers-frame id (request-block
+                                                        `((":method" . "GET")
+                                                          (":scheme" . "http")
+                                                          (":path" . ,path)
+                                                          (":authority" . "localhost")))
+                                                    :end-headers t :end-stream t)))
+                    (ended-p (id)
+                      (lambda (fs)
+                        (find-if (lambda (f)
+                                   (and (frame-on-stream-p f id +frame-data+)
+                                        (end-stream-p f)))
+                                 fs))))
+               (h2c-preface-and-settings client)
+               (request 1 "/stream")
+               (request 3 "/full")
+               (let ((frames (h2c-read-until client
+                                             (lambda (fs)
+                                               (and (funcall (ended-p 1) fs)
+                                                    (funcall (ended-p 3) fs))))))
+                 (ok (not (find woo.http2.constants:+frame-rst-stream+ frames :key #'frame-type)))
+                 (ok (not (find woo.http2.constants:+frame-goaway+ frames :key #'frame-type)))
+                 (ok (= 1 (length (frames-of-type (frames-on-stream frames 1) +frame-headers+))))
+                 (ok (equal (map 'string #'code-char (data-bytes (frames-on-stream frames 1)))
+                            "c0;c1;c2;c3;c4;")
+                     "every chunk written from the other thread arrives in order")
+                 (ok (equal (map 'string #'code-char (data-bytes (frames-on-stream frames 3)))
+                            "full body"))))
           (usocket:socket-close (h2c-client-socket client)))))))
