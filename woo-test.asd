@@ -12,6 +12,7 @@
    (:file "t/http2-stream")
    (:file "t/http2-connection")
    (:file "t/http2-clack")
+   (:file "t/http2-e2e")
    ;; WebSocket tests
    (:file "t/websocket")
    (:file "showcase-limits" :pathname "showcase/src/limits")
