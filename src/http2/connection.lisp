@@ -40,6 +40,16 @@
            :setup-http2-parser))
 (in-package :woo.http2.connection)
 
+(defun default-local-settings ()
+  "A fresh settings alist. A backquoted list of constants can be folded
+   into one literal shared by every connection, so editing one would
+   change them all."
+  (list (cons +settings-max-concurrent-streams+ 100)
+        (cons +settings-initial-window-size+ +default-initial-window-size+)
+        (cons +settings-max-frame-size+ +default-max-frame-size+)
+        (cons +settings-header-table-size+ +default-header-table-size+)
+        (cons +settings-max-header-list-size+ +default-max-header-list-size+)))
+
 (defstruct http2-connection
   "HTTP/2 connection state."
   socket
@@ -61,11 +71,7 @@
   (window-size +default-initial-window-size+ :type integer)
   (remote-window-size +default-initial-window-size+ :type integer)
   ;; Settings
-  (local-settings `((,+settings-max-concurrent-streams+ . 100)
-                    (,+settings-initial-window-size+ . ,+default-initial-window-size+)
-                    (,+settings-max-frame-size+ . ,+default-max-frame-size+)
-                    (,+settings-header-table-size+ . ,+default-header-table-size+)
-                    (,+settings-max-header-list-size+ . ,+default-max-header-list-size+)))
+  (local-settings (default-local-settings))
   (remote-settings nil)
   (remote-max-frame-size +default-max-frame-size+ :type integer)
   (remote-initial-window-size +default-initial-window-size+ :type integer)

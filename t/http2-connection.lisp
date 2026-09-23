@@ -699,9 +699,11 @@
                       :end-headers end-headers))
 
 (defun set-header-list-limit (conn n)
-  (setf (cdr (assoc +settings-max-header-list-size+
-                    (http2-connection-local-settings conn)))
-        n))
+  "Edit a copy, so no other connection's settings can change."
+  (let ((settings (copy-alist (http2-connection-local-settings conn))))
+    (setf (cdr (assoc +settings-max-header-list-size+ settings)) n
+          (http2-connection-local-settings conn) settings)
+    n))
 
 (defun concat-octets (&rest parts)
   (let* ((len (reduce #'+ parts :key #'length :initial-value 0))
@@ -1209,3 +1211,16 @@
           (let ((stream (connection-get-stream conn 1)))
             (ok stream)
             (ok (= +state-idle+ (http2-stream-state stream)))))))))
+
+(deftest local-settings-are-per-connection
+  (testing "editing one connection's settings leaves new connections alone"
+    (let* ((a (make-http2-connection))
+           (settings (http2-connection-local-settings a)))
+      (setf (cdr (assoc +settings-max-header-list-size+ settings)) 33)
+      (let ((b (make-http2-connection)))
+        (ok (not (eq settings (http2-connection-local-settings b))))
+        (ok (= +default-max-header-list-size+
+               (cdr (assoc +settings-max-header-list-size+
+                           (http2-connection-local-settings b)))))
+        (ok (= +default-max-header-list-size+
+               (woo.http2.connection::connection-header-list-limit b)))))))
