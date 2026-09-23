@@ -99,9 +99,11 @@
   ;; Set when the client preface is accepted. The next frame must be SETTINGS.
   (awaiting-first-settings nil :type boolean)
   ;; Closed streams are removed from STREAMS so they do not accumulate. Only
-  ;; the ids of recently closed streams are kept (id -> T), bounded by
+  ;; the ids of recently closed streams are kept, bounded by
   ;; *closed-stream-retention*. Older client ids at or below last-stream-id
-  ;; are closed by RFC 9113 §5.1.1, so they need no entry.
+  ;; are closed by RFC 9113 §5.1.1, so they need no entry. The value is T,
+  ;; or for a stream we reset while it was open, the octets of in-flight
+  ;; DATA the peer may still send on it (its receive window at the RST).
   (closed-streams (make-hash-table) :type hash-table)
   ;; Set once a connection error has queued GOAWAY and the socket close.
   (closing nil :type boolean)
@@ -247,13 +249,20 @@
 (defun connection-stream-error (conn stream error-code)
   "Record a stream error, send RST_STREAM, invoke on-error."
   (when stream
-    (setf (http2-connection-last-rst conn)
-          (cons (http2-stream-id stream) error-code))
-    (unless (stream-closed-p stream)
-      (stream-transition stream :send-rst))
-    (connection-send-frame conn
-      (make-rst-stream-frame (http2-stream-id stream) error-code))
-    (connection-drop-closed-stream conn stream))
+    (let ((in-flight (unless (or (stream-closed-p stream)
+                                 (stream-half-closed-remote-p stream))
+                       (max 0 (http2-stream-recv-window-size stream)))))
+      (setf (http2-connection-last-rst conn)
+            (cons (http2-stream-id stream) error-code))
+      (unless (stream-closed-p stream)
+        (stream-transition stream :send-rst))
+      (connection-send-frame conn
+        (make-rst-stream-frame (http2-stream-id stream) error-code))
+      (connection-drop-closed-stream conn stream)
+      ;; The peer may not have seen the RST yet (RFC 9113 §5.4.2).
+      (when in-flight
+        (setf (gethash (http2-stream-id stream) (http2-connection-closed-streams conn))
+              in-flight))))
   (when (http2-connection-on-error conn)
     (funcall (http2-connection-on-error conn) error-code nil))
   nil)
@@ -679,6 +688,14 @@
       (when (or (stream-half-closed-remote-p stream)
                 (stream-closed-p stream))
         (decf (http2-connection-window-size conn) raw-len)
+        ;; DATA already in flight when we reset the stream is ignored, up to
+        ;; the window the peer had; it is neither RST again nor counted.
+        (let ((in-flight (gethash stream-id (http2-connection-closed-streams conn))))
+          (when (and (integerp in-flight) (<= raw-len in-flight))
+            (setf (gethash stream-id (http2-connection-closed-streams conn))
+                  (- in-flight raw-len))
+            (replenish-connection-window conn)
+            (return-from handle-data-frame nil)))
         (when (> (incf (http2-connection-closed-stream-data-resets conn))
                  *max-closed-stream-data-resets*)
           (return-from handle-data-frame

@@ -1669,6 +1669,50 @@
   (testing "the default limit leaves ordinary stragglers alone"
     (ok (>= woo.http2.connection:*max-closed-stream-data-resets* 100))))
 
+(deftest in-flight-data-after-our-rst-is-ignored
+  (testing "DATA within the window the peer had at our RST is not RST again or counted"
+    (let ((woo.http2.connection:*max-request-body-size* 1000))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (with-sent-frames (sent)
+          (connection-process-frame
+           conn (make-headers-frame 1 (empty-octets) :end-headers t))
+          (connection-process-frame conn (make-data-frame 1 (ub8 600 1)))
+          (connection-process-frame conn (make-data-frame 1 (ub8 600 1)))
+          (ok (= (funcall err) +cancel+))
+          (ok (= (count-rsts (sent) 1) 1))
+          ;; Both frames were debited, so the peer had 65535 - 1200 left.
+          (let ((allowance (- +default-initial-window-size+ 1200)))
+            (loop with left = allowance
+                  while (plusp left)
+                  do (let ((n (min left 16384)))
+                       (connection-process-frame conn (make-data-frame 1 (ub8 n 1)))
+                       (decf left n)))
+            (ok (= (count-rsts (sent) 1) 1) "in-flight DATA gets no further RST")
+            (ok (zerop (woo.http2.connection::http2-connection-closed-stream-data-resets conn))
+                "in-flight DATA does not count toward the reset limit")
+            (ok (not (http2-connection-goaway-sent conn)))
+            (ok (> (http2-connection-window-size conn) (- +default-initial-window-size+ allowance))
+                "ignored DATA still has its connection credit returned"))
+          ;; Past the window the peer could have had, it is a violation again.
+          (connection-process-frame conn (make-data-frame 1 (ub8 1 1)))
+          (ok (= (count-rsts (sent) 1) 2))
+          (ok (= (funcall err) +stream-closed+))
+          (ok (= (woo.http2.connection::http2-connection-closed-stream-data-resets conn) 1))))))
+
+  (testing "a stream that ended normally gets no in-flight allowance"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (with-sent-frames (sent)
+        (connection-process-frame
+         conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
+        (connection-process-frame conn (make-data-frame 1 (ub8 100 1)))
+        (ok (= (count-rsts (sent) 1) 1))
+        (ok (= (funcall err) +stream-closed+))
+        ;; The first violation resets a half-closed (remote) stream: no allowance.
+        (connection-process-frame conn (make-data-frame 1 (ub8 100 1)))
+        (ok (= (count-rsts (sent) 1) 2))))))
+
 ;;; Trailer field validation
 
 (defun send-trailers (trailers)
