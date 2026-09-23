@@ -15,6 +15,8 @@
            :http2-stream-awaiting-continuation
            :http2-stream-pending-end-stream
            :http2-stream-refused
+           :http2-stream-trailers
+           :http2-stream-trailers-received
            :stream-transition
            :stream-state-error
            :stream-state-error-stream
@@ -60,7 +62,10 @@
   (pending-end-stream nil :type boolean)
   ;; Set when the stream id is consumed but the request is refused.
   ;; The header block is still decoded; :recv-headers is not run.
-  (refused nil :type boolean))
+  (refused nil :type boolean)
+  ;; Trailer section (RFC 9113 §8.1). HEADERS keeps the request headers.
+  (trailers nil :type list)
+  (trailers-received nil :type boolean))
 
 (defun stream-open-p (stream)
   "Check if stream is in open state."

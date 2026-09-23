@@ -14,20 +14,18 @@
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes)
   (:export :make-http2-app-handler
+           :attach-http2-app
            :build-clack-env
            :send-http2-response
            :validate-request-headers
            :combine-header-fields
            :connection-send-max-frame-size
+           ;; Defined in woo.http2.connection; re-exported for callers.
            :*http2-frame-sink*))
 (in-package :woo.http2.clack)
 
-(defvar *http2-frame-sink* nil
-  "When non-nil, a function of one frame argument invoked for each outbound frame.")
-
 (defun emit-frame (conn frame)
-  (when *http2-frame-sink*
-    (funcall *http2-frame-sink* frame))
+  "Send FRAME. connection-send-frame reports it to *http2-frame-sink*."
   (connection-send-frame conn frame)
   frame)
 
@@ -474,7 +472,11 @@
                              "Internal Server Error")))))
 
 (defun handle-http2-headers (conn socket stream headers end-stream app)
-  "Validate, then run APP only for a complete request. Malformed headers RST first."
+  "Validate, then run APP only for a complete request. Malformed headers RST first.
+   A trailer section ends a request whose headers and body are already stored."
+  (when (http2-stream-trailers-received stream)
+    (return-from handle-http2-headers
+      (handle-http2-data-end conn socket stream app)))
   (let ((env (build-clack-env socket stream headers)))
     (cond
       ((null env)
@@ -495,32 +497,34 @@
              (getf env :raw-body) (if (> (length body) 0) body nil))
        (invoke-http2-app conn socket stream app env)))))
 
+(defun attach-http2-app (conn socket app)
+  "Install the callbacks that run APP for each request on CONN. Returns CONN."
+  (setf (http2-connection-on-headers conn)
+        (lambda (stream headers end-stream)
+          (handle-http2-headers conn socket stream headers end-stream app))
+
+        (http2-connection-on-data conn)
+        (lambda (stream data end-stream)
+          (declare (ignore data))
+          (when end-stream
+            (handle-http2-data-end conn socket stream app)))
+
+        (http2-connection-on-goaway conn)
+        (lambda (last-stream-id error-code debug-data)
+          (declare (ignore last-stream-id debug-data))
+          (vom:info "Received GOAWAY with error code ~A" error-code))
+
+        ;; Connection errors close the socket in the connection layer.
+        (http2-connection-on-error conn)
+        (lambda (error-code debug-data)
+          (vom:error "HTTP/2 protocol error ~A: ~A"
+                     error-code
+                     (when debug-data
+                       (trivial-utf-8:utf-8-bytes-to-string debug-data)))))
+  conn)
+
 (defun make-http2-app-handler (app)
   "Create HTTP/2 connection handler that invokes Clack app for each request.
    Returns a function that takes a socket and sets up HTTP/2 handling."
   (lambda (socket)
-    (let ((conn nil))
-      (setf conn
-            (setup-http2-parser
-             socket
-             :on-headers
-             (lambda (stream headers end-stream)
-               (handle-http2-headers conn socket stream headers end-stream app))
-
-             :on-data
-             (lambda (stream data end-stream)
-               (declare (ignore data))
-               (when end-stream
-                 (handle-http2-data-end conn socket stream app)))
-
-             :on-goaway
-             (lambda (last-stream-id error-code debug-data)
-               (declare (ignore last-stream-id debug-data))
-               (vom:info "Received GOAWAY with error code ~A" error-code))
-
-             :on-error
-             (lambda (error-code debug-data)
-               (vom:error "HTTP/2 protocol error ~A: ~A"
-                          error-code
-                          (when debug-data
-                            (trivial-utf-8:utf-8-bytes-to-string debug-data)))))))))
+    (attach-http2-app (setup-http2-parser socket) socket app)))

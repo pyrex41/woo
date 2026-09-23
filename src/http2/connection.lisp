@@ -37,7 +37,13 @@
            :http2-connection-awaiting-continuation-stream-id
            :http2-connection-send-queue
            :http2-connection-flush-sends
-           :setup-http2-parser))
+           :http2-connection-on-headers
+           :http2-connection-on-data
+           :http2-connection-on-goaway
+           :http2-connection-on-error
+           :http2-connection-on-close
+           :setup-http2-parser
+           :*http2-frame-sink*))
 (in-package :woo.http2.connection)
 
 (defun default-local-settings ()
@@ -80,9 +86,13 @@
   (awaiting-continuation-stream-id nil)
   ;; Set when the client preface is accepted. The next frame must be SETTINGS.
   (awaiting-first-settings nil :type boolean)
-  ;; Closed streams are removed from STREAMS so they do not accumulate, but the
-  ;; id is remembered so WINDOW_UPDATE/RST/DATA are not treated as idle.
+  ;; Closed streams are removed from STREAMS so they do not accumulate. Only
+  ;; the ids of recently closed streams are kept (id -> T), bounded by
+  ;; *closed-stream-retention*. Older client ids at or below last-stream-id
+  ;; are closed by RFC 9113 §5.1.1, so they need no entry.
   (closed-streams (make-hash-table) :type hash-table)
+  ;; Set once a connection error has queued GOAWAY and the socket close.
+  (closing nil :type boolean)
   ;; stream-id -> (cons unsent-octets end-stream-p). Flushed on WINDOW_UPDATE.
   (send-queue (make-hash-table) :type hash-table)
   ;; (lambda (conn &optional stream)) installed by the response writer.
@@ -92,21 +102,48 @@
   on-headers      ; (lambda (stream headers end-stream))
   on-data         ; (lambda (stream data end-stream))
   on-goaway       ; (lambda (last-stream-id error-code debug-data))
-  on-error)       ; (lambda (error-code debug-data))
+  on-error        ; (lambda (error-code debug-data))
+  on-close)       ; (lambda (conn)) - connection error; socket closes after GOAWAY
+
+(defparameter *closed-stream-retention* 128
+  "Closed stream ids remembered exactly. When the table grows past this,
+   the lower half is dropped; those ids stay closed by the §5.1.1 rule.")
+
+(defun connection-stream-id-closed-p (conn stream-id)
+  "True for an id that is not open and has been closed. A client id at or
+   below last-stream-id was either used or implicitly closed when a higher
+   id opened (RFC 9113 §5.1.1)."
+  (or (gethash stream-id (http2-connection-closed-streams conn))
+      (and (oddp stream-id)
+           (<= stream-id (http2-connection-last-stream-id conn)))))
 
 (defun connection-find-stream (conn stream-id)
-  "Return the open stream or a closed stream dropped from the open table."
+  "Return the open stream, or a fresh closed placeholder for a closed id.
+   Closed stream objects are not retained, so the placeholder carries only
+   the id and the closed state."
   (or (gethash stream-id (http2-connection-streams conn))
-      (gethash stream-id (http2-connection-closed-streams conn))))
+      (when (and (plusp stream-id)
+                 (connection-stream-id-closed-p conn stream-id))
+        (make-http2-stream :id stream-id :state +state-closed+))))
+
+(defun prune-closed-stream-ids (conn)
+  "Drop the lower half of the remembered closed ids once over the bound."
+  (let ((closed (http2-connection-closed-streams conn)))
+    (when (> (hash-table-count closed) *closed-stream-retention*)
+      (let ((ids (sort (loop for id being the hash-keys of closed collect id) #'<)))
+        (loop repeat (- (length ids) (floor *closed-stream-retention* 2))
+              for id in ids
+              do (remhash id closed))))))
 
 (defun connection-drop-closed-stream (conn stream)
   "Remove a closed stream from the open table. Idempotent.
-   Keeps the id in the closed table so later frames are not idle errors."
+   Keeps only the id, so later frames are not idle errors."
   (when (and stream (stream-closed-p stream))
     (let ((id (http2-stream-id stream)))
       (remhash id (http2-connection-streams conn))
       (remhash id (http2-connection-send-queue conn))
-      (setf (gethash id (http2-connection-closed-streams conn)) stream)))
+      (setf (gethash id (http2-connection-closed-streams conn)) t)
+      (prune-closed-stream-ids conn)))
   stream)
 
 (defun connection-get-stream (conn stream-id &key (create nil))
@@ -128,12 +165,19 @@
     (when fn
       (funcall fn conn stream))))
 
+(defvar *http2-frame-sink* nil
+  "When non-nil, a function of one frame argument invoked for each outbound frame.")
+
 (defun connection-send-frame (conn frame)
-  "Send a frame on the connection."
-  (let ((socket (http2-connection-socket conn)))
-    (when (and socket (socket-open-p socket))
-      (with-async-writing (socket)
-        (write-socket-data socket (serialize-frame frame))))))
+  "Send a frame on the connection. Nothing is sent once the connection is
+   closing: a later write would also clear the pending close callback."
+  (unless (http2-connection-closing conn)
+    (when *http2-frame-sink*
+      (funcall *http2-frame-sink* frame))
+    (let ((socket (http2-connection-socket conn)))
+      (when (and socket (socket-open-p socket))
+        (with-async-writing (socket)
+          (write-socket-data socket (serialize-frame frame)))))))
 
 (defun connection-send-goaway (conn error-code &optional debug-data)
   "Send GOAWAY frame and mark connection for shutdown."
@@ -144,13 +188,25 @@
                          error-code
                          debug-data))))
 
+(defun connection-close (conn)
+  "Close the connection after a connection error. The socket is closed by
+   the write callback, so the queued GOAWAY is flushed first. Idempotent."
+  (unless (http2-connection-closing conn)
+    (setf (http2-connection-closing conn) t)
+    (when (http2-connection-on-close conn)
+      (funcall (http2-connection-on-close conn) conn))
+    (let ((socket (http2-connection-socket conn)))
+      (when (and socket (socket-open-p socket))
+        (with-async-writing (socket :write-cb #'close-socket))))))
+
 ;;; Frame handlers
 
 (defun connection-protocol-error (conn error-code &optional debug-data)
-  "Record a connection error, send GOAWAY, invoke on-error."
+  "Record a connection error, send GOAWAY, invoke on-error, then close."
   (connection-send-goaway conn error-code debug-data)
   (when (http2-connection-on-error conn)
     (funcall (http2-connection-on-error conn) error-code debug-data))
+  (connection-close conn)
   nil)
 
 (defun connection-stream-error (conn stream error-code)
@@ -253,7 +309,11 @@
      (connection-protocol-error conn +protocol-error+)
      nil)
     (t
-     (let ((existing (connection-find-stream conn stream-id)))
+     ;; Only a stream we know about may take HEADERS again. An unused id
+     ;; at or below last-stream-id is PROTOCOL_ERROR, not a closed stream.
+     (let ((existing (or (gethash stream-id (http2-connection-streams conn))
+                         (and (gethash stream-id (http2-connection-closed-streams conn))
+                              (connection-find-stream conn stream-id)))))
        (cond
          ((null existing)
           (when (<= stream-id (http2-connection-last-stream-id conn))
@@ -341,39 +401,85 @@
     (and (integerp declared)
          (/= (http2-stream-bytes-received stream) declared))))
 
+(defun decode-header-block (conn header-block)
+  "HPACK-decode HEADER-BLOCK with the header-list cap enforced per field.
+   Returns (values headers ok). OK is NIL when the cap was crossed; decoding
+   stopped there and the dynamic table is out of sync with the peer."
+  (handler-case
+      (values (hpack-decode-headers (http2-connection-decoder-context conn)
+                                    header-block
+                                    :max-header-list-size
+                                    (connection-header-list-limit conn))
+              t)
+    (hpack-header-list-too-large ()
+      (values nil nil))))
+
+(defun pseudo-header-field-p (header)
+  (let ((name (car header)))
+    (and (stringp name)
+         (plusp (length name))
+         (char= (char name 0) #\:))))
+
+(defun finish-request-headers (conn stream stream-id headers end-stream)
+  (setf (http2-stream-headers stream) headers)
+  (when (> stream-id (http2-connection-last-stream-id conn))
+    (setf (http2-connection-last-stream-id conn) stream-id))
+  (unless (accept-content-length stream headers)
+    (connection-stream-error conn stream +protocol-error+)
+    (return-from finish-request-headers nil))
+  (when end-stream
+    (when (content-length-complete-error-p stream)
+      (connection-stream-error conn stream +protocol-error+)
+      (return-from finish-request-headers nil))
+    (stream-transition stream :recv-end-stream))
+  (when (http2-connection-on-headers conn)
+    (funcall (http2-connection-on-headers conn)
+             stream headers end-stream))
+  (connection-drop-closed-stream conn stream))
+
+(defun finish-trailers (conn stream trailers end-stream)
+  "A later HEADERS on an open stream is a trailer section (RFC 9113 §8.1).
+   It must carry END_STREAM and no pseudo-headers, or the request is
+   malformed. content-length frames the body and cannot be a trailer
+   (RFC 9110 §6.5.1). The request headers are kept; trailers are stored apart."
+  (when (or (not end-stream)
+            (some #'pseudo-header-field-p trailers)
+            (assoc "content-length" trailers :test #'equal))
+    (connection-stream-error conn stream +protocol-error+)
+    (return-from finish-trailers nil))
+  (setf (http2-stream-trailers stream) trailers
+        (http2-stream-trailers-received stream) t)
+  (when (content-length-complete-error-p stream)
+    (connection-stream-error conn stream +protocol-error+)
+    (return-from finish-trailers nil))
+  (stream-transition stream :recv-end-stream)
+  (when (http2-connection-on-headers conn)
+    (funcall (http2-connection-on-headers conn)
+             stream trailers end-stream))
+  (connection-drop-closed-stream conn stream))
+
 (defun finish-header-block (conn stream stream-id header-block end-stream)
   (when (header-block-too-large-p conn (length header-block))
     (return-from finish-header-block
       (reject-header-list-size conn stream)))
   (clear-header-continuation conn stream)
-  (let ((headers (hpack-decode-headers
-                  (http2-connection-decoder-context conn)
-                  header-block)))
-    (setf (http2-stream-headers stream) headers)
-    (when (> (uncompressed-header-list-size headers)
-             (connection-header-list-limit conn))
+  (multiple-value-bind (headers ok) (decode-header-block conn header-block)
+    (unless ok
       (return-from finish-header-block
         (connection-protocol-error conn +enhance-your-calm+)))
     ;; Refused streams stay out of the state machine. :recv-headers on a
     ;; stream we then RST would be a connection error from closed.
     (when (http2-stream-refused stream)
-      (connection-stream-error conn stream +protocol-error+)
+      (connection-stream-error conn stream +refused-stream+)
       (return-from finish-header-block nil))
-    (stream-transition stream :recv-headers)
-    (when (> stream-id (http2-connection-last-stream-id conn))
-      (setf (http2-connection-last-stream-id conn) stream-id))
-    (unless (accept-content-length stream headers)
-      (connection-stream-error conn stream +protocol-error+)
-      (return-from finish-header-block nil))
-    (when end-stream
-      (when (content-length-complete-error-p stream)
-        (connection-stream-error conn stream +protocol-error+)
-        (return-from finish-header-block nil))
-      (stream-transition stream :recv-end-stream))
-    (when (http2-connection-on-headers conn)
-      (funcall (http2-connection-on-headers conn)
-               stream headers end-stream))
-    (connection-drop-closed-stream conn stream)))
+    (let* ((state (http2-stream-state stream))
+           (trailers-p (or (= state +state-open+)
+                           (= state +state-half-closed-local+))))
+      ;; Signals for states that cannot take HEADERS.
+      (stream-transition stream :recv-headers)
+      (if trailers-p
+          (finish-trailers conn stream headers end-stream)
+          (finish-request-headers conn stream stream-id headers end-stream)))))
 
 (defun handle-headers-frame (conn frame)
   "Handle received HEADERS frame."
@@ -437,6 +543,28 @@
                                  (http2-stream-pending-end-stream stream))
             (setf (http2-stream-header-buffer stream) new-buffer))))))
 
+(defun replenish-connection-window (conn)
+  "Return consumed DATA credit to the peer (RFC 9113 §6.9). A WINDOW_UPDATE
+   is sent once half the window is used, restoring it to the initial size."
+  (let ((window (http2-connection-window-size conn)))
+    (when (<= window (floor +default-initial-window-size+ 2))
+      (setf (http2-connection-window-size conn) +default-initial-window-size+)
+      (connection-send-frame conn
+        (make-window-update-frame 0 (- +default-initial-window-size+ window))))))
+
+(defun replenish-stream-window (conn stream)
+  "As replenish-connection-window, for a stream that can still receive DATA.
+   A stream the peer has finished gets no more credit."
+  (let ((window (http2-stream-recv-window-size stream))
+        (state (http2-stream-state stream)))
+    (when (and (or (= state +state-open+)
+                   (= state +state-half-closed-local+))
+               (<= window (floor +default-initial-window-size+ 2)))
+      (setf (http2-stream-recv-window-size stream) +default-initial-window-size+)
+      (connection-send-frame conn
+        (make-window-update-frame (http2-stream-id stream)
+                                  (- +default-initial-window-size+ window))))))
+
 (defun handle-data-frame (conn frame)
   "Handle received DATA frame."
   (let* ((stream-id (frame-stream-id frame))
@@ -464,13 +592,16 @@
       (when (or (stream-half-closed-remote-p stream)
                 (stream-closed-p stream))
         (decf (http2-connection-window-size conn) raw-len)
+        (replenish-connection-window conn)
         (return-from handle-data-frame
           (connection-stream-error conn stream +stream-closed+)))
       (when (> raw-len (http2-stream-recv-window-size stream))
         (return-from handle-data-frame
           (connection-protocol-error conn +flow-control-error+)))
+      ;; Padding counts against both windows and is credited back too.
       (decf (http2-connection-window-size conn) raw-len)
       (decf (http2-stream-recv-window-size stream) raw-len)
+      (replenish-connection-window conn)
       (let* ((buf (http2-stream-body-buffer stream))
              (old-len (length buf))
              (new-len (+ old-len (length data))))
@@ -486,6 +617,7 @@
           (return-from handle-data-frame nil)))
       (when end-stream
         (stream-transition stream :recv-end-stream))
+      (replenish-stream-window conn stream)
       (when (http2-connection-on-data conn)
         (funcall (http2-connection-on-data conn)
                  stream data end-stream))
@@ -607,13 +739,9 @@
           (t (vom:warn "Unknown frame type: ~A" (frame-type frame)))))
     (hpack-compression-error (e)
       (vom:error "HPACK compression error: ~A" e)
-      (connection-send-goaway conn +compression-error+
-                              (trivial-utf-8:string-to-utf-8-bytes
-                               (princ-to-string e)))
-      (when (http2-connection-on-error conn)
-        (funcall (http2-connection-on-error conn)
-                 +compression-error+
-                 (trivial-utf-8:string-to-utf-8-bytes (princ-to-string e)))))
+      (connection-protocol-error conn +compression-error+
+                                 (trivial-utf-8:string-to-utf-8-bytes
+                                  (princ-to-string e))))
     (stream-state-error (e)
       (vom:error "Stream state error: ~A" e)
       (if (stream-state-error-connection-error-p e)
@@ -656,9 +784,9 @@
                 (replace buf buf :start2 +connection-preface-length+)
                 (setf (fill-pointer buf) remaining)))
             (progn
-              ;; Invalid preface - send GOAWAY and close
+              ;; Invalid preface - send GOAWAY, then close once it is written
               (connection-send-goaway conn +protocol-error+)
-              (close-socket (http2-connection-socket conn))
+              (connection-close conn)
               (return-from parse-connection-data)))))
 
     ;; Parse frames
@@ -682,7 +810,7 @@
              (replace buf buf :start2 consumed)
              (setf (fill-pointer buf) remaining))))))))
 
-(defun setup-http2-parser (socket &key on-stream on-headers on-data on-goaway on-error)
+(defun setup-http2-parser (socket &key on-stream on-headers on-data on-goaway on-error on-close)
   "Set up HTTP/2 handling on socket.
    Returns the connection object.
 
@@ -691,14 +819,16 @@
    - on-headers: (lambda (stream headers end-stream)) - called when headers received
    - on-data: (lambda (stream data end-stream)) - called when data received
    - on-goaway: (lambda (last-stream-id error-code debug-data)) - called on GOAWAY
-   - on-error: (lambda (error-code debug-data)) - called on protocol errors"
+   - on-error: (lambda (error-code debug-data)) - called on protocol errors
+   - on-close: (lambda (conn)) - called when a connection error closes the socket"
   (let ((conn (make-http2-connection
                :socket socket
                :on-stream on-stream
                :on-headers on-headers
                :on-data on-data
                :on-goaway on-goaway
-               :on-error on-error)))
+               :on-error on-error
+               :on-close on-close)))
     ;; Send server SETTINGS
     (connection-send-frame conn
       (make-settings-frame (http2-connection-local-settings conn)))
