@@ -301,6 +301,15 @@
                 (values (subseq payload 1 (- (length payload) pad-length)) nil))))
       (values payload nil)))
 
+(defun record-remote-setting (conn id value)
+  "Keep the latest value of each setting defined by RFC 9113 §6.5.2, so
+   repeated SETTINGS cannot grow the list. Unknown ids are ignored."
+  (when (<= +settings-header-table-size+ id +settings-max-header-list-size+)
+    (let ((cell (assoc id (http2-connection-remote-settings conn))))
+      (if cell
+          (setf (cdr cell) value)
+          (push (cons id value) (http2-connection-remote-settings conn))))))
+
 (defun handle-settings-frame (conn frame)
   "Handle received SETTINGS frame."
   (unless (zerop (frame-stream-id frame))
@@ -350,7 +359,7 @@
                                (setf (http2-stream-window-size stream) new)))
                            (http2-connection-streams conn))
                   (setf (http2-connection-remote-initial-window-size conn) value)))))
-           (push setting (http2-connection-remote-settings conn)))
+           (record-remote-setting conn (car setting) (cdr setting)))
          (connection-send-frame conn (make-settings-ack-frame))
          ;; INITIAL_WINDOW_SIZE may have unblocked queued DATA.
          (connection-flush-pending-sends conn))))))

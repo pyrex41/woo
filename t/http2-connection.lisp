@@ -1978,3 +1978,25 @@
        conn (make-continuation-frame 1 (empty-octets) :end-headers t))
       (ok (= (funcall err) +stream-closed+))
       (ok (http2-connection-goaway-sent conn)))))
+
+;;; Repeated SETTINGS
+
+(deftest remote-settings-stay-bounded
+  (testing "100 SETTINGS frames of 2730 entries keep one value per known id"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (dotimes (k 100)
+        (connection-process-frame
+         conn (make-settings-frame
+               (loop for i below 2730
+                     collect (if (evenp i)
+                                 (cons +settings-max-concurrent-streams+ (+ i k))
+                                 ;; Unknown ids are ignored (RFC 9113 §6.5.2).
+                                 (cons (+ #x100 (mod i 1000)) i))))))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (let ((settings (http2-connection-remote-settings conn)))
+        (ok (<= (length settings) 6) (format nil "~D entries" (length settings)))
+        (ok (= (cdr (assoc +settings-max-concurrent-streams+ settings)) (+ 2728 99))
+            "the latest value wins")
+        (ok (null (assoc #x100 settings)) "unknown ids are not stored")))))
