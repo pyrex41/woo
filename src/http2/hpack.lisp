@@ -12,7 +12,9 @@
            :hpack-encode-headers
            :hpack-decode-headers
            :hpack-context-update-size
-           :hpack-compression-error))
+           :hpack-compression-error
+           :hpack-header-list-too-large
+           :hpack-header-list-too-large-fields))
 (in-package :woo.http2.hpack)
 
 (define-condition hpack-compression-error (error)
@@ -23,6 +25,15 @@
 
 (defun hpack-error (reason)
   (error 'hpack-compression-error :reason reason))
+
+(define-condition hpack-header-list-too-large (error)
+  ((limit :initarg :limit :reader hpack-header-list-too-large-limit)
+   ;; Fields decoded when the limit was crossed, including that field.
+   (fields :initarg :fields :reader hpack-header-list-too-large-fields))
+  (:report (lambda (c stream)
+             (format stream "HPACK header list exceeds ~A octets after ~A fields"
+                     (hpack-header-list-too-large-limit c)
+                     (hpack-header-list-too-large-fields c)))))
 
 ;; Static table (RFC 7541 Appendix A)
 ;; Index 1-61, stored as (name . value) pairs
@@ -199,6 +210,17 @@
         (values (car entry)
                 (aref (hpack-context-entry-name-octets ctx)
                       (- index static-len 1))))))
+
+(defun hpack-indexed-field-octets (ctx index)
+  "Name + value octets of a table entry already checked by hpack-lookup-index.
+   Static entries are ASCII. Dynamic entries use the lengths stored at insert."
+  (let ((static-len (1- (length *static-table*))))
+    (if (<= index static-len)
+        (let ((entry (aref *static-table* index)))
+          (+ (length (car entry)) (length (cdr entry))))
+        (let ((i (- index static-len 1)))
+          (+ (aref (hpack-context-entry-name-octets ctx) i)
+             (aref (hpack-context-entry-value-octets ctx) i))))))
 
 (defun hpack-find-header (ctx name value)
   "Find header in tables. Returns (values index name-only-p).
@@ -469,79 +491,93 @@
           (hpack-indexed-name ctx index)
         (values name octets idx))))
 
-(defun hpack-decode-headers (ctx data &key (start 0) (end (length data)))
+(defun hpack-decode-headers (ctx data &key (start 0) (end (length data))
+                                           (max-header-list-size nil))
   "Decode HPACK header block.
    Returns list of (name . value) pairs as strings.
    Dynamic table size updates are legal only before the first header
-   field and only up to SETTINGS_HEADER_TABLE_SIZE (RFC 7541 §4.2, §6.3)."
+   field and only up to SETTINGS_HEADER_TABLE_SIZE (RFC 7541 §4.2, §6.3).
+   With MAX-HEADER-LIST-SIZE, signal hpack-header-list-too-large as soon as
+   name + value + 32 per field (RFC 9113 §6.5.2) exceeds it. A small block
+   of indexed references to a large entry is stopped there, not expanded.
+   The dynamic table is then partly updated; the caller must end the
+   connection."
   (let ((headers nil)
         (idx start)
-        (seen-field nil))
-    (loop while (< idx end)
-          for byte = (aref data idx)
-          do (cond
-               ;; Indexed Header Field (Section 6.1) - starts with 1
-               ((logbitp 7 byte)
-                (setf seen-field t)
-                (multiple-value-bind (index consumed)
-                    (hpack-decode-integer data idx 7 end)
-                  (let ((entry (hpack-lookup-index ctx index)))
-                    (push (cons (car entry) (cdr entry)) headers))
-                  (incf idx consumed)))
-
-               ;; Literal Header Field with Incremental Indexing (Section 6.2.1) - starts with 01
-               ((= (logand byte #xC0) #x40)
-                (setf seen-field t)
-                (multiple-value-bind (index consumed)
-                    (hpack-decode-integer data idx 6 end)
-                  (incf idx consumed)
-                  (multiple-value-bind (name name-octets new-idx)
-                      (hpack-read-literal-name ctx data idx end index)
-                    (setf idx new-idx)
-                    (multiple-value-bind (value vconsumed value-octets)
-                        (hpack-decode-string data idx end)
-                      (incf idx vconsumed)
-                      ;; Name string and its octet length are captured before
-                      ;; insertion, which may evict the referenced entry.
-                      (hpack-context-add-entry ctx name value
-                                               :name-octets name-octets
-                                               :value-octets value-octets)
-                      (push (cons name value) headers)))))
-
-               ;; Dynamic Table Size Update (Section 6.3) - starts with 001
-               ((= (logand byte #xE0) #x20)
-                (when seen-field
-                  (hpack-error "dynamic table size update after header field"))
-                (multiple-value-bind (size consumed)
-                    (hpack-decode-integer data idx 5 end)
-                  (unless (<= size (hpack-context-header-table-size-limit ctx))
-                    (hpack-error "dynamic table size update exceeds SETTINGS_HEADER_TABLE_SIZE"))
-                  ;; Do not call hpack-context-update-size: that would raise
-                  ;; the protocol ceiling.
-                  (setf (hpack-context-max-dynamic-table-size ctx) size)
-                  (hpack-context-evict ctx)
-                  (incf idx consumed)))
-
-               ;; Literal Header Field without Indexing (Section 6.2.2) - starts with 0000
-               ;; Literal Header Field Never Indexed (Section 6.2.3) - starts with 0001
-               (t
-                (setf seen-field t)
-                (let ((prefix-bits 4))
+        (seen-field nil)
+        (list-size 0)
+        (fields 0))
+    (flet ((note-field (octets)
+             (incf fields)
+             (incf list-size (+ 32 octets))
+             (when (and max-header-list-size
+                        (> list-size max-header-list-size))
+               (error 'hpack-header-list-too-large
+                      :limit max-header-list-size
+                      :fields fields))))
+      (loop while (< idx end)
+            for byte = (aref data idx)
+            do (cond
+                 ;; Indexed Header Field (Section 6.1) - starts with 1
+                 ((logbitp 7 byte)
+                  (setf seen-field t)
                   (multiple-value-bind (index consumed)
-                      (hpack-decode-integer data idx prefix-bits end)
+                      (hpack-decode-integer data idx 7 end)
+                    (let ((entry (hpack-lookup-index ctx index)))
+                      (note-field (hpack-indexed-field-octets ctx index))
+                      (push (cons (car entry) (cdr entry)) headers))
+                    (incf idx consumed)))
+
+                 ;; Literal Header Field with Incremental Indexing (Section 6.2.1) - starts with 01
+                 ((= (logand byte #xC0) #x40)
+                  (setf seen-field t)
+                  (multiple-value-bind (index consumed)
+                      (hpack-decode-integer data idx 6 end)
                     (incf idx consumed)
-                    (let (name value)
-                      (if (zerop index)
-                          (multiple-value-bind (n c)
-                              (hpack-decode-string data idx end)
-                            (setf name n)
-                            (incf idx c))
-                          (setf name (car (hpack-lookup-index ctx index))))
-                      (multiple-value-bind (v c)
+                    (multiple-value-bind (name name-octets new-idx)
+                        (hpack-read-literal-name ctx data idx end index)
+                      (setf idx new-idx)
+                      (multiple-value-bind (value vconsumed value-octets)
                           (hpack-decode-string data idx end)
-                        (setf value v)
-                        (incf idx c))
-                      (push (cons name value) headers)))))))
+                        (incf idx vconsumed)
+                        (note-field (+ name-octets value-octets))
+                        ;; Name string and its octet length are captured before
+                        ;; insertion, which may evict the referenced entry.
+                        (hpack-context-add-entry ctx name value
+                                                 :name-octets name-octets
+                                                 :value-octets value-octets)
+                        (push (cons name value) headers)))))
+
+                 ;; Dynamic Table Size Update (Section 6.3) - starts with 001
+                 ((= (logand byte #xE0) #x20)
+                  (when seen-field
+                    (hpack-error "dynamic table size update after header field"))
+                  (multiple-value-bind (size consumed)
+                      (hpack-decode-integer data idx 5 end)
+                    (unless (<= size (hpack-context-header-table-size-limit ctx))
+                      (hpack-error "dynamic table size update exceeds SETTINGS_HEADER_TABLE_SIZE"))
+                    ;; Do not call hpack-context-update-size: that would raise
+                    ;; the protocol ceiling.
+                    (setf (hpack-context-max-dynamic-table-size ctx) size)
+                    (hpack-context-evict ctx)
+                    (incf idx consumed)))
+
+                 ;; Literal Header Field without Indexing (Section 6.2.2) - starts with 0000
+                 ;; Literal Header Field Never Indexed (Section 6.2.3) - starts with 0001
+                 (t
+                  (setf seen-field t)
+                  (let ((prefix-bits 4))
+                    (multiple-value-bind (index consumed)
+                        (hpack-decode-integer data idx prefix-bits end)
+                      (incf idx consumed)
+                      (multiple-value-bind (name name-octets new-idx)
+                          (hpack-read-literal-name ctx data idx end index)
+                        (setf idx new-idx)
+                        (multiple-value-bind (value c value-octets)
+                            (hpack-decode-string data idx end)
+                          (incf idx c)
+                          (note-field (+ name-octets value-octets))
+                          (push (cons name value) headers)))))))))
     (nreverse headers)))
 
 ;;; Header block encoding

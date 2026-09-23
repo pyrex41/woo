@@ -45,8 +45,13 @@
                 :+flag-end-headers+
                 :+flag-end-stream+
                 :+protocol-error+
+                :+refused-stream+
                 :+stream-closed+))
 (in-package :woo-test.http2-clack)
+
+(defun empty-octets ()
+  "Empty frame payload. A literal #() is a simple-vector, not octets."
+  (make-array 0 :element-type '(unsigned-byte 8)))
 
 (defun valid-request-headers (&rest extra)
   (append (list (cons ":method" "GET")
@@ -359,15 +364,15 @@
               (declare (ignore debug))
               (setf err code)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t))
       (ok (null err))
       (let ((window (http2-stream-window-size (connection-get-stream conn 1))))
         (connection-process-frame
-         conn (make-headers-frame 3 #() :end-headers t))
-        (ok (= err +protocol-error+))
+         conn (make-headers-frame 3 (empty-octets) :end-headers t))
+        (ok (= err +refused-stream+))
         (ok (not (http2-connection-goaway-sent conn)))
         (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
-                   (cons 3 +protocol-error+)))
+                   (cons 3 +refused-stream+)))
         (ok (stream-closed-p (connection-get-stream conn 3)))
         (ok (null (gethash 3 (http2-connection-streams conn))))
         (connection-process-frame conn (make-window-update-frame 1 10))
@@ -379,13 +384,13 @@
     (let ((conn (make-http2-connection)))
       (setf (woo.http2.connection::http2-connection-local-max-concurrent-streams conn) 1)
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (let ((stream (connection-get-stream conn 1)))
         (ok (stream-half-closed-remote-p stream))
         (ok (send-http2-response conn stream 200 nil "ok")))
       (ok (null (gethash 1 (http2-connection-streams conn))))
       (connection-process-frame
-       conn (make-headers-frame 3 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 3 (empty-octets) :end-headers t :end-stream t))
       (ok (not (http2-connection-goaway-sent conn)))
       (ok (stream-half-closed-remote-p (connection-get-stream conn 3)))))
   (testing "DATA after a completed response is RST STREAM_CLOSED, not GOAWAY"
@@ -396,7 +401,7 @@
               (declare (ignore debug))
               (setf err code)))
       (connection-process-frame
-       conn (make-headers-frame 1 #() :end-headers t :end-stream t))
+       conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
       (ok (send-http2-response conn (connection-get-stream conn 1) 200 nil nil))
       (connection-process-frame
        conn (make-data-frame 1 (make-array 1 :element-type '(unsigned-byte 8)
@@ -537,3 +542,266 @@
              (ok (stream-closed-p stream)))
         (when (probe-file path)
           (delete-file path))))))
+
+;;; Trailers through the Clack adapter
+
+(defun adapter-conn (app)
+  "A connection wired to APP exactly as make-http2-app-handler wires it."
+  (woo.http2.clack:attach-http2-app (make-http2-connection) nil app))
+
+(defun request-block (headers)
+  (woo.http2.hpack:hpack-encode-headers (make-hpack-context) headers))
+
+(deftest request-trailers
+  (testing "HEADERS, DATA, trailers with END_STREAM run the app once with the request"
+    (let* ((envs nil)
+           (conn (adapter-conn (lambda (env)
+                                 (push env envs)
+                                 '(200 (:content-type "text/plain") "ok")))))
+      (let ((frames nil))
+        (let ((*http2-frame-sink* (lambda (f) (push f frames))))
+          (connection-process-frame
+           conn (make-headers-frame 1 (request-block
+                                       '((":method" . "POST")
+                                         (":scheme" . "https")
+                                         (":path" . "/upload?x=1")
+                                         (":authority" . "example.com")))
+                                    :end-headers t))
+          (connection-process-frame
+           conn (make-data-frame 1 (map '(vector (unsigned-byte 8)) #'char-code "hello")))
+          (connection-process-frame
+           conn (make-headers-frame 1 (request-block '(("x-checksum" . "abc")))
+                                    :end-headers t :end-stream t)))
+        (ok (= (length envs) 1) "the app runs once, on the trailers")
+        (let ((env (first envs)))
+          (ok (eq (getf env :request-method) :post))
+          (ok (equal (getf env :path-info) "/upload"))
+          (ok (equal (getf env :query-string) "x=1"))
+          (ok (equal (map 'string #'code-char (getf env :raw-body)) "hello"))
+          (ok (equal (woo.http2.stream:http2-stream-trailers (getf env :http2.stream))
+                     '(("x-checksum" . "abc")))))
+        (ok (null (woo.http2.connection::http2-connection-last-rst conn))
+            "no RST PROTOCOL_ERROR")
+        (ok (not (http2-connection-goaway-sent conn)))
+        (let ((response (hpack-decode-headers
+                         (make-hpack-context)
+                         (header-block-bytes (reverse frames)))))
+          (ok (equal (cdr (assoc ":status" response :test #'string=)) "200"))))))
+
+  (testing "trailers with a pseudo-header are malformed"
+    (let* ((called nil)
+           (conn (adapter-conn (lambda (env)
+                                 (declare (ignore env))
+                                 (setf called t)
+                                 '(200 () "no")))))
+      (connection-process-frame
+       conn (make-headers-frame 1 (request-block (valid-request-headers))
+                                :end-headers t))
+      (connection-process-frame
+       conn (make-headers-frame 1 (request-block '((":path" . "/other")))
+                                :end-headers t :end-stream t))
+      (ok (not called))
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +protocol-error+)))
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "trailers without END_STREAM are malformed"
+    (let* ((called nil)
+           (conn (adapter-conn (lambda (env)
+                                 (declare (ignore env))
+                                 (setf called t)
+                                 '(200 () "no")))))
+      (connection-process-frame
+       conn (make-headers-frame 1 (request-block (valid-request-headers))
+                                :end-headers t))
+      (connection-process-frame
+       conn (make-headers-frame 1 (request-block '(("x-a" . "b")))
+                                :end-headers t))
+      (ok (not called))
+      (ok (equal (woo.http2.connection::http2-connection-last-rst conn)
+                 (cons 1 +protocol-error+))))))
+
+;;; h2c prior knowledge against a running server, over a real socket.
+
+(defparameter *h2c-deadline-seconds* 10
+  "Upper bound for any one wait on the server in the socket tests.")
+
+(defstruct h2c-client socket stream (buffer (make-array 0 :element-type '(unsigned-byte 8)
+                                                          :adjustable t :fill-pointer 0))
+  (closed nil))
+
+(defun h2c-connect ()
+  (let ((socket (usocket:socket-connect "127.0.0.1" clack.test:*clack-test-port*
+                                        :element-type '(unsigned-byte 8))))
+    (make-h2c-client :socket socket :stream (usocket:socket-stream socket))))
+
+(defun h2c-send (client &rest frames)
+  (let ((out (h2c-client-stream client)))
+    (dolist (frame frames)
+      (write-sequence (if (typep frame 'woo.http2.frames:frame)
+                          (woo.http2.frames:serialize-frame frame)
+                          frame)
+                      out))
+    (finish-output out)))
+
+(defun h2c-read-frames (client)
+  "Wait up to 0.2 s for input. Returns the complete frames now buffered.
+   Sets CLOSED when the server has closed the connection."
+  (let ((stream (h2c-client-stream client))
+        (buf (h2c-client-buffer client)))
+    (when (and (not (h2c-client-closed client))
+               (usocket:wait-for-input (h2c-client-socket client)
+                                       :timeout 0.2 :ready-only t))
+      (handler-case
+          (loop for byte = (read-byte stream nil :eof)
+                do (if (eq byte :eof)
+                       (progn (setf (h2c-client-closed client) t) (return))
+                       (vector-push-extend byte buf))
+                while (listen stream))
+        (error () (setf (h2c-client-closed client) t))))
+    (let ((frames nil))
+      (loop
+        (multiple-value-bind (frame consumed)
+            (woo.http2.frames:parse-frame (coerce buf '(simple-array (unsigned-byte 8) (*))))
+          (unless frame (return))
+          (push frame frames)
+          (replace buf buf :start2 consumed)
+          (setf (fill-pointer buf) (- (length buf) consumed))))
+      (nreverse frames))))
+
+(defun h2c-read-until (client predicate)
+  "Read frames until PREDICATE is true of the list so far, the server closes,
+   or the deadline passes. Returns all frames read."
+  (let ((deadline (+ (get-internal-real-time)
+                     (* *h2c-deadline-seconds* internal-time-units-per-second)))
+        (frames nil))
+    (loop
+      (setf frames (append frames (h2c-read-frames client)))
+      (when (or (funcall predicate frames)
+                (h2c-client-closed client)
+                (> (get-internal-real-time) deadline))
+        (return frames)))))
+
+(defun h2c-preface-and-settings (client)
+  (h2c-send client woo.http2.constants:+connection-preface+
+            (woo.http2.frames:make-settings-frame nil)))
+
+(defun window-update-increment (frame)
+  (woo.http2.frames:parse-window-update-payload (frame-payload frame)))
+
+(defun h2c-upload (client stream-id bytes)
+  "Send BYTES as DATA, waiting for WINDOW_UPDATE credit like a real client.
+   Returns (values sent-all-p frames-read)."
+  (let ((conn-credit 65535)
+        (stream-credit 65535)
+        (offset 0)
+        (seen nil)
+        (deadline (+ (get-internal-real-time)
+                     (* *h2c-deadline-seconds* internal-time-units-per-second))))
+    (loop while (< offset (length bytes))
+          do (let ((chunk (min 16384 (- (length bytes) offset) conn-credit stream-credit)))
+               (cond
+                 ((plusp chunk)
+                  (h2c-send client (make-data-frame stream-id
+                                                    (subseq bytes offset (+ offset chunk))))
+                  (decf conn-credit chunk)
+                  (decf stream-credit chunk)
+                  (incf offset chunk))
+                 ((or (h2c-client-closed client)
+                      (> (get-internal-real-time) deadline))
+                  (return-from h2c-upload (values nil seen)))
+                 (t
+                  (dolist (frame (h2c-read-frames client))
+                    (push frame seen)
+                    (when (= (frame-type frame) woo.http2.constants:+frame-window-update+)
+                      (let ((sid (woo.http2.frames:frame-stream-id frame))
+                            (inc (window-update-increment frame)))
+                        (cond ((zerop sid) (incf conn-credit inc))
+                              ((= sid stream-id) (incf stream-credit inc))))))))))
+    (values t (nreverse seen))))
+
+(defun frame-on-stream-p (frame stream-id type)
+  (and (= (frame-type frame) type)
+       (= (woo.http2.frames:frame-stream-id frame) stream-id)))
+
+(deftest h2c-socket-end-to-end
+  (let ((clack.test:*clack-test-handler* :woo))
+    (clack.test:testing-app "an upload over 64 KB with trailers gets a response"
+        (lambda (env)
+          (let ((body (getf env :raw-body)))
+            `(200 (:content-type "text/plain")
+                  (,(format nil "~A ~A ~D"
+                            (getf env :request-method)
+                            (getf env :path-info)
+                            (if body (length body) 0))))))
+      (let ((client (h2c-connect))
+            (bytes (make-array 200000 :element-type '(unsigned-byte 8)
+                                      :initial-element 120)))
+        (unwind-protect
+             (progn
+               (h2c-preface-and-settings client)
+               (h2c-send client
+                         (make-headers-frame 1 (request-block
+                                                '((":method" . "POST")
+                                                  (":scheme" . "http")
+                                                  (":path" . "/upload")
+                                                  (":authority" . "localhost")))
+                                             :end-headers t))
+               (multiple-value-bind (sent-all seen) (h2c-upload client 1 bytes)
+                 (ok sent-all "the server kept granting credit for 200,000 octets")
+                 (ok (find-if (lambda (f) (frame-on-stream-p
+                                           f 0 woo.http2.constants:+frame-window-update+))
+                              seen)
+                     "connection WINDOW_UPDATE on the wire")
+                 (h2c-send client (make-headers-frame 1 (request-block '(("x-sum" . "1")))
+                                                      :end-headers t :end-stream t))
+                 (let* ((frames (append seen
+                                        (h2c-read-until
+                                         client
+                                         (lambda (fs)
+                                           (find-if (lambda (f)
+                                                      (and (frame-on-stream-p f 1 +frame-data+)
+                                                           (end-stream-p f)))
+                                                    fs)))))
+                        (response (frames-of-type
+                                   (remove-if-not (lambda (f)
+                                                    (= (woo.http2.frames:frame-stream-id f) 1))
+                                                  frames)
+                                   +frame-headers+)))
+                   (ok (not (find woo.http2.constants:+frame-goaway+ frames
+                                  :key #'frame-type)))
+                   (ok (not (find woo.http2.constants:+frame-rst-stream+ frames
+                                  :key #'frame-type)))
+                   (ok response)
+                   (when response
+                     (ok (equal (cdr (assoc ":status"
+                                            (hpack-decode-headers (make-hpack-context)
+                                                                  (frame-payload (first response)))
+                                            :test #'string=))
+                                "200")))
+                   (ok (equal (map 'string #'code-char
+                                   (data-bytes (remove-if-not
+                                                (lambda (f)
+                                                  (= (woo.http2.frames:frame-stream-id f) 1))
+                                                frames)))
+                              "POST /upload 200000")))))
+          (usocket:socket-close (h2c-client-socket client))))))
+
+  (let ((clack.test:*clack-test-handler* :woo))
+    (clack.test:testing-app "a connection error writes GOAWAY, then closes the socket"
+        (lambda (env) (declare (ignore env)) '(200 () ("ok")))
+      (let ((client (h2c-connect)))
+        (unwind-protect
+             (progn
+               (h2c-preface-and-settings client)
+               (h2c-send client (make-window-update-frame 0 0))
+               (let* ((frames (h2c-read-until client (constantly nil)))
+                      (goaway (find woo.http2.constants:+frame-goaway+ frames
+                                    :key #'frame-type)))
+                 (ok goaway "GOAWAY is flushed before the close")
+                 (when goaway
+                   (ok (= (nth-value 1 (woo.http2.frames:parse-goaway-payload
+                                        (frame-payload goaway)))
+                          +protocol-error+)))
+                 (ok (h2c-client-closed client) "the server closed the TCP connection")))
+          (usocket:socket-close (h2c-client-socket client)))))))
