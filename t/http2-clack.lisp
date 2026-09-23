@@ -213,6 +213,17 @@
 (defun end-stream-p (frame)
   (plusp (logand (frame-flags frame) +flag-end-stream+)))
 
+(defun raw-body-octets (env)
+  "Read the :raw-body input stream to the end, as an application would."
+  (let ((in (getf env :raw-body))
+        (out (make-array 0 :element-type '(unsigned-byte 8)
+                           :adjustable t :fill-pointer 0)))
+    (when in
+      (loop for byte = (read-byte in nil nil)
+            while byte
+            do (vector-push-extend byte out)))
+    out))
+
 (defun register-stream (conn stream)
   (setf (gethash (http2-stream-id stream) (http2-connection-streams conn)) stream))
 
@@ -577,7 +588,7 @@
           (ok (eq (getf env :request-method) :post))
           (ok (equal (getf env :path-info) "/upload"))
           (ok (equal (getf env :query-string) "x=1"))
-          (ok (equal (map 'string #'code-char (getf env :raw-body)) "hello"))
+          (ok (equal (map 'string #'code-char (raw-body-octets env)) "hello"))
           (ok (equal (woo.http2.stream:http2-stream-trailers (getf env :http2.stream))
                      '(("x-checksum" . "abc"))))
           (ok (equal (getf env :http2.trailers) '(("x-checksum" . "abc")))
@@ -773,12 +784,12 @@
   (let ((clack.test:*clack-test-handler* :woo))
     (clack.test:testing-app "an upload over 64 KB with trailers gets a response"
         (lambda (env)
-          (let ((body (getf env :raw-body)))
+          (let ((body (raw-body-octets env)))
             `(200 (:content-type "text/plain")
                   (,(format nil "~A ~A ~D"
                             (getf env :request-method)
                             (getf env :path-info)
-                            (if body (length body) 0))))))
+                            (length body))))))
       (let ((client (h2c-connect))
             (bytes (make-array 200000 :element-type '(unsigned-byte 8)
                                       :initial-element 120)))
@@ -1020,6 +1031,46 @@
                   (lambda ()
                     (connection-process-frame conn (make-window-update-frame 0 100))))
                  +frame-data+))))))
+
+;;; :raw-body is an input stream, as Lack requires
+
+(deftest raw-body-is-a-stream
+  (testing "a form POST reads through lack.request"
+    (let* ((envs nil)
+           (conn (adapter-conn (lambda (env)
+                                 (push env envs)
+                                 '(200 () "ok")))))
+      (run-adapter-request
+       conn 1
+       :headers (list (cons ":method" "POST")
+                      (cons ":scheme" "https")
+                      (cons ":path" "/form?q=1")
+                      (cons ":authority" "example.com")
+                      (cons "content-type" "application/x-www-form-urlencoded")
+                      (cons "accept" "*/*"))
+       :body "name=Ada+Lovelace&n=3")
+      (ok (= (length envs) 1))
+      (let* ((env (first envs))
+             (req (lack.request:make-request env)))
+        (ok (typep (getf env :raw-body) 'stream) ":raw-body is a stream")
+        (ok (= (getf env :content-length) 21)
+            "content-length is the body length when the client omits it")
+        (ok (equal (lack.request:request-body-parameters req)
+                   '(("name" . "Ada Lovelace") ("n" . "3"))))
+        (ok (equal (lack.request:request-query-parameters req) '(("q" . "1"))))
+        (ok (equal (map 'string #'code-char (lack.request:request-content req))
+                   "name=Ada+Lovelace&n=3")))))
+  (testing "a request without a body gets an empty stream"
+    (let* ((envs nil)
+           (conn (adapter-conn (lambda (env)
+                                 (push env envs)
+                                 '(200 () "ok")))))
+      (run-adapter-request conn 1 :headers (valid-request-headers (cons "accept" "*/*")))
+      (let ((env (first envs)))
+        (ok (typep (getf env :raw-body) 'stream))
+        (ok (null (read-byte (getf env :raw-body) nil nil)))
+        (ok (null (getf env :content-length)))
+        (ok (lack.request:make-request env))))))
 
 ;;; Pathname bodies are streamed, not read whole
 

@@ -732,12 +732,22 @@
            (remhash (http2-stream-id stream) (http2-connection-send-queue conn))
            (connection-stream-error conn stream +internal-error+)))))))
 
+(defun request-body-stream (octets)
+  "An input stream over the request body, as HTTP/1 passes :raw-body."
+  (flex:make-in-memory-input-stream octets :end (length octets)))
+
 (defun run-request (conn socket stream app env body trailers)
-  (setf (getf env :http2.connection) conn
-        (getf env :raw-body) (if (and body (> (length body) 0)) body nil)
-        ;; Trailer fields as received, an alist of (name . value).
-        (getf env :http2.trailers) trailers)
-  (invoke-http2-app conn socket stream app env))
+  (let ((body (or body (empty-octets))))
+    (setf (getf env :http2.connection) conn
+          (getf env :raw-body) (request-body-stream body)
+          ;; Trailer fields as received, an alist of (name . value).
+          (getf env :http2.trailers) trailers)
+    ;; HTTP/2 has no chunked coding, so a body without content-length
+    ;; gets its length here; Lack reads a body only when it is set.
+    (when (and (plusp (length body))
+               (null (getf env :content-length)))
+      (setf (getf env :content-length) (length body)))
+    (invoke-http2-app conn socket stream app env)))
 
 (defun handle-http2-headers (conn socket stream headers end-stream app)
   "Validate, then run APP only for a complete request. Malformed headers RST first.

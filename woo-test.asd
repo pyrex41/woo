@@ -1,6 +1,7 @@
 (defsystem "woo-test"
   :depends-on ("woo"
                "clack-test"
+               "lack-request"
                "rove")
   :components
   ((:file "t/woo")
