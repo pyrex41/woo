@@ -75,7 +75,10 @@
                        (lev:ev-run *evloop* 0))
        ;; First, so that nothing touches the loop from another thread
        ;; while it is torn down.
-       (mapc #'funcall *evloop-exit-hooks*)
+       ;; A failing hook must not skip closing the sockets or freeing the loop.
+       (dolist (hook *evloop-exit-hooks*)
+         (handler-case (funcall hook)
+           (error (e) (vom:error "Error in event loop exit hook: ~A" e))))
        (let ((close-socket-fn (intern #.(string :close-socket) (find-package #.(string :woo.ev.socket)))))
          (maphash (lambda (fd socket)
                     (declare (ignore fd))
