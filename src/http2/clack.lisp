@@ -648,7 +648,9 @@
 
 (defun ensure-send-flush-hook (conn)
   (unless (http2-connection-flush-sends conn)
-    (setf (http2-connection-flush-sends conn) #'flush-pending-response-data)))
+    (setf (http2-connection-flush-sends conn) #'flush-pending-response-data))
+  (unless (http2-connection-discard-sends conn)
+    (setf (http2-connection-discard-sends conn) #'discard-pending)))
 
 (defun advance-response-guarded (conn stream)
   "advance-response, but an error resets STREAM instead of escaping, so its

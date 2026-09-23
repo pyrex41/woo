@@ -1413,6 +1413,58 @@
       (ok (notany #'identity (subseq results 10)) "writes over the limit return NIL")
       (ok (rst-frames frames 1) "the stream is reset once the loop runs"))))
 
+;;; A stream error from WINDOW_UPDATE drops that stream's queued response
+
+(deftest window-update-stream-error-drops-queued-response
+  (testing "a stream window overflow resets only that stream and releases its queued octets"
+    (multiple-value-bind (conn writers) (writer-conn :stream-ids '(1 3))
+      (let ((chunk (make-array 5000 :element-type '(unsigned-byte 8) :initial-element 9)))
+        (ok (funcall (first writers) chunk))
+        (ok (funcall (second writers) chunk :close t))
+        (let ((pending (gethash 1 (woo.http2.connection:http2-connection-send-queue conn))))
+          (ok (= (woo.http2.clack::connection-queued-bytes conn) 10000))
+          (let* ((frames (capture-frames
+                          (lambda ()
+                            (connection-process-frame
+                             conn (make-window-update-frame
+                                   1 woo.http2.constants:+max-window-size+)))))
+                 (rst (rst-frames frames 1)))
+            (ok (= (length rst) 1) "stream 1 is reset")
+            (when rst
+              (ok (= (rst-code (first rst)) woo.http2.constants:+flow-control-error+)))
+            (ok (null (frames-of-type frames woo.http2.constants:+frame-goaway+))
+                "no GOAWAY"))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))
+              "the queue entry is gone")
+          (ok (and pending (zerop (woo.http2.clack::pending-queued pending))
+                   (null (woo.http2.clack::pending-chunks pending)))
+              "the writer's entry no longer holds the octets")
+          (ok (= (woo.http2.clack::connection-queued-bytes conn) 5000)
+              "only stream 3 counts against the connection budget"))
+        (ok (null (funcall (first writers) "late")) "later writes on stream 1 are dropped")
+        (let ((frames (capture-frames
+                       (lambda ()
+                         (connection-process-frame conn (make-window-update-frame 0 100000))))))
+          (ok (null (frames-on-stream frames 1)) "nothing more on stream 1")
+          (ok (equalp (data-bytes (frames-on-stream frames 3)) chunk)
+              "stream 3 still gets its whole body")
+          (ok (end-stream-p (car (last (frames-on-stream frames 3))))))
+        (ok (zerop (woo.http2.clack::connection-queued-bytes conn))))))
+
+  (testing "increment 0 on a stream with a queued response is RST PROTOCOL_ERROR"
+    (multiple-value-bind (conn writers) (writer-conn)
+      (ok (funcall (first writers) (make-array 100 :element-type '(unsigned-byte 8))))
+      (let ((rst (rst-frames (capture-frames
+                              (lambda ()
+                                (connection-process-frame conn (make-window-update-frame 1 0))))
+                             1)))
+        (ok (= (length rst) 1))
+        (when rst
+          (ok (= (rst-code (first rst)) +protocol-error+))))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (zerop (woo.http2.clack::connection-queued-bytes conn))))))
+
 ;;; Event-loop dispatch: order, and shutdown
 
 (deftest loop-dispatcher
