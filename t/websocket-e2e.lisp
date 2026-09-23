@@ -24,44 +24,104 @@
 (defun octets-string (octets)
   (map 'string #'code-char octets))
 
-;;; The echo app. Every path upgrades; they differ in what the app returns
-;;; afterwards and in how a close is answered.
-;;;   /ws         returns NIL (woo would send a 500), default on-close
-;;;   /ws-200     returns a finalized 200 the way a framework does
-;;;   /ws-reason  on-close echoes the client's code and reason
+;;; The echo app. Every WebSocket path upgrades; they differ in what the
+;;; app returns afterwards, in how a close is answered, and in when it
+;;; upgrades.
+;;;   /ws             returns NIL (woo would send a 500), default on-close
+;;;   /ws-200         returns a finalized 200 the way a framework does
+;;;   /ws-reason      on-close echoes the client's code and reason
+;;;   /ws-body        first sends text "body:<request body>"
+;;;   /ws-delayed     a delayed response: upgrades 0.3 s later from a timer
+;;;   /ws-late-setup  writes the 101 at once, calls SETUP-WEBSOCKET 0.3 s later
 ;;; Text "close-me" makes the server close (4000 "bye"); "ping-me" makes it
-;;; ping ("hi") and report the pong as text "pong:<payload>".
+;;; ping ("hi") and report the pong as text "pong:<payload>". A request that
+;;; is not a WebSocket upgrade gets "plain", or "delayed" 0.3 s later on
+;;; /delayed-plain.
+
+(defvar *timers* (make-hash-table))
+(defvar *timers-lock* (bt2:make-lock :name "websocket-e2e-timers"))
+
+(cffi:defcallback e2e-timer-cb :void ((evloop :pointer) (timer :pointer) (events :int))
+  (declare (ignore events))
+  (lev:ev-timer-stop evloop timer)
+  (let ((thunk (bt2:with-lock-held (*timers-lock*)
+                 (prog1 (gethash (cffi:pointer-address timer) *timers*)
+                   (remhash (cffi:pointer-address timer) *timers*)))))
+    (cffi:foreign-free timer)
+    (when thunk
+      (handler-case (funcall thunk)
+        (error (e) (warn "Delayed e2e callback failed: ~A" e))))))
+
+(defun call-later (seconds thunk)
+  "Run THUNK after SECONDS on the current woo event loop."
+  (let ((timer (cffi:foreign-alloc '(:struct lev:ev-timer))))
+    (bt2:with-lock-held (*timers-lock*)
+      (setf (gethash (cffi:pointer-address timer) *timers*) thunk))
+    (lev:ev-timer-init timer 'e2e-timer-cb (coerce seconds 'double-float) 0.0d0)
+    (lev:ev-timer-start woo.ev:*evloop* timer)))
+
+(defun echo-setup (socket path)
+  (woo:setup-websocket
+   socket
+   :on-message (lambda (opcode payload)
+                 (cond
+                   ((= opcode woo.websocket:+opcode-binary+)
+                    (woo:send-binary-frame socket payload))
+                   (t
+                    (let ((text (utf-8-bytes-to-string payload)))
+                      (cond
+                        ((string= text "close-me")
+                         (woo:send-close socket 4000 "bye"))
+                        ((string= text "ping-me")
+                         (woo:send-ping socket (string-to-utf-8-bytes "hi")))
+                        (t (woo:send-text-frame socket text)))))))
+   :on-pong (lambda (payload)
+              (woo:send-text-frame socket (format nil "pong:~A"
+                                                  (utf-8-bytes-to-string payload))))
+   :on-close (and (string= path "/ws-reason")
+                  (lambda (code reason)
+                    (woo:send-close socket code reason)))))
+
+(defun request-body-string (env)
+  (let ((n (or (getf env :content-length) 0))
+        (in (getf env :raw-body)))
+    (if (and in (plusp n))
+        (let ((buf (make-array n :element-type '(unsigned-byte 8))))
+          (utf-8-bytes-to-string buf :end (read-sequence buf in)))
+        "")))
 
 (defun echo-app (env)
-  (let ((socket (getf env :clack.io))
-        (path (getf env :path-info)))
-    (if (not (woo:websocket-p env))
-        '(200 (:content-type "text/plain") ("plain"))
-        (let ((key (gethash "sec-websocket-key" (getf env :headers))))
-          (woo:write-websocket-upgrade-response socket (woo:compute-accept-key key))
-          (woo:setup-websocket
-           socket
-           :on-message (lambda (opcode payload)
-                         (cond
-                           ((= opcode woo.websocket:+opcode-binary+)
-                            (woo:send-binary-frame socket payload))
-                           (t
-                            (let ((text (utf-8-bytes-to-string payload)))
-                              (cond
-                                ((string= text "close-me")
-                                 (woo:send-close socket 4000 "bye"))
-                                ((string= text "ping-me")
-                                 (woo:send-ping socket (string-to-utf-8-bytes "hi")))
-                                (t (woo:send-text-frame socket text)))))))
-           :on-pong (lambda (payload)
-                      (woo:send-text-frame socket (format nil "pong:~A"
-                                                          (utf-8-bytes-to-string payload))))
-           :on-close (and (string= path "/ws-reason")
-                          (lambda (code reason)
-                            (woo:send-close socket code reason))))
-          (if (string= path "/ws-200")
-              '(200 (:content-type "text/html") ("finalized by the framework"))
-              nil)))))
+  (let* ((socket (getf env :clack.io))
+         (path (getf env :path-info))
+         (accept (and (woo:websocket-p env)
+                      (woo:compute-accept-key
+                       (gethash "sec-websocket-key" (getf env :headers))))))
+    (cond
+      ((and (not accept) (string= path "/delayed-plain"))
+       (lambda (responder)
+         (call-later 0.3 (lambda ()
+                           (funcall responder
+                                    '(200 (:content-type "text/plain") ("delayed")))))))
+      ((not accept)
+       '(200 (:content-type "text/plain") ("plain")))
+      ((string= path "/ws-delayed")
+       (lambda (responder)
+         (call-later 0.3 (lambda ()
+                           (woo:write-websocket-upgrade-response socket accept)
+                           (echo-setup socket path)
+                           (funcall responder '(200 nil nil))))))
+      ((string= path "/ws-late-setup")
+       (woo:write-websocket-upgrade-response socket accept)
+       (call-later 0.3 (lambda () (echo-setup socket path)))
+       nil)
+      (t
+       (woo:write-websocket-upgrade-response socket accept)
+       (when (string= path "/ws-body")
+         (woo:send-text-frame socket (format nil "body:~A" (request-body-string env))))
+       (echo-setup socket path)
+       (if (string= path "/ws-200")
+           '(200 (:content-type "text/html") ("finalized by the framework"))
+           nil)))))
 
 (defmacro with-server ((port app) &body body)
   `(let ((clack.test:*clack-test-handler* :woo)
@@ -116,32 +176,62 @@
   (write-sequence octets (conn-stream conn))
   (force-output (conn-stream conn)))
 
+(defun connect (port)
+  (let ((socket (usocket:socket-connect "127.0.0.1" port :element-type '(unsigned-byte 8)
+                                                          :nodelay t)))
+    (make-conn :socket socket :stream (usocket:socket-stream socket))))
+
+(defun upgrade-request (port path &key (key *sample-key*) headers)
+  (string-to-utf-8-bytes
+   (apply #'crlf
+          (append (list (format nil "GET ~A HTTP/1.1" path)
+                        (format nil "Host: 127.0.0.1:~D" port)
+                        "Upgrade: websocket"
+                        "Connection: Upgrade"
+                        (format nil "Sec-WebSocket-Key: ~A" key)
+                        "Sec-WebSocket-Version: 13")
+                  headers
+                  (list "")))))
+
+(defun read-head (conn)
+  "The response up to and including the blank line, or NIL if none arrived
+   within 5 seconds."
+  (let* ((end (octets 13 10 13 10))
+         (head (read-with-timeout
+                (lambda ()
+                  (let ((out (make-array 0 :element-type '(unsigned-byte 8)
+                                           :adjustable t :fill-pointer 0)))
+                    (loop for b = (read-byte (conn-stream conn) nil nil)
+                          while b
+                          do (vector-push-extend b out)
+                             (when (and (>= (length out) 4)
+                                        (equalp (subseq out (- (length out) 4)) end))
+                               (return (octets-string out)))))))))
+    (and (stringp head) head)))
+
 (defun ws-open (port path &key (key *sample-key*))
   "Connect and send the upgrade request. Returns (values conn head), HEAD
    being the response up to and including the blank line, or NIL if none
    arrived within 5 seconds."
-  (let* ((socket (usocket:socket-connect "127.0.0.1" port :element-type '(unsigned-byte 8)))
-         (conn (make-conn :socket socket :stream (usocket:socket-stream socket))))
-    (send-octets conn (string-to-utf-8-bytes
-                       (crlf (format nil "GET ~A HTTP/1.1" path)
-                             (format nil "Host: 127.0.0.1:~D" port)
-                             "Upgrade: websocket"
-                             "Connection: Upgrade"
-                             (format nil "Sec-WebSocket-Key: ~A" key)
-                             "Sec-WebSocket-Version: 13"
-                             "")))
-    (let* ((end (octets 13 10 13 10))
-           (head (read-with-timeout
-                  (lambda ()
-                    (let ((out (make-array 0 :element-type '(unsigned-byte 8)
-                                             :adjustable t :fill-pointer 0)))
-                      (loop for b = (read-byte (conn-stream conn) nil nil)
-                            while b
-                            do (vector-push-extend b out)
-                               (when (and (>= (length out) 4)
-                                          (equalp (subseq out (- (length out) 4)) end))
-                                 (return (octets-string out)))))))))
-      (values conn (and (stringp head) head)))))
+  (let ((conn (connect port)))
+    (send-octets conn (upgrade-request port path :key key))
+    (values conn (read-head conn))))
+
+(defun ws-open-with (port path after &key headers)
+  "Like WS-OPEN, but the octets AFTER follow the request in the same write:
+   one buffer, one write, on a TCP_NODELAY socket, so the server reads them
+   together with the request."
+  (let ((conn (connect port)))
+    (send-octets conn (concatenate '(vector (unsigned-byte 8))
+                                   (upgrade-request port path :headers headers)
+                                   after))
+    (values conn (read-head conn))))
+
+(defun cat (&rest vectors)
+  (apply #'concatenate '(vector (unsigned-byte 8)) vectors))
+
+(defun text (string)
+  (string-to-utf-8-bytes string))
 
 (defun client-frame (opcode payload &key (fin t))
   "A masked client frame."
@@ -327,6 +417,129 @@
                  (ok (eql (close-code payload) 1007)))
                (ok (equalp (read-until-eof conn) #())))
           (conn-close conn))))))
+
+;;; Frames in the same write as the upgrade request. A client may send them
+;;; without waiting for the 101; they reach the server in the read that
+;;; carries the request, where the HTTP parser used to drop them.
+
+(defun expect-text (conn expected &optional (label expected))
+  (multiple-value-bind (opcode payload) (read-frame conn)
+    (ok (and (eql opcode 1) (equal (utf-8-bytes-to-string payload) expected))
+        (format nil "text ~S comes back" label))))
+
+(defun expect-close-reply (conn code)
+  (multiple-value-bind (opcode payload) (read-frame conn)
+    (ok (and (eql opcode 8) (eql (close-code payload) code))
+        (format nil "the close (~D) is answered" code)))
+  (ok (equalp (read-until-eof conn) #()) "then the server closes the socket"))
+
+(deftest e2e-frames-with-the-upgrade-request
+  (with-server (port #'echo-app)
+    (testing "the request and one complete frame"
+      (multiple-value-bind (conn head)
+          (ws-open-with port "/ws" (client-frame 1 (text "early")))
+        (unwind-protect
+             (progn
+               (ok (equal head (expected-head *sample-accept*)) "the 101 comes first")
+               (expect-text conn "early")
+               (send-octets conn (client-frame 8 (close-body 4001)))
+               (expect-close-reply conn 4001))
+          (conn-close conn))))
+    (testing "the request and part of a frame; the rest comes later"
+      (let ((frame (client-frame 1 (text "split frame"))))
+        (multiple-value-bind (conn head)
+            (ws-open-with port "/ws" (subseq frame 0 5))
+          (unwind-protect
+               (progn
+                 (ok (equal head (expected-head *sample-accept*)))
+                 (ok (zerop (length (available-octets conn 0.2)))
+                     "nothing is answered before the frame is complete")
+                 (send-octets conn (subseq frame 5))
+                 (expect-text conn "split frame")
+                 (send-octets conn (client-frame 8 (close-body 1000)))
+                 (expect-close-reply conn 1000))
+            (conn-close conn)))))
+    (testing "the request, text, a ping, binary and a close"
+      (multiple-value-bind (conn head)
+          (ws-open-with port "/ws"
+                        (cat (client-frame 1 (text "one"))
+                             (client-frame 9 (octets 7 8 9))
+                             (client-frame 2 (octets 0 255 128))
+                             (client-frame 1 (text "two"))
+                             (client-frame 8 (close-body 4002 "done"))))
+        (unwind-protect
+             (progn
+               (ok (equal head (expected-head *sample-accept*)))
+               (expect-text conn "one")
+               (multiple-value-bind (opcode payload) (read-frame conn)
+                 (ok (and (eql opcode 10) (equalp payload (octets 7 8 9)))
+                     "the ping is answered in order"))
+               (multiple-value-bind (opcode payload) (read-frame conn)
+                 (ok (and (eql opcode 2) (equalp payload (octets 0 255 128)))
+                     "the binary frame comes back"))
+               (expect-text conn "two")
+               (expect-close-reply conn 4002))
+          (conn-close conn))))
+    (testing "a request with a Content-Length body, then frames"
+      (multiple-value-bind (conn head)
+          (ws-open-with port "/ws-body"
+                        (cat (text "abcde")
+                             (client-frame 1 (text "after body"))
+                             (client-frame 8 (close-body 1000)))
+                        :headers '("Content-Length: 5"))
+        (unwind-protect
+             (progn
+               (ok (equal head (expected-head *sample-accept*)))
+               (expect-text conn "body:abcde" "the body, as the app read it")
+               (expect-text conn "after body")
+               (expect-close-reply conn 1000))
+          (conn-close conn))))))
+
+(deftest e2e-frames-before-a-late-upgrade
+  (with-server (port #'echo-app)
+    (dolist (path '("/ws-delayed" "/ws-late-setup"))
+      (testing (format nil "~A: frames sent before the app upgrades are kept" path)
+        (multiple-value-bind (conn head)
+            (ws-open-with port path (client-frame 1 (text "first")))
+          (unwind-protect
+               (progn
+                 (ok (equal head (expected-head *sample-accept*)))
+                 (send-octets conn (cat (client-frame 1 (text "second"))
+                                        (client-frame 8 (close-body 4003))))
+                 (expect-text conn "first")
+                 (expect-text conn "second")
+                 (expect-close-reply conn 4003))
+            (conn-close conn)))))))
+
+(deftest e2e-declined-upgrade-stays-http
+  (with-server (port #'echo-app)
+    (dolist (path '("/plain" "/delayed-plain"))
+      (testing (format nil "~A: an Upgrade request the app answers normally; the next request is parsed" path)
+        (let ((conn (connect port)))
+          (unwind-protect
+               (progn
+                 (send-octets conn (text (concatenate 'string
+                                                      (crlf (format nil "GET ~A HTTP/1.1" path)
+                                                            "Host: 127.0.0.1"
+                                                            "Upgrade: h2c"
+                                                            "Connection: Upgrade"
+                                                            "")
+                                                      (crlf "GET /plain HTTP/1.1"
+                                                            "Host: 127.0.0.1"
+                                                            "Connection: close"
+                                                            ""))))
+                 (let* ((res (read-until-eof conn))
+                        (n (count-matches "HTTP/1.1 200"
+                                          (if (vectorp res) (octets-string res) ""))))
+                   (ok (= n 2) (format nil "both requests are answered (~D responses)" n))))
+            (conn-close conn)))))))
+
+(defun count-matches (needle haystack)
+  (loop with start = 0
+        for pos = (search needle haystack :start2 start)
+        while pos
+        count t
+        do (setf start (1+ pos))))
 
 ;;; Node's WebSocket client (global in Node 22), the same implementation
 ;;; family a browser uses: it rejects a malformed handshake and fails the

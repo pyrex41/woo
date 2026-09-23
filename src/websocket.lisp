@@ -27,6 +27,8 @@
            :send-close
            :write-websocket-upgrade-response
            :socket-upgraded-p
+           :feed-websocket-data
+           :take-pending-websocket-data
            :+opcode-continuation+
            :+opcode-text+
            :+opcode-binary+
@@ -112,6 +114,53 @@
 
 (defun mark-socket-upgraded (socket)
   (setf (gethash socket *upgraded-sockets*) t))
+
+(defvar *websocket-input*
+  #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized t)
+  #+ccl (make-hash-table :test 'eq :weak :key)
+  #+lispworks (make-hash-table :test 'eq :weak-kind :key)
+  #-(or sbcl ccl lispworks) (make-hash-table :test 'eq)
+  "Per socket: octets that arrived after its upgrade request but before
+   SETUP-WEBSOCKET installed a reader, or :READER once one is installed.
+   Neither refers to the socket, so the weak table never keeps one alive.")
+
+(defconstant +max-pending-websocket-octets+ (+ (* 16 1024 1024) 14)
+  "Octets buffered before SETUP-WEBSOCKET: one maximal frame (the payload
+   cap plus a 14-octet header).")
+
+(defun feed-websocket-data (socket data &key (start 0) (end (length data)))
+  "Hand octets read after SOCKET's upgrade request to its WebSocket reader.
+   Until SETUP-WEBSOCKET installs one they are buffered, in order, and it
+   parses them first. A client that sends more than one maximal frame
+   before then is disconnected."
+  (let ((input (gethash socket *websocket-input*)))
+    (cond
+      ((eq input :reader)
+       (funcall (socket-data socket) data :start start :end end))
+      ((< start end)
+       (let* ((buf (or input
+                       (make-array 0 :element-type '(unsigned-byte 8)
+                                     :adjustable t :fill-pointer 0)))
+              (old (length buf))
+              (new (+ old (- end start))))
+         (cond
+           ((> new +max-pending-websocket-octets+)
+            (remhash socket *websocket-input*)
+            (when (socket-open-p socket)
+              (close-socket socket)))
+           (t
+            (let ((grown (grow-octet-buffer buf new +max-pending-websocket-octets+)))
+              (replace grown data :start1 old :start2 start :end2 end)
+              (setf (gethash socket *websocket-input*) grown)))))))))
+
+(defun take-pending-websocket-data (socket)
+  "Remove and return the octets buffered for SOCKET by FEED-WEBSOCKET-DATA
+   (a simple octet vector), or NIL. Used when the upgrade is declined and
+   the connection goes back to HTTP."
+  (let ((input (gethash socket *websocket-input*)))
+    (when (vectorp input)
+      (remhash socket *websocket-input*)
+      (coerce input '(simple-array (unsigned-byte 8) (*))))))
 
 (defstruct ws-state
   "WebSocket connection state."
@@ -578,7 +627,10 @@
    - on-close: (lambda (code reason)) - called for close frames (default:
      echo the close, unless SEND-CLOSE already sent one, then close the socket)
    - on-error: (lambda (error)) - called when the connection fails: a
-     WEBSOCKET-PROTOCOL-ERROR, or the error a callback raised (closed 1011)"
+     WEBSOCKET-PROTOCOL-ERROR, or the error a callback raised (closed 1011)
+
+   Frames that arrived before this call (a client need not wait for the
+   101) are parsed before it returns, so write the 101 first."
   (let ((state (make-ws-state
                 :socket socket
                 :close-state (socket-close-state socket)
@@ -628,6 +680,13 @@
                 ;; Anything unexpected fails the connection: leaving it open
                 ;; would re-parse the same bytes on the next read.
                 (ws-fail state (princ-to-string e) 1011 e)))))
+    ;; Frames the client sent before this reader existed (in the same read
+    ;; as its upgrade request, or while the application was deciding) are
+    ;; parsed now, ahead of any later read.
+    (let ((pending (take-pending-websocket-data socket)))
+      (setf (gethash socket *websocket-input*) :reader)
+      (when pending
+        (funcall (socket-data socket) pending :start 0 :end (length pending))))
     state))
 
 (defun write-websocket-upgrade-response (socket accept-key &optional extra-headers)

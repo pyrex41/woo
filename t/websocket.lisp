@@ -1502,3 +1502,41 @@
                     (make-string 40 :initial-element (code-char #x1F600))))))
       (ok (= (length reason) 120))
       (ok (woo.websocket::valid-utf-8-p reason)))))
+
+(deftest test-ws-data-before-setup
+  (testing "octets fed before setup-websocket are parsed by it, in order"
+    (with-stubbed-close (closed)
+      (let* ((messages nil)
+             (socket (make-bare-socket))
+             (c (masked-frame +opcode-text+ (string-to-utf-8-bytes "C"))))
+        (woo.websocket:feed-websocket-data
+         socket (concat-octets (masked-frame +opcode-text+ (string-to-utf-8-bytes "A"))
+                               (masked-frame +opcode-text+ (string-to-utf-8-bytes "B"))))
+        (woo.websocket:feed-websocket-data socket c :start 0 :end 3)
+        (ok (null messages) "nothing is parsed before setup-websocket")
+        (setup-websocket socket
+                         :on-message (lambda (op data)
+                                       (declare (ignore op))
+                                       (push (utf-8-bytes-to-string data) messages)))
+        (ok (equal (reverse messages) '("A" "B")) "the buffered frames are delivered")
+        (ok (null (woo.websocket:take-pending-websocket-data socket))
+            "nothing stays buffered")
+        (woo.websocket:feed-websocket-data socket c :start 3)
+        (ok (equal (reverse messages) '("A" "B" "C"))
+            "later octets go to the reader and complete the partial frame")
+        (ok (null closed)))))
+  (testing "a declined upgrade takes the buffered octets back"
+    (let ((socket (make-bare-socket)))
+      (woo.websocket:feed-websocket-data socket (string-to-utf-8-bytes "GET / HTTP/1.1"))
+      (woo.websocket:feed-websocket-data socket (string-to-utf-8-bytes " tail"))
+      (ok (equal (utf-8-bytes-to-string (woo.websocket:take-pending-websocket-data socket))
+                 "GET / HTTP/1.1 tail"))
+      (ok (null (woo.websocket:take-pending-websocket-data socket)))))
+  (testing "more than one maximal frame before setup-websocket closes the socket"
+    (with-stubbed-close (closed)
+      (let ((socket (make-bare-socket)))
+        (woo.websocket:feed-websocket-data
+         socket (make-array (1+ woo.websocket::+max-pending-websocket-octets+)
+                            :element-type '(unsigned-byte 8)))
+        (ok (equal closed (list socket)))
+        (ok (null (woo.websocket:take-pending-websocket-data socket)))))))
