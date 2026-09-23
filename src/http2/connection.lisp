@@ -43,7 +43,10 @@
            :http2-connection-on-error
            :http2-connection-on-close
            :setup-http2-parser
-           :*http2-frame-sink*))
+           :*http2-frame-sink*
+           :*max-request-body-size*
+           :*max-connection-body-buffer*
+           :*max-closed-stream-data-resets*))
 (in-package :woo.http2.connection)
 
 (defun default-local-settings ()
@@ -73,6 +76,11 @@
   (goaway-received nil :type boolean)
   ;; (stream-id . error-code) of the most recent RST_STREAM we sent.
   (last-rst nil)
+  ;; RST_STREAMs sent for DATA on a half-closed (remote) or closed stream.
+  ;; Such DATA is credited back, so it is bounded by this count instead.
+  (closed-stream-data-resets 0 :type integer)
+  ;; Request body octets buffered by streams not yet dropped.
+  (buffered-body-octets 0 :type integer)
   ;; Connection-level flow control
   (window-size +default-initial-window-size+ :type integer)
   (remote-window-size +default-initial-window-size+ :type integer)
@@ -109,6 +117,21 @@
   "Closed stream ids remembered exactly. When the table grows past this,
    the lower half is dropped; those ids stay closed by the §5.1.1 rule.")
 
+(defparameter *max-request-body-size* (* 64 1024 1024)
+  "Largest request body buffered for one stream, in octets, or NIL for no
+   limit. A body that grows past it, or a content-length above it, is
+   RST_STREAM CANCEL: the request has not reached the application yet.")
+
+(defparameter *max-connection-body-buffer* (* 256 1024 1024)
+  "Largest total of request body octets buffered across the open streams of
+   one connection, or NIL for no limit. The stream whose DATA would exceed
+   it is RST_STREAM CANCEL.")
+
+(defparameter *max-closed-stream-data-resets* 1000
+  "RST_STREAMs a connection may earn with DATA on half-closed (remote) or
+   closed streams. That DATA gets its connection credit back, so without a
+   bound a peer could stream it forever. Past this, GOAWAY ENHANCE_YOUR_CALM.")
+
 (defun connection-stream-id-closed-p (conn stream-id)
   "True for an id that is not open and has been closed. A client id at or
    below last-stream-id was either used or implicitly closed when a higher
@@ -140,6 +163,14 @@
    Keeps only the id, so later frames are not idle errors."
   (when (and stream (stream-closed-p stream))
     (let ((id (http2-stream-id stream)))
+      ;; Release the body's share of the connection budget once. The
+      ;; application keeps its own reference to the old buffer.
+      (let ((buffered (length (http2-stream-body-buffer stream))))
+        (when (plusp buffered)
+          (decf (http2-connection-buffered-body-octets conn) buffered)
+          (setf (http2-stream-body-buffer stream)
+                (make-array 0 :element-type '(unsigned-byte 8)
+                              :adjustable t :fill-pointer 0))))
       (remhash id (http2-connection-streams conn))
       (remhash id (http2-connection-send-queue conn))
       (setf (gethash id (http2-connection-closed-streams conn)) t)
@@ -420,6 +451,10 @@
          (plusp (length name))
          (char= (char name 0) #\:))))
 
+(defun body-size-over-limit-p (size)
+  (and *max-request-body-size*
+       (> size *max-request-body-size*)))
+
 (defun finish-request-headers (conn stream stream-id headers end-stream)
   (setf (http2-stream-headers stream) headers)
   (when (> stream-id (http2-connection-last-stream-id conn))
@@ -427,6 +462,11 @@
   (unless (accept-content-length stream headers)
     (connection-stream-error conn stream +protocol-error+)
     (return-from finish-request-headers nil))
+  ;; A declared length over the cap is refused before any DATA arrives.
+  (let ((declared (http2-stream-content-length stream)))
+    (when (and declared (body-size-over-limit-p declared))
+      (connection-stream-error conn stream +cancel+)
+      (return-from finish-request-headers nil)))
   (when end-stream
     (when (content-length-complete-error-p stream)
       (connection-stream-error conn stream +protocol-error+)
@@ -592,6 +632,10 @@
       (when (or (stream-half-closed-remote-p stream)
                 (stream-closed-p stream))
         (decf (http2-connection-window-size conn) raw-len)
+        (when (> (incf (http2-connection-closed-stream-data-resets conn))
+                 *max-closed-stream-data-resets*)
+          (return-from handle-data-frame
+            (connection-protocol-error conn +enhance-your-calm+)))
         (replenish-connection-window conn)
         (return-from handle-data-frame
           (connection-stream-error conn stream +stream-closed+)))
@@ -602,11 +646,15 @@
       (decf (http2-connection-window-size conn) raw-len)
       (decf (http2-stream-recv-window-size stream) raw-len)
       (replenish-connection-window conn)
-      (let* ((buf (http2-stream-body-buffer stream))
-             (old-len (length buf))
-             (new-len (+ old-len (length data))))
-        (adjust-array buf new-len :fill-pointer new-len)
-        (replace buf data :start1 old-len))
+      (when (or (body-size-over-limit-p
+                 (+ (length (http2-stream-body-buffer stream)) (length data)))
+                (and *max-connection-body-buffer*
+                     (> (+ (http2-connection-buffered-body-octets conn) (length data))
+                        *max-connection-body-buffer*)))
+        (return-from handle-data-frame
+          (connection-stream-error conn stream +cancel+)))
+      (stream-append-body stream data *max-request-body-size*)
+      (incf (http2-connection-buffered-body-octets conn) (length data))
       (incf (http2-stream-bytes-received stream) (length data))
       (let ((declared (http2-stream-content-length stream))
             (got (http2-stream-bytes-received stream)))

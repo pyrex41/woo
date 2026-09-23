@@ -1519,3 +1519,147 @@
                            (http2-connection-local-settings b)))))
         (ok (= +default-max-header-list-size+
                (woo.http2.connection::connection-header-list-limit b)))))))
+
+;;; Request body limits
+
+(defun data-sink (conn)
+  "Record each on-data call as (stream-id length end-stream), oldest first."
+  (let ((calls nil))
+    (setf (woo.http2.connection::http2-connection-on-data conn)
+          (lambda (stream data end-stream)
+            (push (list (http2-stream-id stream) (length data) end-stream) calls)))
+    (lambda () (reverse calls))))
+
+(defun count-rsts (frames &optional stream-id)
+  (count-if (lambda (frame)
+              (and (= (woo.http2.frames:frame-type frame) +frame-rst-stream+)
+                   (or (null stream-id)
+                       (= (woo.http2.frames:frame-stream-id frame) stream-id))))
+            frames))
+
+(deftest request-body-size-limit
+  (testing "a body past *max-request-body-size* is RST CANCEL, the connection stays up"
+    (let ((woo.http2.connection:*max-request-body-size* 1000))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (let ((calls (data-sink conn)))
+          (connection-process-frame
+           conn (make-headers-frame 1 (empty-octets) :end-headers t))
+          (connection-process-frame conn (make-data-frame 1 (ub8 600 1)))
+          (ok (null (funcall err)))
+          (connection-process-frame conn (make-data-frame 1 (ub8 600 1)))
+          (ok (= (funcall err) +cancel+))
+          (ok (equal (last-rst conn) (cons 1 +cancel+)))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (ok (equal (funcall calls) '((1 600 nil)))
+              "the over-limit frame is not buffered or delivered")
+          (ok (stream-closed-p (connection-get-stream conn 1)))
+          (ok (zerop (woo.http2.connection::http2-connection-buffered-body-octets conn))
+              "the dropped stream releases its buffered octets")))))
+
+  (testing "a body of exactly the limit is accepted"
+    (let ((woo.http2.connection:*max-request-body-size* 1000))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (connection-process-frame
+         conn (make-headers-frame 1 (empty-octets) :end-headers t))
+        (connection-process-frame conn (make-data-frame 1 (ub8 1000 1) :end-stream t))
+        (ok (null (funcall err)))
+        (ok (stream-half-closed-remote-p (connection-get-stream conn 1))))))
+
+  (testing "a declared content-length above the limit is refused at HEADERS"
+    (let ((woo.http2.connection:*max-request-body-size* 1000))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (let ((headers-called nil))
+          (setf (woo.http2.connection::http2-connection-on-headers conn)
+                (lambda (stream headers end-stream)
+                  (declare (ignore stream headers end-stream))
+                  (setf headers-called t)))
+          (connection-process-frame
+           conn (headers-of 1 '(("content-length" . "1001"))))
+          (ok (= (funcall err) +cancel+))
+          (ok (equal (last-rst conn) (cons 1 +cancel+)))
+          (ok (not headers-called))
+          (ok (not (http2-connection-goaway-sent conn)))))))
+
+  (testing "the per-connection body budget refuses the stream that would exceed it"
+    (let ((woo.http2.connection:*max-request-body-size* nil)
+          (woo.http2.connection:*max-connection-body-buffer* 1500))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (dolist (id '(1 3 5))
+          (connection-process-frame
+           conn (make-headers-frame id (empty-octets) :end-headers t)))
+        (connection-process-frame conn (make-data-frame 1 (ub8 1000 1)))
+        (connection-process-frame conn (make-data-frame 3 (ub8 1000 1)))
+        (ok (equal (last-rst conn) (cons 3 +cancel+)))
+        (ok (stream-open-p (connection-get-stream conn 1)))
+        (ok (= (woo.http2.connection::http2-connection-buffered-body-octets conn) 1000))
+        ;; The client resets stream 1; its octets return to the budget.
+        (connection-process-frame conn (make-rst-stream-frame 1 +cancel+))
+        (ok (zerop (woo.http2.connection::http2-connection-buffered-body-octets conn)))
+        (connection-process-frame conn (make-data-frame 5 (ub8 1000 1)))
+        (ok (equal (last-rst conn) (cons 3 +cancel+)) "stream 5 fits again")
+        (ok (stream-open-p (connection-get-stream conn 5)))
+        (ok (= (funcall err) +cancel+))
+        (ok (not (http2-connection-goaway-sent conn)))))))
+
+(deftest request-body-buffer-grows-geometrically
+  (testing "1000 appends reallocate the body buffer O(log n) times, not per frame"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((capacities nil))
+        (setf (woo.http2.connection::http2-connection-on-data conn)
+              (lambda (stream data end-stream)
+                (declare (ignore data end-stream))
+                (push (array-total-size
+                       (woo.http2.stream:http2-stream-body-buffer stream))
+                      capacities)))
+        (connection-process-frame
+         conn (make-headers-frame 1 (empty-octets) :end-headers t))
+        (dotimes (i 1000)
+          (connection-process-frame conn (make-data-frame 1 (ub8 100 (mod i 256)))))
+        (ok (null (funcall err)))
+        (let* ((capacities (nreverse capacities))
+               (growths (loop for (a b) on capacities
+                              count (and b (/= a b))))
+               (body (woo.http2.stream:http2-stream-body-buffer
+                      (connection-get-stream conn 1))))
+          (ok (= (length capacities) 1000))
+          ;; Doubling from 1024 to 100,000 octets is 7 growths. An exact-fit
+          ;; buffer grows on every one of the 1000 frames.
+          (ok (<= growths 10) (format nil "~D growths" growths))
+          (ok (= (length body) 100000))
+          (ok (<= (array-total-size body) (* 2 (length body))))
+          (ok (loop for i below 1000
+                    always (and (= (aref body (* i 100)) (mod i 256))
+                                (= (aref body (+ (* i 100) 99)) (mod i 256))))
+              "octets land in order"))))))
+
+(deftest closed-stream-data-reset-limit
+  (testing "DATA on closed streams earns RSTs only up to the limit, then GOAWAY"
+    (let ((woo.http2.connection:*max-closed-stream-data-resets* 10))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (with-sent-frames (sent)
+          (connection-process-frame
+           conn (make-headers-frame 1 (empty-octets) :end-headers t :end-stream t))
+          (dotimes (i 10)
+            (connection-process-frame conn (make-data-frame 1 (ub8 100 1))))
+          (ok (= (count-rsts (sent) 1) 10))
+          (ok (= (funcall err) +stream-closed+))
+          (ok (not (http2-connection-goaway-sent conn)))
+          (connection-process-frame conn (make-data-frame 1 (ub8 100 1)))
+          (ok (= (count-rsts (sent) 1) 10) "no RST past the limit")
+          (ok (= (funcall err) +enhance-your-calm+))
+          (ok (http2-connection-goaway-sent conn))
+          (let ((goaway (find +frame-goaway+ (sent)
+                              :key #'woo.http2.frames:frame-type)))
+            (ok goaway)
+            (ok (= (nth-value 1 (woo.http2.frames:parse-goaway-payload
+                                 (frame-payload goaway)))
+                   +enhance-your-calm+)))))))
+
+  (testing "the default limit leaves ordinary stragglers alone"
+    (ok (>= woo.http2.connection:*max-closed-stream-data-resets* 100))))

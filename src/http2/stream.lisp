@@ -7,6 +7,7 @@
            :http2-stream-state
            :http2-stream-headers
            :http2-stream-body-buffer
+           :stream-append-body
            :http2-stream-window-size
            :http2-stream-recv-window-size
            :http2-stream-content-length
@@ -66,6 +67,28 @@
   ;; Trailer section (RFC 9113 §8.1). HEADERS keeps the request headers.
   (trailers nil :type list)
   (trailers-received nil :type boolean))
+
+;; Smallest capacity allocated for a non-empty body buffer.
+(defconstant +min-body-buffer-capacity+ 1024)
+
+(defun stream-append-body (stream data &optional limit)
+  "Append the octets in DATA to the stream's body buffer. Capacity at least
+   doubles when it runs out, so N appends copy O(N) octets in total rather
+   than O(N^2). LIMIT, when non-NIL, caps the capacity; the caller must not
+   append past it. Returns the buffer."
+  (let* ((buf (http2-stream-body-buffer stream))
+         (old-len (fill-pointer buf))
+         (new-len (+ old-len (length data)))
+         (capacity (array-total-size buf)))
+    (when (> new-len capacity)
+      (let ((grown (max new-len (* 2 capacity) +min-body-buffer-capacity+)))
+        (when limit
+          (setf grown (max new-len (min grown limit))))
+        (setf buf (adjust-array buf grown)
+              (http2-stream-body-buffer stream) buf)))
+    (setf (fill-pointer buf) new-len)
+    (replace buf data :start1 old-len)
+    buf))
 
 (defun stream-open-p (stream)
   "Check if stream is in open state."
