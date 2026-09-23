@@ -1263,3 +1263,90 @@
                  (ok (equal (map 'string #'code-char (data-bytes (frames-on-stream frames 3)))
                             "full body"))))
           (usocket:socket-close (h2c-client-socket client)))))))
+
+;;; Event-loop dispatch: order, and shutdown
+
+(deftest loop-dispatcher
+  (testing "a thunk run on the loop thread waits for thunks other threads queued first"
+    (let ((order nil))
+      (woo.ev.event-loop:with-event-loop ()
+        (let ((run (woo.http2.clack::dispatcher-runner
+                    (woo.http2.clack::current-loop-dispatcher) nil)))
+          (bt2:join-thread
+           (bt2:make-thread (lambda () (funcall run (lambda () (push :queued order))))))
+          (funcall run (lambda () (push :loop order)))))
+      (ok (equal (reverse order) '(:queued :loop)))))
+
+  (testing "a loop-thread write after a responder called from another thread is sent"
+    (let ((frames nil)
+          (result :unset))
+      (let ((*http2-frame-sink* (lambda (f) (push f frames))))
+        (woo.ev.event-loop:with-event-loop ()
+          (let* ((conn (make-http2-connection))
+                 (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+                 (responder (progn
+                              (register-stream conn stream)
+                              (woo.http2.clack::make-responder
+                               conn nil stream
+                               (woo.http2.clack::dispatcher-runner
+                                (woo.http2.clack::current-loop-dispatcher) nil))))
+                 (writer (bt2:join-thread
+                          (bt2:make-thread (lambda () (funcall responder '(200 ())))))))
+            (setf result (funcall writer "x" :close t)))))
+      (setf frames (reverse frames))
+      (ok (equal (response-status frames) "200"))
+      (ok (equal (map 'string #'code-char (data-bytes frames)) "x"))
+      (ok (end-stream-p (car (last frames))))))
+
+  (testing "a stopped loop's dispatcher is freed, forgotten, and refuses thunks"
+    (let ((d nil)
+          (late-ran nil))
+      (woo.ev.event-loop:with-event-loop ()
+        (setf d (woo.http2.clack::current-loop-dispatcher))
+        ;; Runs before the dispatcher's own exit hook: a thunk still queued
+        ;; when the loop stops.
+        (push (lambda ()
+                (woo.http2.clack::dispatcher-enqueue d (lambda () (setf late-ran t))))
+              woo.ev.event-loop:*evloop-exit-hooks*))
+      (ok (woo.http2.clack::dispatcher-stopped d))
+      (ok (null (woo.http2.clack::dispatcher-watcher d)) "the watcher is freed")
+      (ok (null (woo.http2.clack::dispatcher-thunks d)) "queued thunks are dropped")
+      (ok (not late-ran))
+      (ok (not (member d (alexandria:hash-table-values woo.http2.clack::*dispatchers*)))
+          "the dispatcher is forgotten")
+      (ok (null (woo.http2.clack::dispatcher-enqueue d (lambda () (setf late-ran t))))
+          "a later enqueue is refused")
+      (ok (null (woo.http2.clack::dispatcher-thunks d)))))
+
+  (testing "a server start and stop leaves no dispatcher behind"
+    (let ((before (hash-table-count woo.http2.clack::*dispatchers*))
+          (clack.test:*clack-test-handler* :woo)
+          (clack.test:*enable-debug* nil))
+      (clack.test:testing-app "delayed response"
+          (lambda (env)
+            (declare (ignore env))
+            (lambda (responder) (funcall responder '(200 () ("ok")))))
+        (let ((client (h2c-connect)))
+          (unwind-protect
+               (progn
+                 (h2c-preface-and-settings client)
+                 (h2c-send client (make-headers-frame 1 (request-block
+                                                         '((":method" . "GET")
+                                                           (":scheme" . "http")
+                                                           (":path" . "/")
+                                                           (":authority" . "localhost")))
+                                                      :end-headers t :end-stream t))
+                 (h2c-read-until client (lambda (fs)
+                                          (find-if (lambda (f)
+                                                     (and (frame-on-stream-p f 1 +frame-data+)
+                                                          (end-stream-p f)))
+                                                   fs)))
+                 (ok (> (hash-table-count woo.http2.clack::*dispatchers*) before)
+                     "the loop made a dispatcher"))
+            (usocket:socket-close (h2c-client-socket client)))))
+      (let ((deadline (+ (get-internal-real-time) (* 5 internal-time-units-per-second))))
+        (loop until (or (<= (hash-table-count woo.http2.clack::*dispatchers*) before)
+                        (> (get-internal-real-time) deadline))
+              do (sleep 0.05)))
+      (ok (<= (hash-table-count woo.http2.clack::*dispatchers*) before)
+          "stopping the server removed it"))))

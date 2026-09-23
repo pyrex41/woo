@@ -254,6 +254,8 @@
 ;;; returns, from any thread. Connection state, the HPACK encoder and the
 ;;; socket buffer belong to the event loop, so writes from another thread
 ;;; are queued and the loop is woken with an ev_async watcher, one per loop.
+;;; When the loop stops, its dispatcher is marked stopped under its lock,
+;;; so no thread wakes a loop that is being freed.
 
 (defstruct (loop-dispatcher (:conc-name dispatcher-))
   (id 0 :type fixnum)
@@ -261,7 +263,9 @@
   watcher
   (lock (bt2:make-lock :name "woo HTTP/2 dispatcher"))
   ;; Thunks waiting to run on the loop, newest first.
-  (thunks nil :type list))
+  (thunks nil :type list)
+  ;; Set, under LOCK, before the loop and the watcher are freed.
+  (stopped nil))
 
 (defvar *dispatchers* (make-hash-table)
   "Dispatcher id -> dispatcher. The id is kept in the loop's ev_userdata.")
@@ -296,10 +300,48 @@
     (when dispatcher
       (drain-dispatcher dispatcher))))
 
+(defun dispatcher-enqueue (dispatcher thunk)
+  "Queue THUNK to run on DISPATCHER's loop and wake the loop. Returns T, or
+   NIL, dropping THUNK, once the loop has stopped. The check and the wakeup
+   hold the lock that stop-dispatcher takes before the loop is freed."
+  (bt2:with-lock-held ((dispatcher-lock dispatcher))
+    (unless (dispatcher-stopped dispatcher)
+      (push thunk (dispatcher-thunks dispatcher))
+      (lev:ev-async-send (dispatcher-evloop dispatcher)
+                         (dispatcher-watcher dispatcher))
+      t)))
+
+(defun stop-dispatcher (dispatcher)
+  "Called on the loop's thread after ev_run returns, before the loop is
+   freed. Later enqueues are refused. Queued thunks are dropped: they would
+   write to sockets the loop is closing, and they hold connections and body
+   octets. The watcher is stopped and freed, and the dispatcher forgotten."
+  (let ((watcher nil)
+        (evloop nil))
+    (bt2:with-lock-held ((dispatcher-lock dispatcher))
+      (setf (dispatcher-stopped dispatcher) t
+            (dispatcher-thunks dispatcher) nil
+            watcher (dispatcher-watcher dispatcher)
+            evloop (dispatcher-evloop dispatcher)
+            (dispatcher-watcher dispatcher) nil
+            (dispatcher-evloop dispatcher) nil))
+    (bt2:with-lock-held (*dispatchers-lock*)
+      (remhash (dispatcher-id dispatcher) *dispatchers*))
+    (when evloop
+      (lev:ev-set-userdata evloop (cffi:null-pointer))
+      (when watcher
+        ;; Undo the ev_unref done at start, as libev requires before a stop.
+        (lev:ev-ref evloop)
+        (lev:ev-async-stop evloop watcher)
+        (cffi:foreign-free watcher)))
+    nil))
+
 (defun current-loop-dispatcher ()
   "The dispatcher of the event loop running in this thread, made on first
    use. NIL outside an event loop. A fresh loop has NULL ev_userdata, so a
-   loop allocated at a freed loop's address does not find the old one."
+   loop allocated at a freed loop's address does not find the old one. The
+   dispatcher is stopped when the loop exits (woo.ev.event-loop's
+   *evloop-exit-hooks*)."
   (let ((evloop woo.ev.event-loop:*evloop*))
     (when (and evloop (not (cffi:null-pointer-p evloop)))
       (or (find-dispatcher evloop)
@@ -314,28 +356,41 @@
             (bt2:with-lock-held (*dispatchers-lock*)
               (setf (gethash id *dispatchers*) dispatcher))
             (lev:ev-set-userdata evloop (cffi:make-pointer id))
+            (push (lambda () (stop-dispatcher dispatcher))
+                  woo.ev.event-loop:*evloop-exit-hooks*)
             dispatcher)))))
 
 (defun http2-socket-accepts-p (socket)
   (or (null socket) (socket-open-p socket)))
 
-(defun make-loop-runner (socket)
-  "Call on the connection's event-loop thread. Returns a function that runs
-   a thunk on that loop: at once when called there, else queued in order.
-   Without an event loop (unit tests) the thunk runs at once."
-  (let ((owner (bt2:current-thread))
-        (dispatcher (and socket (current-loop-dispatcher))))
+(defun dispatcher-runner (dispatcher socket)
+  "Call on DISPATCHER's loop thread. A function that runs a thunk on that
+   loop and returns T, or NIL when the thunk was dropped because SOCKET is
+   closed or the loop has stopped. On the loop thread the thunk runs at
+   once, after any thunks other threads queued before it, so writes to a
+   response keep the order they were made in."
+  (let ((owner (bt2:current-thread)))
     (lambda (thunk)
       (cond
-        ((or (null dispatcher) (eq (bt2:current-thread) owner))
-         (funcall thunk))
+        ((eq (bt2:current-thread) owner)
+         (drain-dispatcher dispatcher)
+         (funcall thunk)
+         t)
         ;; The loop closes its sockets before it is freed, so a closed
         ;; socket means there may be no loop left to wake.
         ((http2-socket-accepts-p socket)
-         (bt2:with-lock-held ((dispatcher-lock dispatcher))
-           (push thunk (dispatcher-thunks dispatcher)))
-         (lev:ev-async-send (dispatcher-evloop dispatcher)
-                            (dispatcher-watcher dispatcher)))))))
+         (dispatcher-enqueue dispatcher thunk))))))
+
+(defun make-loop-runner (socket)
+  "Call on the connection's event-loop thread. Returns a function that runs
+   a thunk on that loop (see dispatcher-runner). Without an event loop (unit
+   tests) the thunk runs at once."
+  (let ((dispatcher (and socket (current-loop-dispatcher))))
+    (if dispatcher
+        (dispatcher-runner dispatcher socket)
+        (lambda (thunk)
+          (funcall thunk)
+          t))))
 
 ;;; Sending responses
 
