@@ -75,6 +75,28 @@
                        (string-to-utf-8-bytes concat))))
     (cl-base64:usb8-array-to-base64-string sha1-bytes)))
 
+(defstruct ws-close
+  "Closing-handshake state of one socket. The send API takes only a socket,
+   so this is kept per socket (see SOCKET-CLOSE-STATE). It holds no
+   reference to the socket, so the weak table never keeps one alive."
+  ;; A close frame has been queued. Nothing may follow it (RFC 6455 5.5.1).
+  (sent nil :type boolean)
+  ;; Close the socket once the queued frames are written.
+  (on-flush nil :type boolean)
+  ;; Frames are queued and the write callback has not run yet.
+  (flush-pending nil :type boolean))
+
+(defvar *socket-close-states*
+  #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized t)
+  #+ccl (make-hash-table :test 'eq :weak :key)
+  #+lispworks (make-hash-table :test 'eq :weak-kind :key)
+  #-(or sbcl ccl lispworks) (make-hash-table :test 'eq))
+
+(defun socket-close-state (socket)
+  "The WS-CLOSE of SOCKET, created on first use."
+  (or (gethash socket *socket-close-states*)
+      (setf (gethash socket *socket-close-states*) (make-ws-close))))
+
 (defstruct ws-state
   "WebSocket connection state."
   (buffer (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
@@ -90,6 +112,8 @@
   (close-code nil)
   ;; A close frame arrived; later frames are discarded (RFC 6455 5.5.1).
   (close-received nil :type boolean)
+  ;; Closing-handshake state shared with the socket's send functions.
+  (close-state (make-ws-close) :type ws-close)
   socket
   on-message    ; (lambda (opcode payload))
   on-ping       ; (lambda (payload))
@@ -156,10 +180,16 @@
   (or (= opcode +opcode-text+)
       (= opcode +opcode-binary+)))
 
+(defun close-when-flushed (socket close-state)
+  "Close SOCKET now, or once its queued frames are written. Closing with a
+   frame still queued would drop it (a close frame's status included)."
+  (when (and socket (socket-open-p socket))
+    (if (ws-close-flush-pending close-state)
+        (setf (ws-close-on-flush close-state) t)
+        (close-socket socket))))
+
 (defun close-ws (state)
-  (let ((socket (ws-state-socket state)))
-    (when (and socket (socket-open-p socket))
-      (close-socket socket))))
+  (close-when-flushed (ws-state-socket state) (ws-state-close-state state)))
 
 (defun valid-close-code-p (code)
   "Status codes that may appear in a close frame (RFC 6455 7.4, IANA).
@@ -204,13 +234,18 @@
 
 (defun close-after-frame (socket code)
   "Send a close frame with CODE and close SOCKET once it is flushed.
-   Closing at once would drop the frame from the write buffer. Without a
-   running event loop (unit tests) there is nothing to flush; close now."
+   Closing at once would drop the frame from the write buffer. If a close
+   frame was already sent, none is added; the socket closes once that one
+   is flushed. Without a running event loop (unit tests) there is nothing
+   to flush; close now."
   (when (and socket (socket-open-p socket))
-    (if woo.ev.event-loop:*evloop*
-        (with-async-writing (socket :write-cb (lambda (s) (close-socket s)))
-          (write-socket-data socket (make-frame +opcode-close+ (close-payload code))))
-        (close-socket socket))))
+    (let ((close-state (socket-close-state socket)))
+      (cond
+        ((null woo.ev.event-loop:*evloop*)
+         (setf (ws-close-sent close-state) t)
+         (close-socket socket))
+        ((not (send-frame socket +opcode-close+ (close-payload code) :close-after t))
+         (close-when-flushed socket close-state))))))
 
 (defun ws-fail (state reason &optional (code 1002) condition)
   "Mark the connection failed, report it, and close with status CODE.
@@ -380,10 +415,13 @@
                      (ws-fail state "close reason is not valid UTF-8" 1007)))
                  (setf (ws-state-close-received state) t)
                  (consume)
-                 (run-callback state (ws-state-on-close state) code
-                               (if (> payload-len 2)
-                                   (utf-8-bytes-to-string payload :start 2)
-                                   ""))))
+                 (prog1 (run-callback state (ws-state-on-close state) code
+                                      (if (> payload-len 2)
+                                          (utf-8-bytes-to-string payload :start 2)
+                                          ""))
+                   ;; Both closes are sent or queued: the handshake is done.
+                   (when (ws-close-sent (ws-state-close-state state))
+                     (close-ws state)))))
               ((= opcode +opcode-continuation+)
                (unless (ws-state-fragment-opcode state)
                  (return-from parse-frame
@@ -429,11 +467,32 @@
               (t
                (ws-fail state "reserved opcode")))))))))
 
-(defun send-frame (socket opcode payload)
-  "Send a WebSocket frame over socket."
-  (let ((frame (make-frame opcode payload)))
-    (with-async-writing (socket)
-      (write-socket-data socket frame))))
+(defun flushed-callback (close-state)
+  "Write callback run once queued frames are written."
+  (lambda (socket)
+    (setf (ws-close-flush-pending close-state) nil)
+    (when (ws-close-on-flush close-state)
+      (close-socket socket))))
+
+(defun send-frame (socket opcode payload &key close-after)
+  "Send a WebSocket frame over socket. Returns T if the frame was queued, or
+   NIL if it was dropped: the socket is closed, or a close frame was already
+   sent (RFC 6455 5.5.1). CLOSE-AFTER also closes the socket once it is flushed.
+   Every frame installs the same flush callback, so a later write cannot
+   cancel a pending close."
+  (let ((close-state (socket-close-state socket)))
+    (when (or (not (socket-open-p socket))
+              (ws-close-sent close-state))
+      (return-from send-frame nil))
+    (when (= opcode +opcode-close+)
+      (setf (ws-close-sent close-state) t))
+    (when close-after
+      (setf (ws-close-on-flush close-state) t))
+    (setf (ws-close-flush-pending close-state) t)
+    (let ((frame (make-frame opcode payload)))
+      (with-async-writing (socket :write-cb (flushed-callback close-state))
+        (write-socket-data socket frame)))
+    t))
 
 (defun send-text-frame (socket text)
   "Send a text frame."
@@ -453,7 +512,9 @@
   (send-frame socket +opcode-pong+ payload))
 
 (defun send-close (socket &optional (code 1000) (reason ""))
-  "Send a close frame."
+  "Start the closing handshake. Later frames, and a second close, are
+   dropped. The socket stays open for the peer's close; receiving it closes
+   the socket (the connection timeout bounds a peer that never answers)."
   (let* ((reason-bytes (string-to-utf-8-bytes reason))
          (payload (make-array (+ 2 (length reason-bytes))
                               :element-type '(unsigned-byte 8))))
@@ -470,11 +531,13 @@
    - on-message: (lambda (opcode payload)) - called for text/binary messages
    - on-ping: (lambda (payload)) - called for ping frames (default: auto-pong)
    - on-pong: (lambda (payload)) - called for pong frames
-   - on-close: (lambda (code reason)) - called for close frames (default: echo close)
+   - on-close: (lambda (code reason)) - called for close frames (default:
+     echo the close, unless SEND-CLOSE already sent one, then close the socket)
    - on-error: (lambda (error)) - called when the connection fails: a
      WEBSOCKET-PROTOCOL-ERROR, or the error a callback raised (closed 1011)"
   (let ((state (make-ws-state
                 :socket socket
+                :close-state (socket-close-state socket)
                 :on-message on-message
                 :on-ping (or on-ping
                              (lambda (payload)
@@ -496,7 +559,8 @@
             (handler-case
                 (cond
                   ;; Already failed: do not parse again (the bad frame is
-                  ;; still buffered, and :ERROR is truthy).
+                  ;; still buffered, and :ERROR is truthy). Leave a queued
+                  ;; close frame to be flushed before the socket closes.
                   ((ws-state-failed state)
                    (close-ws state))
                   (t

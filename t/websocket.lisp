@@ -1199,3 +1199,116 @@
         (funcall reader (subseq tail 5))
         (ok (equalp (first messages) (string-to-utf-8-bytes "tail")))
         (ok (null closed))))))
+
+;;; The closing handshake with queued writes. A fake event loop lets
+;;; WITH-ASYNC-WRITING queue into the socket buffer; FAKE-FLUSH then does
+;;; what ASYNC-WRITE does once the buffer is written.
+
+(defmacro with-fake-event-loop (() &body body)
+  "Bind *EVLOOP* and make starting or stopping a watcher a no-op."
+  (let ((start (gensym)) (stop (gensym)))
+    `(let ((woo.ev.event-loop:*evloop* :fake-loop)
+           (,start (symbol-function 'lev:ev-io-start))
+           (,stop (symbol-function 'lev:ev-io-stop)))
+       (unwind-protect
+            (progn
+              (setf (symbol-function 'lev:ev-io-start) (lambda (loop w) (declare (ignore loop w)))
+                    (symbol-function 'lev:ev-io-stop) (lambda (loop w) (declare (ignore loop w))))
+              ,@body)
+         (setf (symbol-function 'lev:ev-io-start) ,start
+               (symbol-function 'lev:ev-io-stop) ,stop)))))
+
+(defun queued-octets (socket)
+  "Octets written to SOCKET and not yet flushed."
+  (fast-io:finish-output-buffer (woo.ev.socket::socket-buffer socket)))
+
+(defun fake-flush (socket)
+  "Write out the buffer and run the write callback, as ASYNC-WRITE does.
+   Returns the octets written."
+  (let ((octets (queued-octets socket)))
+    (woo.ev.socket::reset-buffer socket)
+    (let ((cb (woo.ev.socket::socket-write-cb socket)))
+      (when cb (funcall cb socket)))
+    (when (woo.ev.socket:socket-open-p socket)
+      (setf (woo.ev.socket::socket-write-cb socket) nil))
+    octets))
+
+(defun server-close-frame (code)
+  (unmasked-frame +opcode-close+ (close-frame-payload code)))
+
+(deftest test-ws-nothing-follows-a-queued-close
+  (testing "a send after a queued echo is dropped and the close still happens"
+    (with-fake-event-loop ()
+      (with-stubbed-close (closed)
+        (let* ((socket (make-bare-socket))
+               (reader (progn (setup-websocket socket)
+                              (woo.ev.socket:socket-data socket))))
+          (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1000)))
+          (ok (null (send-text-frame socket "broadcast"))
+              "the data frame is dropped")
+          (ok (null (send-ping socket)) "a ping is dropped too")
+          (ok (woo.ev.socket:socket-open-p socket)
+              "the socket stays open until the close is flushed")
+          (ok (equalp (fake-flush socket) (server-close-frame 1000))
+              "only the close frame is written")
+          (ok closed "the pending close survives the later sends")
+          (ok (not (woo.ev.socket:socket-open-p socket)))))))
+  (testing "send-close twice queues a single close frame"
+    (with-fake-event-loop ()
+      (with-stubbed-close (closed)
+        (let ((socket (make-bare-socket)))
+          (setup-websocket socket)
+          (ok (send-close socket 1001))
+          (ok (null (send-close socket 1000)))
+          (ok (null (send-binary-frame socket (ws-octets 1 2))))
+          (ok (equalp (fake-flush socket) (server-close-frame 1001)))
+          (ok (null closed)
+              "a server-initiated close waits for the peer's close"))))))
+
+(deftest test-ws-server-initiated-close-is-not-echoed
+  (testing "the peer's close answers ours: no second close, socket closes"
+    (with-fake-event-loop ()
+      (with-stubbed-close (closed)
+        (let* ((socket (make-bare-socket))
+               (reader (progn (setup-websocket socket)
+                              (woo.ev.socket:socket-data socket))))
+          (send-close socket 1000)
+          (ok (equalp (fake-flush socket) (server-close-frame 1000)))
+          (ok (woo.ev.socket:socket-open-p socket))
+          (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1000)))
+          (ok (zerop (length (queued-octets socket)))
+              "the default on-close does not echo a second close")
+          (ok closed "the socket closes once both closes are exchanged")))))
+  (testing "a peer close crossing an unflushed close closes after the flush"
+    (with-fake-event-loop ()
+      (with-stubbed-close (closed)
+        (let* ((socket (make-bare-socket))
+               (reader (progn (setup-websocket socket)
+                              (woo.ev.socket:socket-data socket))))
+          (send-close socket 1001)
+          (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1000)))
+          (ok (null closed) "our close frame is still queued")
+          (ok (equalp (fake-flush socket) (server-close-frame 1001)))
+          (ok closed))))))
+
+(deftest test-ws-failed-connection-flushes-its-close-frame
+  (testing "a read after a failure does not close before the close frame is written"
+    (with-fake-event-loop ()
+      (with-stubbed-close (closed)
+        (let* ((errors 0)
+               (socket (make-bare-socket))
+               (reader (progn
+                         (setup-websocket socket
+                                          :on-error (lambda (e)
+                                                      (declare (ignore e))
+                                                      (incf errors)))
+                         (woo.ev.socket:socket-data socket))))
+          (funcall reader (unmasked-frame +opcode-text+ (string-to-utf-8-bytes "bad")))
+          (ok (= errors 1))
+          (funcall reader (masked-frame +opcode-text+ (string-to-utf-8-bytes "more")))
+          (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1000)))
+          (ok (= errors 1) "later reads are ignored")
+          (ok (null closed) "the socket is not closed before the flush")
+          (ok (equalp (fake-flush socket) (server-close-frame 1002))
+              "the 1002 close frame is written")
+          (ok closed "the flush closes the socket"))))))
