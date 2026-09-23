@@ -1290,3 +1290,25 @@
           (ok (null closed) "our close frame is still queued")
           (ok (equalp (fake-flush socket) (server-close-frame 1001)))
           (ok closed))))))
+
+(deftest test-ws-failed-connection-flushes-its-close-frame
+  (testing "a read after a failure does not close before the close frame is written"
+    (with-fake-event-loop ()
+      (with-stubbed-close (closed)
+        (let* ((errors 0)
+               (socket (make-bare-socket))
+               (reader (progn
+                         (setup-websocket socket
+                                          :on-error (lambda (e)
+                                                      (declare (ignore e))
+                                                      (incf errors)))
+                         (woo.ev.socket:socket-data socket))))
+          (funcall reader (unmasked-frame +opcode-text+ (string-to-utf-8-bytes "bad")))
+          (ok (= errors 1))
+          (funcall reader (masked-frame +opcode-text+ (string-to-utf-8-bytes "more")))
+          (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1000)))
+          (ok (= errors 1) "later reads are ignored")
+          (ok (null closed) "the socket is not closed before the flush")
+          (ok (equalp (fake-flush socket) (server-close-frame 1002))
+              "the 1002 close frame is written")
+          (ok closed "the flush closes the socket"))))))

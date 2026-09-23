@@ -189,9 +189,7 @@
         (close-socket socket))))
 
 (defun close-ws (state)
-  (let ((socket (ws-state-socket state)))
-    (when (and socket (socket-open-p socket))
-      (close-socket socket))))
+  (close-when-flushed (ws-state-socket state) (ws-state-close-state state)))
 
 (defun valid-close-code-p (code)
   "Status codes that may appear in a close frame (RFC 6455 7.4, IANA).
@@ -423,8 +421,7 @@
                                           ""))
                    ;; Both closes are sent or queued: the handshake is done.
                    (when (ws-close-sent (ws-state-close-state state))
-                     (close-when-flushed (ws-state-socket state)
-                                         (ws-state-close-state state))))))
+                     (close-ws state)))))
               ((= opcode +opcode-continuation+)
                (unless (ws-state-fragment-opcode state)
                  (return-from parse-frame
@@ -562,7 +559,8 @@
             (handler-case
                 (cond
                   ;; Already failed: do not parse again (the bad frame is
-                  ;; still buffered, and :ERROR is truthy).
+                  ;; still buffered, and :ERROR is truthy). Leave a queued
+                  ;; close frame to be flushed before the socket closes.
                   ((ws-state-failed state)
                    (close-ws state))
                   (t
