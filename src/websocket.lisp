@@ -300,6 +300,17 @@
         (setf (fill-pointer buf) remaining
               (ws-state-read-pos state) 0)))))
 
+(defun grow-octet-buffer (buf new-length limit)
+  "Set BUF's fill pointer to NEW-LENGTH, returning BUF or its replacement.
+   Capacity grows geometrically (doubling, at most LIMIT unless NEW-LENGTH
+   itself is larger), so appending n octets in pieces copies O(n) octets
+   rather than O(n^2)."
+  (let ((capacity (array-dimension buf 0)))
+    (if (<= new-length capacity)
+        (progn (setf (fill-pointer buf) new-length) buf)
+        (adjust-array buf (max new-length (min limit (max 256 (* 2 capacity))))
+                      :fill-pointer new-length))))
+
 (defun append-fragment (state payload)
   "Append PAYLOAD to the open fragment. Fail the connection instead of
    growing past +MAX-WS-PAYLOAD+. Returns T on success, NIL after WS-FAIL."
@@ -309,7 +320,7 @@
     (when (> new +max-ws-payload+)
       (ws-fail state "fragment exceeds maximum payload" 1009)
       (return-from append-fragment nil))
-    (let ((grown (adjust-array frag new :fill-pointer new)))
+    (let ((grown (grow-octet-buffer frag new +max-ws-payload+)))
       (setf (ws-state-fragment-buffer state) grown)
       (replace grown payload :start1 old))
     t))
@@ -584,8 +595,11 @@
                    (let* ((buf (ws-state-buffer state))
                           (new-len (- end start))
                           (old-len (length buf))
-                          (grown (adjust-array buf (+ old-len new-len)
-                                               :fill-pointer (+ old-len new-len))))
+                          ;; A frame larger than the cap fails once its
+                          ;; header is parsed, so the buffer only needs to
+                          ;; hold one maximal frame (14-octet header).
+                          (grown (grow-octet-buffer buf (+ old-len new-len)
+                                                    (+ +max-ws-payload+ 14))))
                      (setf (ws-state-buffer state) grown)
                      (replace grown data :start1 old-len :start2 start :end2 end))
                    ;; Only T means a frame was consumed. NIL waits for more

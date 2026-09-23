@@ -1395,3 +1395,67 @@
       (setup-websocket socket)
       (ok (woo.websocket:socket-upgraded-p socket)))))
 
+;;; Growing a buffer to exactly its new size on every append copies O(n^2)
+;;; octets. Count reallocations instead of timing them.
+
+(defun capacity (array)
+  (array-dimension array 0))
+
+(deftest test-ws-fragment-buffer-grows-geometrically
+  (testing "2000 continuation frames reallocate the fragment buffer O(log n) times"
+    (let* ((n 2000)
+           (piece (make-array 100 :element-type '(unsigned-byte 8) :initial-element 65))
+           (delivered nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (declare (ignore op))
+                                 (setf delivered data))))
+           (growths 0)
+           (last-capacity nil))
+      (flet ((note ()
+               (let ((c (capacity (woo.websocket::ws-state-fragment-buffer state))))
+                 (unless (eql c last-capacity)
+                   (incf growths)
+                   (setf last-capacity c)))))
+        (ok (eq (feed-ws state (masked-frame +opcode-binary+ piece :fin nil)) t))
+        (note)
+        (loop repeat (- n 2)
+              do (feed-ws state (masked-frame +opcode-continuation+ piece :fin nil))
+                 (note))
+        (ok (eq (feed-ws state (masked-frame +opcode-continuation+ piece)) t))
+        (ok (= (length delivered) (* n 100)) "the whole message is delivered")
+        (ok (every (lambda (b) (= b 65)) delivered))
+        (ok (<= growths 20)
+            (format nil "~D reallocations for ~D fragments" growths n)))))
+  (testing "growth never allocates past +max-ws-payload+"
+    (let* ((max woo.websocket:+max-ws-payload+)
+           (buf (make-array (- max 10) :element-type '(unsigned-byte 8)
+                                       :adjustable t :fill-pointer (- max 10)))
+           (grown (woo.websocket::grow-octet-buffer buf (- max 5) max)))
+      (ok (= (length grown) (- max 5)))
+      (ok (= (capacity grown) max)))))
+
+(deftest test-ws-read-buffer-grows-geometrically
+  (testing "a 200 KB frame read 1000 octets at a time reallocates O(log n) times"
+    (let* ((payload (make-array 200000 :element-type '(unsigned-byte 8) :initial-element 7))
+           (frame (masked-frame +opcode-binary+ payload))
+           (got nil)
+           (socket (make-bare-socket))
+           (state (setup-websocket socket
+                                   :on-message (lambda (op data)
+                                                 (declare (ignore op))
+                                                 (setf got data))))
+           (reader (woo.ev.socket:socket-data socket))
+           (growths 0)
+           (last-capacity (capacity (woo.websocket::ws-state-buffer state))))
+      (loop for start from 0 below (length frame) by 1000
+            do (funcall reader frame :start start :end (min (length frame) (+ start 1000)))
+               (let ((c (capacity (woo.websocket::ws-state-buffer state))))
+                 (unless (eql c last-capacity)
+                   (incf growths)
+                   (setf last-capacity c))))
+      (ok (equalp got payload) "the frame is delivered intact")
+      (ok (<= growths 20)
+          (format nil "~D reallocations for ~D reads" growths
+                  (ceiling (length frame) 1000))))))
+
