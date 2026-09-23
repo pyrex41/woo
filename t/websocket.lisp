@@ -939,3 +939,263 @@
         (ok (null messages))
         (ok (not (eq (woo.websocket::parse-frame state) t)))
         (ok (eq (woo.websocket::parse-frame state) :error))))))
+
+;;; Frames are consumed before callbacks run, so an exception cannot cause
+;;; redelivery. Invalid UTF-8 fails with 1007, bad close codes with 1002,
+;;; and a callback error with 1011.
+
+(defmacro with-recorded-close-frames ((sent) &body body)
+  "Record (SOCKET CODE) for every close frame the connection would send."
+  (let ((sym (gensym)) (orig (gensym)))
+    `(let* ((,sym (find-symbol "CLOSE-AFTER-FRAME" :woo.websocket))
+            (,orig (symbol-function ,sym))
+            (,sent nil))
+       (unwind-protect
+            (progn
+              (setf (symbol-function ,sym)
+                    (lambda (socket code)
+                      (push (list socket code) ,sent)
+                      (when socket
+                        (setf (woo.ev.socket:socket-open-p socket) nil))))
+              ,@body)
+         (setf (symbol-function ,sym) ,orig)))))
+
+(defun close-frame-payload (code &rest reason-octets)
+  (apply #'ws-octets (ldb (byte 8 8) code) (ldb (byte 8 0) code) reason-octets))
+
+(defun make-reader-state (socket &key on-message on-close on-ping)
+  "SETUP-WEBSOCKET with counters. Returns (values state reader errors-fn)."
+  (let* ((errors nil)
+         (state (setup-websocket
+                 socket
+                 :on-message on-message
+                 :on-ping (or on-ping (lambda (payload) (declare (ignore payload))))
+                 :on-close on-close
+                 :on-error (lambda (e) (push e errors)))))
+    (values state
+            (woo.ev.socket:socket-data socket)
+            (lambda () errors))))
+
+(deftest test-ws-invalid-utf-8-close-reason
+  (testing "close reason FF FE fails with 1007 once and is not re-processed"
+    (with-recorded-close-frames (sent)
+      (let* ((closes 0)
+             (messages nil)
+             (socket (make-bare-socket)))
+        (multiple-value-bind (state reader errors)
+            (make-reader-state socket
+                               :on-message (lambda (op data)
+                                             (push (list op data) messages))
+                               :on-close (lambda (code reason)
+                                           (declare (ignore code reason))
+                                           (incf closes)))
+          (funcall reader (masked-frame +opcode-close+
+                                        (close-frame-payload 1000 #xFF #xFE)))
+          (funcall reader (masked-frame +opcode-text+ (string-to-utf-8-bytes "later")))
+          (ok (= closes 0) "on-close is not called with an undecodable reason")
+          (ok (null messages))
+          (ok (= (length (funcall errors)) 1) "on-error runs exactly once")
+          (let ((e (first (funcall errors))))
+            (ok (typep e 'woo.websocket:websocket-protocol-error))
+            (ok (and (typep e 'woo.websocket:websocket-protocol-error)
+                     (= (woo.websocket:websocket-protocol-error-code e) 1007))))
+          (ok (woo.websocket::ws-state-failed state))
+          (ok (eql (woo.websocket::ws-state-close-code state) 1007))
+          (ok (equal (mapcar #'second sent) '(1007)) "close frame carries 1007"))))))
+
+(deftest test-ws-callback-error-does-not-redeliver
+  (testing "an on-message error fails with 1011 and the frame is not redelivered"
+    (with-recorded-close-frames (sent)
+      (let* ((calls 0)
+             (socket (make-bare-socket)))
+        (multiple-value-bind (state reader errors)
+            (make-reader-state socket
+                               :on-message (lambda (op data)
+                                             (declare (ignore op data))
+                                             (incf calls)
+                                             (error "app bug"))
+                               :on-close (lambda (code reason)
+                                           (declare (ignore code reason))))
+          (funcall reader (masked-frame +opcode-text+ (string-to-utf-8-bytes "A")))
+          (funcall reader (masked-frame +opcode-text+ (string-to-utf-8-bytes "B")))
+          (funcall reader (masked-frame +opcode-text+ (string-to-utf-8-bytes "C")))
+          (ok (= calls 1) "the failing message is delivered once")
+          (ok (= (length (funcall errors)) 1))
+          (ok (typep (first (funcall errors)) 'simple-error)
+              "on-error receives the callback's own error")
+          (ok (woo.websocket::ws-state-failed state))
+          (ok (eql (woo.websocket::ws-state-close-code state) 1011))
+          (ok (equal (mapcar #'second sent) '(1011)))
+          (ok (not (eq (woo.websocket::parse-frame state) t)))))))
+  (testing "an on-close error is not re-run on later reads"
+    (with-recorded-close-frames (sent)
+      (let* ((calls 0)
+             (socket (make-bare-socket)))
+        (multiple-value-bind (state reader errors)
+            (make-reader-state socket
+                               :on-close (lambda (code reason)
+                                           (declare (ignore code reason))
+                                           (incf calls)
+                                           (error "close handler bug")))
+          (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1000)))
+          (funcall reader (masked-frame +opcode-ping+ (ws-octets 1)))
+          (ok (= calls 1))
+          (ok (= (length (funcall errors)) 1))
+          (ok (eql (woo.websocket::ws-state-close-code state) 1011)))))))
+
+(deftest test-ws-text-utf-8-validation
+  (testing "single-frame text with invalid UTF-8 fails with 1007"
+    (dolist (bad (list (ws-octets #xFF)
+                       (ws-octets #xC0 #xAF)              ; overlong
+                       (ws-octets #xED #xA0 #x80)         ; surrogate
+                       (ws-octets #xF4 #x90 #x80 #x80)    ; > U+10FFFF
+                       (ws-octets #x68 #xE2 #x82)))       ; truncated
+      (let* ((messages nil)
+             (state (make-parse-state
+                     :on-message (lambda (op data) (push (list op data) messages))
+                     :on-error (lambda (e) (declare (ignore e))))))
+        (ok (eq (feed-ws state (masked-frame +opcode-text+ bad)) :error))
+        (ok (null messages))
+        (ok (eql (woo.websocket::ws-state-close-code state) 1007)))))
+  (testing "binary frames are not UTF-8 checked"
+    (let* ((messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data) (push (list op data) messages)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-binary+ (ws-octets #xFF #xFE))) t))
+      (ok (= (length messages) 1))))
+  (testing "a code point split across fragments is valid once reassembled"
+    (let* ((messages nil)
+           (euro (string-to-utf-8-bytes (string (code-char #x20AC))))
+           (state (make-parse-state
+                   :on-message (lambda (op data) (push (list op data) messages)))))
+      (ok (eq (feed-ws state (masked-frame +opcode-text+ (subseq euro 0 1) :fin nil)) t))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+ (subseq euro 1))) t))
+      (ok (equalp (second (first messages)) euro))))
+  (testing "reassembled text that is invalid fails with 1007"
+    (let* ((messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data) (push (list op data) messages))
+                   :on-error (lambda (e) (declare (ignore e))))))
+      (ok (eq (feed-ws state (masked-frame +opcode-text+ (ws-octets #x61) :fin nil)) t))
+      (ok (eq (feed-ws state (masked-frame +opcode-continuation+ (ws-octets #xE2 #x82)))
+              :error))
+      (ok (null messages))
+      (ok (eql (woo.websocket::ws-state-close-code state) 1007)))))
+
+(deftest test-ws-fragmented-message-is-a-fresh-copy
+  (testing "a retained reassembled payload is not truncated or overwritten"
+    (let* ((messages nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (declare (ignore op))
+                                 ;; Retain without copying.
+                                 (push data messages)))))
+      (feed-ws state (masked-frame +opcode-text+ (string-to-utf-8-bytes "Hel") :fin nil))
+      (feed-ws state (masked-frame +opcode-continuation+ (string-to-utf-8-bytes "lo")))
+      (feed-ws state (masked-frame +opcode-text+ (string-to-utf-8-bytes "XY") :fin nil))
+      (feed-ws state (masked-frame +opcode-continuation+ (string-to-utf-8-bytes "Z")))
+      (ok (= (length messages) 2))
+      (ok (equalp (second messages) (string-to-utf-8-bytes "Hello"))
+          "first message is intact after the next one")
+      (ok (equalp (first messages) (string-to-utf-8-bytes "XYZ")))
+      (ok (not (eq (first messages) (second messages)))))))
+
+(deftest test-ws-close-code-validation
+  (testing "reserved, local-only, and unassigned close codes fail with 1002"
+    (dolist (code '(0 999 1004 1005 1006 1015 1016 2000 2999 5000 65535))
+      (let* ((closed nil)
+             (state (make-parse-state
+                     :on-close (lambda (c r) (declare (ignore r)) (setf closed c))
+                     :on-error (lambda (e) (declare (ignore e))))))
+        (ok (eq (feed-ws state (masked-frame +opcode-close+ (close-frame-payload code)))
+                :error)
+            (format nil "close code ~D is rejected" code))
+        (ok (null closed))
+        (ok (eql (woo.websocket::ws-state-close-code state) 1002)))))
+  (testing "defined and private-use close codes are accepted"
+    (dolist (code '(1000 1001 1002 1003 1007 1008 1009 1010 1011 1012 1013 1014 3000 4999))
+      (let* ((closed nil)
+             (state (make-parse-state
+                     :on-close (lambda (c r) (declare (ignore r)) (setf closed c)))))
+        (ok (eq (feed-ws state (masked-frame +opcode-close+ (close-frame-payload code))) t)
+            (format nil "close code ~D is accepted" code))
+        (ok (eql closed code))))))
+
+(deftest test-ws-default-close-echo
+  (testing "the default on-close echoes a valid code"
+    (with-recorded-close-frames (sent)
+      (let* ((socket (make-bare-socket))
+             (state (setup-websocket socket))
+             (reader (woo.ev.socket:socket-data socket)))
+        (declare (ignore state))
+        (funcall reader (masked-frame +opcode-close+ (close-frame-payload 1001)))
+        (ok (equal (mapcar #'second sent) '(1001))))))
+  (testing "an empty close is echoed as 1000"
+    (with-recorded-close-frames (sent)
+      (let* ((socket (make-bare-socket))
+             (reader (progn (setup-websocket socket)
+                            (woo.ev.socket:socket-data socket))))
+        (funcall reader (masked-frame +opcode-close+
+                                      (make-array 0 :element-type '(unsigned-byte 8))))
+        (ok (equal (mapcar #'second sent) '(1000))))))
+  (testing "the default on-close never sends 1005, 1006, or 1015"
+    (dolist (code '(1005 1006 1015))
+      (with-recorded-close-frames (sent)
+        (let ((state (setup-websocket (make-bare-socket))))
+          (funcall (woo.websocket::ws-state-on-close state) code "")
+          (ok (equal (mapcar #'second sent) '(1000))
+              (format nil "~D is replaced by 1000" code)))))))
+
+(deftest test-ws-many-small-frames-in-one-read
+  (testing "a read holding many tiny frames is parsed in linear time"
+    (with-stubbed-close (closed)
+      (let* ((n 500000)
+             (count 0)
+             (one (masked-frame +opcode-binary+ (ws-octets 7)))
+             (bytes (make-array (* n (length one)) :element-type '(unsigned-byte 8)))
+             (socket (make-bare-socket))
+             (state (setup-websocket
+                     socket
+                     :on-message (lambda (op data)
+                                   (declare (ignore op data))
+                                   (incf count))
+                     :on-ping (lambda (payload) (declare (ignore payload)))
+                     :on-close (lambda (code reason) (declare (ignore code reason)))))
+             (reader (woo.ev.socket:socket-data socket))
+             (finished t))
+        (dotimes (i n)
+          (replace bytes one :start1 (* i (length one))))
+        ;; Shifting the buffer after each frame moves ~n^2/2 * 7 octets
+        ;; (~10^12 octets here); consuming by offset finishes well inside this.
+        (handler-case
+            (sb-ext:with-timeout 5
+              (funcall reader bytes))
+          (sb-ext:timeout () (setf finished nil)))
+        (ok finished "parsing did not time out")
+        (ok (= count n) "every frame was delivered")
+        (ok (null closed))
+        (ok (zerop (length (woo.websocket::ws-state-buffer state))))
+        (ok (zerop (woo.websocket::ws-state-read-pos state))))))
+  (testing "a partial frame after complete ones is kept and compacted"
+    (with-stubbed-close (closed)
+      (let* ((messages nil)
+             (socket (make-bare-socket))
+             (tail (masked-frame +opcode-text+ (string-to-utf-8-bytes "tail")))
+             (state (setup-websocket
+                     socket
+                     :on-message (lambda (op data)
+                                   (declare (ignore op))
+                                   (push data messages))
+                     :on-ping (lambda (payload) (declare (ignore payload)))
+                     :on-close (lambda (code reason) (declare (ignore code reason)))))
+             (reader (woo.ev.socket:socket-data socket)))
+        (funcall reader (concat-octets
+                         (masked-frame +opcode-text+ (string-to-utf-8-bytes "a"))
+                         (masked-frame +opcode-text+ (string-to-utf-8-bytes "b"))
+                         (subseq tail 0 5)))
+        (ok (= (length messages) 2))
+        (ok (equalp (ws-buffer-copy state) (subseq tail 0 5)))
+        (ok (zerop (woo.websocket::ws-state-read-pos state)))
+        (funcall reader (subseq tail 5))
+        (ok (equalp (first messages) (string-to-utf-8-bytes "tail")))
+        (ok (null closed))))))
