@@ -15,7 +15,11 @@
            :shrink-vector
            :try-shrink
            :bytes-equal-p
-           :prop-iters))
+           :prop-iters
+           :prop-seed
+           :+default-prop-seed+
+           :make-unique-temp-directory
+           :with-unique-temp-directory))
 (in-package :woo-test.prop)
 
 (defun prop-iters ()
@@ -26,7 +30,25 @@
         100)))
 
 (defvar *prop-iters* 100)
-(defvar *prop-seed* 0)
+
+(defconstant +default-prop-seed+ 20260922)
+
+(defvar *prop-seed* nil
+  "When non-NIL, the base seed for CHECK-PROPERTY. Overrides WOO_PROP_SEED.")
+
+(defun prop-seed ()
+  "Base seed for CHECK-PROPERTY: *PROP-SEED* when bound non-NIL, else the
+   WOO_PROP_SEED env var, else +DEFAULT-PROP-SEED+. Deterministic by default
+   so a failure seen once is seen every run."
+  (let ((env (ignore-errors (uiop:getenv "WOO_PROP_SEED"))))
+    (logand (or *prop-seed*
+                (and env (plusp (length env))
+                     (parse-integer env :junk-allowed t))
+                +default-prop-seed+)
+            #xFFFFFFFF)))
+
+(defun iteration-seed (base-seed i)
+  (logand (+ base-seed (* i 1103515245) 12345) #xFFFFFFFF))
 
 (defstruct rng
   (state 0 :type (unsigned-byte 64)))
@@ -120,15 +142,18 @@
                  (return current)))
         finally (return current)))
 
-(defun check-property (name property generator &key (shrinker nil) (iters nil))
-  "Run PROPERTY on GENERATOR samples. On failure print seed and shrunk value.
+(defun check-property (name property generator &key (shrinker nil) (iters nil) (seed nil))
+  "Run PROPERTY on GENERATOR samples. On failure print the base seed, the
+   failing iteration, the shrunk value, and how to replay.
    PROPERTY is (lambda (value) ...) returning T on success.
-   GENERATOR is (lambda (rng size) value)."
+   GENERATOR is (lambda (rng size) value).
+   SEED overrides PROP-SEED (see there) as the base seed.
+   Returns T, or (values NIL base-seed shrunk error iteration)."
   (let* ((n (or iters (prop-iters)))
-         (base-seed (logand (get-universal-time) #xFFFFFFFF)))
+         (base-seed (if seed (logand seed #xFFFFFFFF) (prop-seed))))
     (loop for i from 0 below n
-          for seed = (logand (+ base-seed (* i 1103515245) 12345) #xFFFFFFFF)
-          for rng = (make-prop-rng seed)
+          for iter-seed = (iteration-seed base-seed i)
+          for rng = (make-prop-rng iter-seed)
           for size = (1+ (mod i 16))
           for value = (funcall generator rng size)
           do (let ((ok t)
@@ -140,8 +165,35 @@
                    (setf ok nil err e)))
                (unless ok
                  (let ((shrunk (try-shrink value shrinker property)))
-                   (format t "~&Property ~A failed seed=~A iter=~A/~A~%  value=~S~%  shrunk=~S~%~@[  error=~A~%~]"
-                           name seed i n value shrunk err)
+                   (format t "~&Property ~A failed seed=~A iter=~A/~A (iteration seed ~A)~%  value=~S~%  shrunk=~S~%~@[  error=~A~%~]  replay: WOO_PROP_SEED=~A WOO_PROP_ITERS=~A, or bind woo-test.prop:*prop-seed* to ~A~%"
+                           name base-seed i n iter-seed value shrunk err
+                           base-seed (max n (1+ i)) base-seed)
                    (return-from check-property
-                     (values nil seed shrunk err))))))
+                     (values nil base-seed shrunk err i))))))
     t))
+
+(defvar *temp-random-state* (make-random-state t))
+
+(defun make-unique-temp-directory (label)
+  "Create and return a fresh directory under the system temp directory named
+   woo-test-LABEL-<pid-ish random suffix>/. Never reuses an existing path, so
+   concurrent runs and stale leftovers cannot collide."
+  (let ((base (uiop:ensure-directory-pathname (uiop:temporary-directory))))
+    (loop repeat 100
+          for name = (format nil "woo-test-~A-~36R~36R/"
+                             label
+                             (random (expt 36 6) *temp-random-state*)
+                             (get-universal-time))
+          for dir = (merge-pathnames name base)
+          unless (uiop:directory-exists-p dir)
+            do (multiple-value-bind (path created) (ensure-directories-exist dir)
+                 (when created
+                   (return-from make-unique-temp-directory path))))
+    (error "could not create a unique temp directory under ~A" base)))
+
+(defmacro with-unique-temp-directory ((var label) &body body)
+  "Bind VAR to a fresh temp directory for BODY, then delete it."
+  `(let ((,var (make-unique-temp-directory ,label)))
+     (unwind-protect (progn ,@body)
+       (ignore-errors
+        (uiop:delete-directory-tree ,var :validate t :if-does-not-exist :ignore)))))

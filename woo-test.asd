@@ -24,10 +24,10 @@
      (:file "properties" :depends-on ("core"))
      (:file "qc" :depends-on ("quickcheck"))))
    ;; Differential oracle against Go's HTTP/2 stack.
-   (:file "t/diff/diff")
+   (:file "t/diff/diff" :depends-on ("t-prop"))
    ;; Coverage-guided fuzz and mutation testing of the pure codecs.
-   (:file "t/fuzz/guided")
-   (:file "t/mutate/mutate")
+   (:file "t/fuzz/guided" :depends-on ("t-prop"))
+   (:file "t/mutate/mutate" :depends-on ("t-prop"))
    ;; SSL/ALPN tests
    (:file "t/alpn" :if-feature (:not :woo-no-ssl)))
   :perform (test-op (op c) (symbol-call '#:rove '#:run c)))
