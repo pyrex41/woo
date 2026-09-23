@@ -1365,7 +1365,11 @@
     (multiple-value-bind (conn err)
         (test-conn)
       (let ((called nil)
-            (block (many-indexed-refs-block 4000 1000)))
+            ;; #x80 is indexed field 0, an HPACK error. Decoding reaches it
+            ;; only if the block is decoded past the cap and checked after,
+            ;; which would be COMPRESSION_ERROR instead of ENHANCE_YOUR_CALM.
+            (block (concat-octets (many-indexed-refs-block 4000 1000)
+                                  (ub8 1 #x80))))
         (setf (woo.http2.connection::http2-connection-on-headers conn)
               (lambda (stream headers end-stream)
                 (declare (ignore stream headers end-stream))
@@ -1374,7 +1378,8 @@
             "the compressed block passes the pre-decode size check")
         (connection-process-frame
          conn (make-headers-frame 1 block :end-headers t :end-stream t))
-        (ok (= (funcall err) +enhance-your-calm+))
+        (ok (= (funcall err) +enhance-your-calm+)
+            "decoding stopped at the cap, before the poisoned tail")
         (ok (http2-connection-goaway-sent conn))
         (ok (not called))))))
 
@@ -1412,8 +1417,8 @@
             do (complete-stream conn id))
       (let ((closed (woo.http2.connection::http2-connection-closed-streams conn)))
         (ok (null (funcall err)))
-        (ok (<= (hash-table-count closed)
-                woo.http2.connection::*closed-stream-retention*))
+        ;; A literal: raising the retention default must fail this test.
+        (ok (<= (hash-table-count closed) 128))
         (ok (plusp (hash-table-count closed)))
         (ok (loop for v being the hash-values of closed always (eq v t))
             "only ids are retained, not stream objects"))
@@ -1720,3 +1725,20 @@
       (ok (= calls 2))
       (ok (equal (woo.http2.stream:http2-stream-trailers (connection-get-stream conn 1))
                  '(("x-checksum" . "abc") ("te" . "trailers") ("x-empty" . "")))))))
+
+(deftest max-frame-size-boundary
+  (testing "a DATA frame of exactly 16384 octets is accepted at the default max"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let ((calls (data-sink conn)))
+        (parse-bytes conn
+                     (concat-octets
+                      +connection-preface+
+                      (serialize-frame (make-settings-frame nil))
+                      (serialize-frame (make-headers-frame 1 (empty-octets) :end-headers t))
+                      (serialize-frame (make-data-frame 1 (ub8 +default-max-frame-size+ 7)
+                                                        :end-stream t))))
+        (ok (= +default-max-frame-size+ 16384))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal (funcall calls) '((1 16384 t))))))))
