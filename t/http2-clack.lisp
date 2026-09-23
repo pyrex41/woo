@@ -1264,6 +1264,155 @@
                             "full body"))))
           (usocket:socket-close (h2c-client-socket client)))))))
 
+;;; A pathname body that cannot be read ends its stream, not the connection
+
+(defun rst-code (frame)
+  (woo.http2.frames:parse-rst-stream-payload (frame-payload frame)))
+
+(defun rst-frames (frames stream-id)
+  (frames-of-type (frames-on-stream frames stream-id)
+                  woo.http2.constants:+frame-rst-stream+))
+
+(deftest unreadable-pathname-bodies
+  (testing "a file deleted mid-send is reset, and another queued stream still completes"
+    (let* ((path (merge-pathnames "woo-h2-vanish.bin" (uiop:temporary-directory)))
+           (conn (make-http2-connection))
+           (file-stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (other (make-http2-stream :id 3 :state +state-half-closed-remote+))
+           (body (make-array 1000 :element-type '(unsigned-byte 8) :initial-element 5)))
+      (register-stream conn file-stream)
+      (register-stream conn other)
+      (setf (woo.http2.connection::http2-connection-last-stream-id conn) 3)
+      (unwind-protect
+           (progn
+             (write-pattern-file path 200000)
+             (ok (not (send-http2-response conn file-stream 200 nil path)))
+             (ok (zerop (http2-connection-remote-window-size conn))
+                 "the file used up the connection window")
+             (ok (not (send-http2-response conn other 200 nil body))
+                 "stream 3 waits behind it")
+             (delete-file path)
+             (let ((frames (capture-frames
+                            (lambda ()
+                              ;; Stream credit first; nothing moves until
+                              ;; the connection window opens for both.
+                              (connection-process-frame conn (make-window-update-frame 1 100000))
+                              (connection-process-frame conn (make-window-update-frame 0 100000))))))
+               (let ((rst (rst-frames frames 1)))
+                 (ok (= (length rst) 1) "stream 1 is reset")
+                 (when rst
+                   (ok (= (rst-code (first rst)) woo.http2.constants:+internal-error+))))
+               (ok (null (frames-of-type (frames-on-stream frames 1) +frame-data+)))
+               (ok (equalp (data-bytes (frames-on-stream frames 3)) body)
+                   "stream 3 gets its whole body")
+               (ok (end-stream-p (car (last (frames-of-type frames +frame-data+))))))
+             (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))
+                 "the failed entry is not retried")
+             (ok (stream-closed-p other))
+             (ok (null (capture-frames
+                        (lambda ()
+                          (connection-process-frame conn (make-window-update-frame 0 100)))))
+                 "a later WINDOW_UPDATE sends nothing")
+             (ok (not (http2-connection-goaway-sent conn))))
+        (when (probe-file path) (delete-file path)))))
+
+  (testing "a delayed response whose file is missing gets a 500"
+    (let* ((responder nil)
+           (conn (adapter-conn (lambda (env)
+                                 (declare (ignore env))
+                                 (lambda (r) (setf responder r)))))
+           (missing (merge-pathnames "woo-h2-missing-file.bin" (uiop:temporary-directory))))
+      (when (probe-file missing) (delete-file missing))
+      (run-adapter-request conn 1)
+      (let ((frames (capture-frames
+                     (lambda () (funcall responder (list 200 nil missing))))))
+        (ok (equal (response-status frames) "500"))
+        (ok (end-stream-p (car (last frames))))
+        (ok (null (gethash 1 (http2-connection-streams conn))) "the stream is closed")))))
+
+;;; Streamed writes are bounded
+
+(defun writer-conn (&key (stream-ids '(1)))
+  "A connection with a streaming writer on each of STREAM-IDS, with no send
+   window. Returns (values conn writers)."
+  (let* ((writers nil)
+         (conn (adapter-conn
+                (lambda (env)
+                  (declare (ignore env))
+                  (lambda (responder)
+                    (push (funcall responder '(200 ())) writers))))))
+    (setf (http2-connection-remote-window-size conn) 0)
+    (dolist (id stream-ids)
+      (run-adapter-request conn id))
+    (values conn (reverse writers))))
+
+(deftest streamed-writes-are-bounded
+  (testing "a writer past *max-queued-response-bytes* resets the stream and then drops writes"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 100000))
+      (multiple-value-bind (conn writers) (writer-conn)
+        (let* ((writer (first writers))
+               (chunk (make-array 10000 :element-type '(unsigned-byte 8)))
+               (results nil)
+               (frames (capture-frames
+                        (lambda ()
+                          (dotimes (i 50)
+                            (push (funcall writer chunk) results)))))
+               (results (reverse results))
+               (rst (rst-frames frames 1)))
+          (ok (every #'identity (subseq results 0 10)) "writes up to the limit return T")
+          (ok (notany #'identity (subseq results 10)) "then NIL")
+          (ok (= (length rst) 1) "one RST_STREAM")
+          (when rst
+            (ok (= (rst-code (first rst)) woo.http2.constants:+internal-error+)))
+          (ok (zerop (queued-octets conn 1)) "nothing is left queued")
+          (ok (zerop (woo.http2.clack::connection-queued-bytes conn)))
+          (ok (null (capture-frames (lambda () (funcall writer "late" :close t))))
+              "later writes send nothing")))))
+
+  (testing "a write that takes the connection past its limit resets that stream"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 100000)
+          (woo.http2.clack:*max-connection-queued-response-bytes* 150000))
+      (multiple-value-bind (conn writers) (writer-conn :stream-ids '(1 3))
+        (let ((chunk (make-array 90000 :element-type '(unsigned-byte 8))))
+          (ok (funcall (first writers) chunk))
+          (let ((frames (capture-frames
+                         (lambda ()
+                           (ok (null (funcall (second writers) chunk))
+                               "the write that crosses the limit returns NIL")))))
+            (ok (rst-frames frames 3) "stream 3 is reset")
+            (ok (null (rst-frames frames 1)) "stream 1 is not"))
+          (ok (= (woo.http2.clack::connection-queued-bytes conn) 90000))
+          (ok (funcall (first writers) "more") "stream 1 still takes writes")))))
+
+  (testing "writes from another thread are bounded before they reach the loop"
+    (let ((d nil)
+          (results nil)
+          (queued nil)
+          (frames nil))
+      (let ((*http2-frame-sink* (lambda (f) (push f frames)))
+            (woo.http2.clack:*max-queued-response-bytes* 100000))
+        (woo.ev.event-loop:with-event-loop ()
+          (setf d (woo.http2.clack::current-loop-dispatcher))
+          (let* ((conn (make-http2-connection))
+                 (stream (make-http2-stream :id 1 :state +state-half-closed-remote+ :window-size 0))
+                 (responder (progn
+                              (register-stream conn stream)
+                              (woo.http2.clack::make-responder
+                               conn nil stream (woo.http2.clack::dispatcher-runner d nil))))
+                 (writer (funcall responder '(200 ())))
+                 (chunk (make-array 10000 :element-type '(unsigned-byte 8))))
+            (bt2:join-thread
+             (bt2:make-thread (lambda ()
+                                (dotimes (i 50)
+                                  (push (funcall writer chunk) results)))))
+            (setf queued (length (woo.http2.clack::dispatcher-thunks d)))
+            (woo.http2.clack::drain-dispatcher d))))
+      (setf results (reverse results)
+            frames (reverse frames))
+      (ok (<= queued 11) (format nil "at most the limit is queued (~D thunks)" queued))
+      (ok (notany #'identity (subseq results 10)) "writes over the limit return NIL")
+      (ok (rst-frames frames 1) "the stream is reset once the loop runs"))))
+
 ;;; Event-loop dispatch: order, and shutdown
 
 (deftest loop-dispatcher
@@ -1294,6 +1443,7 @@
                           (bt2:make-thread (lambda () (funcall responder '(200 ())))))))
             (setf result (funcall writer "x" :close t)))))
       (setf frames (reverse frames))
+      (ok (eq result t) "the write is taken")
       (ok (equal (response-status frames) "200"))
       (ok (equal (map 'string #'code-char (data-bytes frames)) "x"))
       (ok (end-stream-p (car (last frames))))))

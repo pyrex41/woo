@@ -17,6 +17,8 @@
            :request-method-keyword
            :*pathname-chunk-size*
            :*pathname-body-open-hook*
+           :*max-queued-response-bytes*
+           :*max-connection-queued-response-bytes*
            :attach-http2-app
            :build-clack-env
            :send-http2-response
@@ -401,6 +403,17 @@
 (defvar *pathname-body-open-hook* nil
   "When non-nil, called with each file stream opened to read a pathname body.")
 
+(defparameter *max-queued-response-bytes* (* 8 1024 1024)
+  "Most octets a streamed response may hold unsent: queued for the send
+   window, plus written from another thread and not yet run on the loop.
+   A write past it resets the stream (RST_STREAM INTERNAL_ERROR) and the
+   writer drops later writes. Read on the event-loop thread.")
+
+(defparameter *max-connection-queued-response-bytes* (* 64 1024 1024)
+  "Most octets a connection's responses may hold queued for the send window.
+   A streamed write that takes the connection past it resets that stream, as
+   for *max-queued-response-bytes*. Read on the event-loop thread.")
+
 (defun connection-closing-p (conn)
   (woo.http2.connection::http2-connection-closing conn))
 
@@ -457,6 +470,8 @@
   (tail nil :type list)
   ;; Octets of the first chunk already sent.
   (offset 0 :type fixnum)
+  ;; Octets in CHUNKS not yet sent.
+  (queued 0 :type integer)
   ;; A pathname body, sent from PATH-OFFSET up to PATH-END.
   (path nil)
   (path-offset 0 :type integer)
@@ -474,6 +489,7 @@
 
 (defun pending-append (pending octets)
   (when (plusp (length octets))
+    (incf (pending-queued pending) (length octets))
     (let ((cell (list octets)))
       (if (pending-chunks pending)
           (setf (cdr (pending-tail pending)) cell)
@@ -509,6 +525,7 @@
                                                              (subseq chunk start end))
                                                          :end-stream last))
                             (consume-send-window conn stream n)
+                            (decf (pending-queued pending) n)
                             (setf (pending-offset pending) end)
                             (when last
                               (return-from send-pending-chunks :finished)))))
@@ -521,14 +538,16 @@
 (defun send-pending-path (conn stream pending)
   "Send the pathname body as the window allows, reading at most
    *pathname-chunk-size* octets at a time. The file is open only during this
-   call. Returns :finished, :blocked, :failed (the file got shorter), or NIL."
+   call. Returns :finished, :blocked, :failed (the file got shorter, or can
+   no longer be opened or read), or NIL."
   (when (pending-path-done-p pending)
     (return-from send-pending-path nil))
   (when (<= (send-window-available conn stream) 0)
     (return-from send-pending-path :blocked))
   (let ((id (http2-stream-id stream))
         (max (connection-send-max-frame-size conn)))
-    (with-open-file (in (pending-path pending) :element-type '(unsigned-byte 8))
+    (handler-case
+     (with-open-file (in (pending-path pending) :element-type '(unsigned-byte 8))
       (when *pathname-body-open-hook*
         (funcall *pathname-body-open-hook* in))
       (file-position in (pending-path-offset pending))
@@ -550,6 +569,10 @@
                      (consume-send-window conn stream n)
                      (when last
                        (return-from send-pending-path :finished)))))))
+      ;; Deleted, replaced by something unreadable, or an I/O error.
+      ((or file-error stream-error) (e)
+        (vom:error "HTTP/2 pathname body ~A: ~A" (pending-path pending) e)
+        (return-from send-pending-path :failed)))
     nil))
 
 (defun pump-response (conn stream pending)
@@ -578,6 +601,27 @@
   (when (stream-closed-p stream)
     (connection-drop-closed-stream conn stream)))
 
+(defun discard-pending (pending)
+  "Let go of PENDING's unsent octets; a writer may still hold PENDING."
+  (setf (pending-chunks pending) nil
+        (pending-tail pending) nil
+        (pending-offset pending) 0
+        (pending-queued pending) 0))
+
+(defun drop-pending-response (conn stream)
+  "Remove STREAM's entry from the send queue and discard its octets."
+  (let* ((queue (http2-connection-send-queue conn))
+         (pending (gethash (http2-stream-id stream) queue)))
+    (when pending
+      (discard-pending pending)
+      (remhash (http2-stream-id stream) queue))))
+
+(defun reset-response (conn stream)
+  "Abandon STREAM's unfinished response: drop its queue entry and end the
+   stream with RST_STREAM INTERNAL_ERROR, since HEADERS are already out."
+  (drop-pending-response conn stream)
+  (connection-stream-error conn stream +internal-error+))
+
 (defun advance-response (conn stream)
   "Send what the window allows of STREAM's pending response. Returns T once
    the response is complete. A reset or closed stream just loses its entry."
@@ -587,7 +631,7 @@
     (cond
       ((null pending) nil)
       ((not (stream-sendable-p conn stream))
-       (remhash id queue)
+       (drop-pending-response conn stream)
        nil)
       (t
        (ecase (pump-response conn stream pending)
@@ -596,10 +640,9 @@
           (note-response-finished conn stream)
           t)
          (:failed
-          (vom:error "HTTP/2 pathname body ~A got shorter while being sent"
+          (vom:error "HTTP/2 pathname body ~A could not be sent whole"
                      (pending-path pending))
-          (remhash id queue)
-          (connection-stream-error conn stream +internal-error+)
+          (reset-response conn stream)
           nil)
          ((:blocked nil) nil))))))
 
@@ -607,10 +650,24 @@
   (unless (http2-connection-flush-sends conn)
     (setf (http2-connection-flush-sends conn) #'flush-pending-response-data)))
 
+(defun advance-response-guarded (conn stream)
+  "advance-response, but an error resets STREAM instead of escaping, so its
+   queue entry is not retried on every WINDOW_UPDATE and the other queued
+   streams are still served."
+  (handler-case (advance-response conn stream)
+    (error (e)
+      (vom:error "Error sending HTTP/2 response on stream ~D: ~A"
+                 (http2-stream-id stream) e)
+      (handler-case (reset-response conn stream)
+        (error (e)
+          (vom:error "Error resetting HTTP/2 stream ~D: ~A"
+                     (http2-stream-id stream) e)))
+      nil)))
+
 (defun flush-pending-response-data (conn &optional only-stream)
   "Write queued DATA now that a send window has grown. END_STREAM rides the last frame."
   (if only-stream
-      (advance-response conn only-stream)
+      (advance-response-guarded conn only-stream)
       (dolist (id (let ((ids nil))
                     (maphash (lambda (id entry)
                                (declare (ignore entry))
@@ -619,7 +676,7 @@
                     (sort ids #'<)))
         (let ((stream (gethash id (http2-connection-streams conn))))
           (if stream
-              (advance-response conn stream)
+              (advance-response-guarded conn stream)
               (remhash id (http2-connection-send-queue conn)))))))
 
 (defun response-startable-p (conn stream)
@@ -758,46 +815,147 @@
                                 (http2-connection-send-queue conn)))
            pending))))
 
+(defun connection-queued-bytes (conn)
+  "Octets held unsent by all of CONN's queued responses."
+  (let ((total 0))
+    (maphash (lambda (id pending)
+               (declare (ignore id))
+               (incf total (pending-queued pending)))
+             (http2-connection-send-queue conn))
+    total))
+
 (defun streaming-write (conn stream pending octets close)
   "Queue OCTETS on the streaming response PENDING and send what fits.
-   Dropped when PENDING is no longer the stream's response (reset, closed,
-   or already finished)."
+   Returns T when the octets were taken. NIL when they were dropped because
+   PENDING is no longer the stream's response (reset, closed, or already
+   finished), or because what stays queued is over
+   *max-queued-response-bytes* or *max-connection-queued-response-bytes*;
+   then the stream is reset with INTERNAL_ERROR. Not CANCEL: the peer may
+   keep its window closed and still want the response. The server gives up
+   on a response it cannot finish, as for any other internal failure."
+  (unless (eq pending (gethash (http2-stream-id stream)
+                               (http2-connection-send-queue conn)))
+    ;; The peer may have reset the stream, leaving octets only we hold.
+    (discard-pending pending))
   (when (and (eq pending (gethash (http2-stream-id stream)
                                   (http2-connection-send-queue conn)))
              (not (pending-end-stream pending)))
     (pending-append pending octets)
     (when close
       (setf (pending-end-stream pending) t))
-    (advance-response conn stream)))
+    (cond
+      ((advance-response conn stream) t)
+      ;; Reset while sending.
+      ((not (eq pending (gethash (http2-stream-id stream)
+                                 (http2-connection-send-queue conn))))
+       nil)
+      ((or (> (pending-queued pending) *max-queued-response-bytes*)
+           (> (connection-queued-bytes conn) *max-connection-queued-response-bytes*))
+       (vom:warn "HTTP/2 stream ~D: ~D response octets queued, over the limit; resetting"
+                 (http2-stream-id stream) (pending-queued pending))
+       (reset-response conn stream)
+       nil)
+      (t t))))
+
+(defun abandon-response (conn socket stream)
+  "After an error while responding on STREAM: a 500 response when nothing
+   has been sent, else RST_STREAM INTERNAL_ERROR when HEADERS are out and
+   the body is not finished (a second response is not allowed)."
+  (when (http2-socket-accepts-p socket)
+    (cond
+      ((response-startable-p conn stream)
+       (send-http2-response conn stream 500
+                            '(:content-type "text/plain")
+                            "Internal Server Error"))
+      ((gethash (http2-stream-id stream) (http2-connection-send-queue conn))
+       (reset-response conn stream)))))
+
+(defmacro with-response-errors ((conn socket stream what) &body body)
+  "Run BODY. An error is logged and the response abandoned (abandon-response)."
+  (let ((e (gensym "E")))
+    `(handler-case (progn ,@body)
+       (error (,e)
+         (vom:error "Error in HTTP/2 ~A: ~A" ,what ,e)
+         (abandon-response ,conn ,socket ,stream)
+         nil))))
 
 (defun make-responder (conn socket stream run)
   "The Clack responder for a delayed response. A (status headers body)
    response is sent whole. A (status headers) response returns a writer,
    (lambda (data &key start end close)), like HTTP/1's streaming writer.
-   Both may be called from any thread; RUN puts the work on the loop."
+   Both may be called from any thread; RUN puts the work on the loop.
+   An error while sending (a pathname body that cannot be opened, say) is
+   answered with 500, or RST_STREAM once HEADERS are out.
+
+   The writer returns T while the response takes writes, and NIL once it is
+   known to be finished, reset, or dropped for going over
+   *max-queued-response-bytes*; from then on writes are dropped. Called from
+   another thread, the write runs later on the loop, so T means only that
+   the response was alive when the write was queued; a later call returns
+   NIL once a queued write has found it dead."
   (lambda (clack-res)
     (destructuring-bind (status headers &optional (body nil body-p)) clack-res
       (cond
         (body-p
          (funcall run
                   (lambda ()
-                    (when (http2-socket-accepts-p socket)
-                      (send-http2-response conn stream status headers body))))
+                    (with-response-errors (conn socket stream "delayed response")
+                      (when (http2-socket-accepts-p socket)
+                        (send-http2-response conn stream status headers body)))))
          nil)
         (t
-         (let ((pending nil))
-           (funcall run
-                    (lambda ()
-                      (when (http2-socket-accepts-p socket)
-                        (setf pending
-                              (begin-streaming-response conn stream status headers)))))
-           (lambda (data &key (start 0) end close)
-             (let ((octets (octets-of data :start start :end end)))
-               (funcall run
-                        (lambda ()
-                          (when (and pending (http2-socket-accepts-p socket))
-                            (streaming-write conn stream pending octets close)))))
-             nil)))))))
+         (let ((pending nil)
+               (lock (bt2:make-lock :name "woo HTTP/2 writer"))
+               ;; Octets written and not yet run on the loop.
+               (in-transit 0)
+               (dead nil)
+               (limit *max-queued-response-bytes*))
+           (flet ((mark-dead ()
+                    (bt2:with-lock-held (lock) (setf dead t))))
+             (unless (funcall run
+                              (lambda ()
+                                (with-response-errors (conn socket stream "delayed response")
+                                  (when (http2-socket-accepts-p socket)
+                                    (setf pending
+                                          (begin-streaming-response conn stream status headers))))
+                                (unless pending (mark-dead))))
+               (mark-dead))
+             (lambda (data &key (start 0) end close)
+               (let* ((octets (octets-of data :start start :end end))
+                      (len (length octets))
+                      (verdict (bt2:with-lock-held (lock)
+                                 (cond
+                                   (dead :dead)
+                                   ((> (+ in-transit len) limit)
+                                    (setf dead t)
+                                    :over)
+                                   (t (incf in-transit len)
+                                      :ok)))))
+                 (ecase verdict
+                   (:dead nil)
+                   (:over
+                    (vom:warn "HTTP/2 stream ~D: writes outpace the event loop; resetting"
+                              (http2-stream-id stream))
+                    (funcall run
+                             (lambda ()
+                               (when (and pending
+                                          (eq pending (gethash (http2-stream-id stream)
+                                                               (http2-connection-send-queue conn))))
+                                 (reset-response conn stream))))
+                    nil)
+                   (:ok
+                    (unless (funcall run
+                                     (lambda ()
+                                       (bt2:with-lock-held (lock) (decf in-transit len))
+                                       (unless (with-response-errors
+                                                   (conn socket stream "streaming response")
+                                                 (and pending
+                                                      (http2-socket-accepts-p socket)
+                                                      (streaming-write conn stream pending
+                                                                       octets close)))
+                                         (mark-dead))))
+                      (mark-dead))
+                    (bt2:with-lock-held (lock) (not dead)))))))))))))
 
 (defun dispatch-clack-response (conn socket stream response)
   "Send a Clack response. A function is a delayed response, same as HTTP/1."
@@ -811,21 +969,8 @@
               (make-responder conn socket stream (make-loop-runner socket))))))
 
 (defun invoke-http2-app (conn socket stream app env)
-  (handler-case
-      (dispatch-clack-response conn socket stream (funcall app env))
-    (error (e)
-      (vom:error "Error in HTTP/2 app handler: ~A" e)
-      (when (http2-socket-accepts-p socket)
-        (cond
-          ((response-startable-p conn stream)
-           (send-http2-response conn stream 500
-                                '(:content-type "text/plain")
-                                "Internal Server Error"))
-          ;; HEADERS are out and the body is not finished: a second
-          ;; response is not allowed, so end the stream with RST_STREAM.
-          ((gethash (http2-stream-id stream) (http2-connection-send-queue conn))
-           (remhash (http2-stream-id stream) (http2-connection-send-queue conn))
-           (connection-stream-error conn stream +internal-error+)))))))
+  (with-response-errors (conn socket stream "app handler")
+    (dispatch-clack-response conn socket stream (funcall app env))))
 
 (defun request-body-stream (octets)
   "An input stream over the request body, as HTTP/1 passes :raw-body."
