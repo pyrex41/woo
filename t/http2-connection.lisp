@@ -624,7 +624,7 @@
       (ok (= (funcall err) +flow-control-error+))
       (ok (http2-connection-goaway-sent conn))
       (ok (null (woo.http2.connection::http2-connection-last-rst conn)))
-      (ok (= (http2-connection-window-size conn) 5)))))
+      (ok (= (http2-connection-window-size conn) 5))))
 
   (testing "Empty DATA does not apply increment 0"
     (multiple-value-bind (conn err)

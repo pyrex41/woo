@@ -188,9 +188,12 @@
                                  (when ready
                                    (setf detected t)
                                    (install-detected-protocol socket use-h2)
+                                   ;; Parsers declare simple octet vectors, so
+                                   ;; replay a simple copy, not the adjustable buffer.
                                    (when (plusp (length pending))
-                                     (funcall (wev:socket-data socket) pending
-                                              :start 0 :end (length pending)))))))))
+                                     (let ((replay (coerce pending '(simple-array (unsigned-byte 8) (*)))))
+                                       (funcall (wev:socket-data socket) replay
+                                                :start 0 :end (length replay))))))))))
                  (woo.ev.tcp:start-listening-socket socket)))
              (start-multithread-server ()
                (unless (getf vom::*config* :woo.signal)
