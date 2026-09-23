@@ -14,6 +14,7 @@
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes)
   (:export :make-http2-app-handler
+           :request-method-keyword
            :*pathname-chunk-size*
            :*pathname-body-open-hook*
            :attach-http2-app
@@ -123,6 +124,24 @@
                    (cons item (gethash item table))))
              order))))
 
+;; The methods fast-http accepts for HTTP/1, so both protocols give an
+;; application the same set. Methods are case-sensitive (RFC 9110 §9.1).
+;; A client-chosen string is never interned: that would grow the heap
+;; without bound.
+(defparameter *request-methods*
+  (let ((table (make-hash-table :test 'equal)))
+    (dolist (method '(:CHECKOUT :CONNECT :COPY :DELETE :GET :HEAD :LOCK
+                      :M-SEARCH :MERGE :MKACTIVITY :MKCALENDAR :MKCOL :MOVE
+                      :NOTIFY :OPTIONS :PATCH :POST :PROPFIND :PROPPATCH
+                      :PURGE :PUT :REPORT :SEARCH :SUBSCRIBE :TRACE :UNLOCK
+                      :UNSUBSCRIBE)
+                    table)
+      (setf (gethash (symbol-name method) table) method))))
+
+(defun request-method-keyword (method)
+  "The keyword for a known request method, else NIL."
+  (values (gethash method *request-methods*)))
+
 (defun build-clack-env (socket stream headers)
   "Build Clack environment from HTTP/2 stream headers.
    Returns NIL if the header list is not a valid HTTP/2 request."
@@ -145,8 +164,8 @@
             (value (cdr header)))
         (cond
           ((string= name ":method")
-           (setf (getf env :request-method)
-                 (intern (string-upcase value) :keyword)))
+           ;; NIL for a method we do not know; the request gets 501.
+           (setf (getf env :request-method) (request-method-keyword value)))
           ((string= name ":path")
            (let* ((path value)
                   (query-pos (position #\? path)))
@@ -736,18 +755,28 @@
   "An input stream over the request body, as HTTP/1 passes :raw-body."
   (flex:make-in-memory-input-stream octets :end (length octets)))
 
+(defun respond-not-implemented (conn stream)
+  "A request method we do not know. RFC 9110 §9.1: respond 501."
+  (send-http2-response conn stream 501
+                       '(:content-type "text/plain")
+                       "Not Implemented"))
+
 (defun run-request (conn socket stream app env body trailers)
-  (let ((body (or body (empty-octets))))
-    (setf (getf env :http2.connection) conn
-          (getf env :raw-body) (request-body-stream body)
-          ;; Trailer fields as received, an alist of (name . value).
-          (getf env :http2.trailers) trailers)
-    ;; HTTP/2 has no chunked coding, so a body without content-length
-    ;; gets its length here; Lack reads a body only when it is set.
-    (when (and (plusp (length body))
-               (null (getf env :content-length)))
-      (setf (getf env :content-length) (length body)))
-    (invoke-http2-app conn socket stream app env)))
+  (cond
+    ((null (getf env :request-method))
+     (respond-not-implemented conn stream))
+    (t
+     (let ((body (or body (empty-octets))))
+       (setf (getf env :http2.connection) conn
+             (getf env :raw-body) (request-body-stream body)
+             ;; Trailer fields as received, an alist of (name . value).
+             (getf env :http2.trailers) trailers)
+       ;; HTTP/2 has no chunked coding, so a body without content-length
+       ;; gets its length here; Lack reads a body only when it is set.
+       (when (and (plusp (length body))
+                  (null (getf env :content-length)))
+         (setf (getf env :content-length) (length body)))
+       (invoke-http2-app conn socket stream app env)))))
 
 (defun handle-http2-headers (conn socket stream headers end-stream app)
   "Validate, then run APP only for a complete request. Malformed headers RST first.

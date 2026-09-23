@@ -1072,6 +1072,40 @@
         (ok (null (getf env :content-length)))
         (ok (lack.request:make-request env))))))
 
+;;; Request methods are never interned
+
+(deftest unknown-methods-are-not-interned
+  (testing "known methods map to keywords"
+    (ok (eq (woo.http2.clack:request-method-keyword "GET") :get))
+    (ok (eq (woo.http2.clack:request-method-keyword "PROPFIND") :propfind))
+    (ok (null (woo.http2.clack:request-method-keyword "get"))
+        "methods are case-sensitive"))
+  (testing "unknown methods get 501 and create no symbols"
+    (let* ((called 0)
+           (conn (adapter-conn (lambda (env)
+                                 (declare (ignore env))
+                                 (incf called)
+                                 '(200 () "ok"))))
+           (names (loop for i from 0 below 200
+                        collect (format nil "WOOTESTMETHOD~D~D" i (random 1000000))))
+           (statuses nil))
+      (loop for name in names
+            for id from 1 by 2
+            do (push (response-status
+                      (frames-on-stream
+                       (run-adapter-request
+                        conn id
+                        :headers (list (cons ":method" name)
+                                       (cons ":scheme" "https")
+                                       (cons ":path" "/")
+                                       (cons ":authority" "example.com")))
+                       id))
+                     statuses))
+      (ok (zerop called) "the app never sees an unknown method")
+      (ok (every (lambda (s) (equal s "501")) statuses) "every one is 501")
+      (ok (notany (lambda (name) (find-symbol name :keyword)) names)
+          "no keyword was interned"))))
+
 ;;; Pathname bodies are streamed, not read whole
 
 (defun queued-octets (conn stream-id)
