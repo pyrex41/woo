@@ -34,7 +34,8 @@
                 :send-ping
                 :send-pong
                 :send-close
-                :write-websocket-upgrade-response)
+                :write-websocket-upgrade-response
+                :socket-upgraded-p)
   (:import-from :woo.http2.clack
                 :make-http2-app-handler)
   (:import-from :woo.http2.constants
@@ -396,13 +397,19 @@
 ;; Handling responses
 
 (defun handle-response (http socket clack-res)
+  ;; After a WebSocket upgrade the socket carries frames, not HTTP. Whatever
+  ;; the app returned (NIL, which becomes a 500, or a framework's finalized
+  ;; 200), writing it would corrupt the stream.
+  (when (socket-upgraded-p socket)
+    (return-from handle-response nil))
   (handler-case
       (etypecase clack-res
         (list (handle-normal-response http socket clack-res))
         (function (funcall clack-res (lambda (clack-res)
-                                       (handler-case
-                                           (handle-normal-response http socket clack-res)
-                                         (wev:socket-closed ()))))))
+                                       (unless (socket-upgraded-p socket)
+                                         (handler-case
+                                             (handle-normal-response http socket clack-res)
+                                           (wev:socket-closed ())))))))
     (wev:tcp-error (e)
       (vom:error (princ-to-string e)))))
 

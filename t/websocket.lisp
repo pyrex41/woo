@@ -1312,3 +1312,193 @@
           (ok (equalp (fake-flush socket) (server-close-frame 1002))
               "the 1002 close frame is written")
           (ok closed "the flush closes the socket"))))))
+
+;;; The 101 handshake must be real CR LF lines. "\r\n" in a Lisp string is
+;;; the letters r and n, which no client can parse.
+
+(defun octets-string (octets)
+  (map 'string #'code-char octets))
+
+(defun split-crlf (string)
+  "Lines of STRING split on CR LF. A bare CR or LF stays inside a line."
+  (loop with start = 0
+        for pos = (search (coerce '(#\Return #\Newline) 'string) string :start2 start)
+        collect (subseq string start (or pos (length string)))
+        while pos
+        do (setf start (+ pos 2))))
+
+(deftest test-upgrade-response-bytes
+  (testing "the 101 response for the RFC 6455 sample key, byte for byte"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (write-websocket-upgrade-response
+         socket (compute-accept-key "dGhlIHNhbXBsZSBub25jZQ=="))
+        (let* ((bytes (queued-octets socket))
+               (text (octets-string bytes))
+               (lines (split-crlf text)))
+          (ok (equal text
+                     (format nil "HTTP/1.1 101 Switching Protocols~C~C~
+                                  Upgrade: websocket~C~C~
+                                  Connection: Upgrade~C~C~
+                                  Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=~C~C~C~C"
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline))
+              "exact handshake bytes")
+          (ok (equal (first lines) "HTTP/1.1 101 Switching Protocols")
+              "status line ends at CR LF")
+          (ok (equal (last lines 2) '("" ""))
+              "the header block ends with an empty line")
+          (ok (notany (lambda (line) (find #\\ line)) lines)
+              "no backslash escapes leaked into the response")
+          (ok (notany (lambda (line) (or (find #\Return line) (find #\Newline line))) lines)
+              "no bare CR or LF")
+          (let ((headers (loop for line in (subseq lines 1 (- (length lines) 2))
+                               for colon = (position #\: line)
+                               collect (cons (string-downcase (subseq line 0 colon))
+                                             (string-trim " " (subseq line (1+ colon)))))))
+            (ok (equal (cdr (assoc "upgrade" headers :test #'string=)) "websocket"))
+            (ok (equal (cdr (assoc "connection" headers :test #'string=)) "Upgrade"))
+            (ok (equal (cdr (assoc "sec-websocket-accept" headers :test #'string=))
+                       "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")))))))
+  (testing "extra headers are CR LF lines before the blank line"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (write-websocket-upgrade-response socket "abc=" '(:sec-websocket-protocol "chat"))
+        (let ((lines (split-crlf (octets-string (queued-octets socket)))))
+          (ok (equal lines '("HTTP/1.1 101 Switching Protocols"
+                             "Upgrade: websocket"
+                             "Connection: Upgrade"
+                             "Sec-WebSocket-Accept: abc="
+                             "Sec-Websocket-Protocol: chat"
+                             "" ""))))))))
+
+;;; After the upgrade woo must not write the app's HTTP response (NIL turns
+;;; into a 500; a framework finalizes a 200) onto the WebSocket stream.
+
+(deftest test-no-http-response-after-upgrade
+  (testing "handle-response writes nothing to an upgraded socket"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (ok (not (woo.websocket:socket-upgraded-p socket)))
+        (write-websocket-upgrade-response socket "abc=")
+        (ok (woo.websocket:socket-upgraded-p socket))
+        (let ((handshake (queued-octets socket)))
+          (dolist (res (list '(500 nil nil)
+                             '(200 (:content-type "text/html") (""))
+                             (lambda (responder)
+                               (funcall responder '(200 nil ("late"))))))
+            (ok (null (woo::handle-response nil socket res)))
+            (ok (equalp (queued-octets socket) handshake)
+                (format nil "nothing follows the 101 for ~S" res)))))))
+  (testing "setup-websocket alone marks the socket"
+    (let ((socket (make-bare-socket)))
+      (setup-websocket socket)
+      (ok (woo.websocket:socket-upgraded-p socket)))))
+
+;;; Growing a buffer to exactly its new size on every append copies O(n^2)
+;;; octets. Count reallocations instead of timing them.
+
+(defun capacity (array)
+  (array-dimension array 0))
+
+(deftest test-ws-fragment-buffer-grows-geometrically
+  (testing "2000 continuation frames reallocate the fragment buffer O(log n) times"
+    (let* ((n 2000)
+           (piece (make-array 100 :element-type '(unsigned-byte 8) :initial-element 65))
+           (delivered nil)
+           (state (make-parse-state
+                   :on-message (lambda (op data)
+                                 (declare (ignore op))
+                                 (setf delivered data))))
+           (growths 0)
+           (last-capacity nil))
+      (flet ((note ()
+               (let ((c (capacity (woo.websocket::ws-state-fragment-buffer state))))
+                 (unless (eql c last-capacity)
+                   (incf growths)
+                   (setf last-capacity c)))))
+        (ok (eq (feed-ws state (masked-frame +opcode-binary+ piece :fin nil)) t))
+        (note)
+        (loop repeat (- n 2)
+              do (feed-ws state (masked-frame +opcode-continuation+ piece :fin nil))
+                 (note))
+        (ok (eq (feed-ws state (masked-frame +opcode-continuation+ piece)) t))
+        (ok (= (length delivered) (* n 100)) "the whole message is delivered")
+        (ok (every (lambda (b) (= b 65)) delivered))
+        (ok (<= growths 20)
+            (format nil "~D reallocations for ~D fragments" growths n)))))
+  (testing "growth never allocates past +max-ws-payload+"
+    (let* ((max woo.websocket:+max-ws-payload+)
+           (buf (make-array (- max 10) :element-type '(unsigned-byte 8)
+                                       :adjustable t :fill-pointer (- max 10)))
+           (grown (woo.websocket::grow-octet-buffer buf (- max 5) max)))
+      (ok (= (length grown) (- max 5)))
+      (ok (= (capacity grown) max)))))
+
+(deftest test-ws-read-buffer-grows-geometrically
+  (testing "a 200 KB frame read 1000 octets at a time reallocates O(log n) times"
+    (let* ((payload (make-array 200000 :element-type '(unsigned-byte 8) :initial-element 7))
+           (frame (masked-frame +opcode-binary+ payload))
+           (got nil)
+           (socket (make-bare-socket))
+           (state (setup-websocket socket
+                                   :on-message (lambda (op data)
+                                                 (declare (ignore op))
+                                                 (setf got data))))
+           (reader (woo.ev.socket:socket-data socket))
+           (growths 0)
+           (last-capacity (capacity (woo.websocket::ws-state-buffer state))))
+      (loop for start from 0 below (length frame) by 1000
+            do (funcall reader frame :start start :end (min (length frame) (+ start 1000)))
+               (let ((c (capacity (woo.websocket::ws-state-buffer state))))
+                 (unless (eql c last-capacity)
+                   (incf growths)
+                   (setf last-capacity c))))
+      (ok (equalp got payload) "the frame is delivered intact")
+      (ok (<= growths 20)
+          (format nil "~D reallocations for ~D reads" growths
+                  (ceiling (length frame) 1000))))))
+
+;;; A close frame's payload is at most 125 octets: 2 for the code, 123 for
+;;; the reason, cut at a UTF-8 character boundary.
+
+(defun close-frame-payload-sent (socket)
+  "Payload of the single unmasked close frame queued on SOCKET."
+  (let* ((frame (queued-octets socket))
+         (len7 (logand (aref frame 1) #x7F)))
+    (ok (= (aref frame 0) (logior #x80 +opcode-close+)))
+    (ok (< len7 126) "a control frame uses the 7-bit length")
+    (subseq frame 2 (+ 2 len7))))
+
+(deftest test-send-close-caps-reason
+  (testing "a short reason is sent whole"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (send-close socket 1000 "bye")
+        (ok (equalp (close-frame-payload-sent socket)
+                    (concat-octets (close-frame-payload 1000)
+                                   (string-to-utf-8-bytes "bye")))))))
+  (testing "an ASCII reason is cut to 123 octets"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        (send-close socket 1001 (make-string 300 :initial-element #\x))
+        (let ((payload (close-frame-payload-sent socket)))
+          (ok (= (length payload) 125))
+          (ok (= (+ (ash (aref payload 0) 8) (aref payload 1)) 1001))))))
+  (testing "a multi-byte reason is cut before a split character"
+    (with-fake-event-loop ()
+      (let ((socket (make-bare-socket)))
+        ;; U+00E9 is 2 octets; octet 123 is the second half of the 62nd.
+        (send-close socket 1000 (make-string 100 :initial-element (code-char #xE9)))
+        (let* ((payload (close-frame-payload-sent socket))
+               (reason (subseq payload 2)))
+          (ok (= (length reason) 122))
+          (ok (woo.websocket::valid-utf-8-p reason))
+          (ok (equal (utf-8-bytes-to-string reason)
+                     (make-string 61 :initial-element (code-char #xE9))))))))
+  (testing "4-octet characters"
+    (let ((reason (woo.websocket::truncate-close-reason
+                   (string-to-utf-8-bytes
+                    (make-string 40 :initial-element (code-char #x1F600))))))
+      (ok (= (length reason) 120))
+      (ok (woo.websocket::valid-utf-8-p reason)))))

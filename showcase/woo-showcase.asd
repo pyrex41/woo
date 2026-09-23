@@ -9,7 +9,11 @@
                "djula"
                "jonathan"
                "trivial-utf-8"
-               "cl-ppcre")
+               "cl-ppcre"
+               ;; Delayed responses on woo's event loop
+               "lev"
+               "cffi"
+               "bordeaux-threads")
   :components ((:module "src"
                 :components
                 ((:file "package")

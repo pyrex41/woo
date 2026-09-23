@@ -26,6 +26,7 @@
            :send-pong
            :send-close
            :write-websocket-upgrade-response
+           :socket-upgraded-p
            :+opcode-continuation+
            :+opcode-text+
            :+opcode-binary+
@@ -96,6 +97,21 @@
   "The WS-CLOSE of SOCKET, created on first use."
   (or (gethash socket *socket-close-states*)
       (setf (gethash socket *socket-close-states*) (make-ws-close))))
+
+(defvar *upgraded-sockets*
+  #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized t)
+  #+ccl (make-hash-table :test 'eq :weak :key)
+  #+lispworks (make-hash-table :test 'eq :weak-kind :key)
+  #-(or sbcl ccl lispworks) (make-hash-table :test 'eq))
+
+(defun socket-upgraded-p (socket)
+  "True once SOCKET has been handed to WebSocket: the 101 response was
+   written or SETUP-WEBSOCKET installed its reader. The HTTP response path
+   must write nothing more to it, whatever the application returned."
+  (values (gethash socket *upgraded-sockets*)))
+
+(defun mark-socket-upgraded (socket)
+  (setf (gethash socket *upgraded-sockets*) t))
 
 (defstruct ws-state
   "WebSocket connection state."
@@ -284,6 +300,17 @@
         (setf (fill-pointer buf) remaining
               (ws-state-read-pos state) 0)))))
 
+(defun grow-octet-buffer (buf new-length limit)
+  "Set BUF's fill pointer to NEW-LENGTH, returning BUF or its replacement.
+   Capacity grows geometrically (doubling, at most LIMIT unless NEW-LENGTH
+   itself is larger), so appending n octets in pieces copies O(n) octets
+   rather than O(n^2)."
+  (let ((capacity (array-dimension buf 0)))
+    (if (<= new-length capacity)
+        (progn (setf (fill-pointer buf) new-length) buf)
+        (adjust-array buf (max new-length (min limit (max 256 (* 2 capacity))))
+                      :fill-pointer new-length))))
+
 (defun append-fragment (state payload)
   "Append PAYLOAD to the open fragment. Fail the connection instead of
    growing past +MAX-WS-PAYLOAD+. Returns T on success, NIL after WS-FAIL."
@@ -293,7 +320,7 @@
     (when (> new +max-ws-payload+)
       (ws-fail state "fragment exceeds maximum payload" 1009)
       (return-from append-fragment nil))
-    (let ((grown (adjust-array frag new :fill-pointer new)))
+    (let ((grown (grow-octet-buffer frag new +max-ws-payload+)))
       (setf (ws-state-fragment-buffer state) grown)
       (replace grown payload :start1 old))
     t))
@@ -511,11 +538,28 @@
   "Send a pong frame."
   (send-frame socket +opcode-pong+ payload))
 
+(defconstant +max-close-reason-octets+ 123
+  "A control frame payload is at most 125 octets (RFC 6455 5.5); the close
+   status code takes two.")
+
+(defun truncate-close-reason (octets)
+  "OCTETS cut to +MAX-CLOSE-REASON-OCTETS+ at a UTF-8 character boundary."
+  (if (<= (length octets) +max-close-reason-octets+)
+      octets
+      (let ((end +max-close-reason-octets+))
+        ;; Back up over continuation octets (10xxxxxx) so the character
+        ;; starting at END is dropped whole.
+        (loop while (and (plusp end)
+                         (= (logand (aref octets end) #xC0) #x80))
+              do (decf end))
+        (subseq octets 0 end))))
+
 (defun send-close (socket &optional (code 1000) (reason ""))
   "Start the closing handshake. Later frames, and a second close, are
    dropped. The socket stays open for the peer's close; receiving it closes
-   the socket (the connection timeout bounds a peer that never answers)."
-  (let* ((reason-bytes (string-to-utf-8-bytes reason))
+   the socket (the connection timeout bounds a peer that never answers).
+   A REASON over 123 UTF-8 octets is truncated at a character boundary."
+  (let* ((reason-bytes (truncate-close-reason (string-to-utf-8-bytes reason)))
          (payload (make-array (+ 2 (length reason-bytes))
                               :element-type '(unsigned-byte 8))))
     (setf (aref payload 0) (ldb (byte 8 8) code)
@@ -553,6 +597,7 @@
                                                        code
                                                        1000))))
                 :on-error on-error)))
+    (mark-socket-upgraded socket)
     ;; Replace socket's data with our state and install frame parser
     (setf (socket-data socket)
           (lambda (data &key (start 0) (end (length data)))
@@ -567,8 +612,11 @@
                    (let* ((buf (ws-state-buffer state))
                           (new-len (- end start))
                           (old-len (length buf))
-                          (grown (adjust-array buf (+ old-len new-len)
-                                               :fill-pointer (+ old-len new-len))))
+                          ;; A frame larger than the cap fails once its
+                          ;; header is parsed, so the buffer only needs to
+                          ;; hold one maximal frame (14-octet header).
+                          (grown (grow-octet-buffer buf (+ old-len new-len)
+                                                    (+ +max-ws-payload+ 14))))
                      (setf (ws-state-buffer state) grown)
                      (replace grown data :start1 old-len :start2 start :end2 end))
                    ;; Only T means a frame was consumed. NIL waits for more
@@ -584,11 +632,19 @@
 
 (defun write-websocket-upgrade-response (socket accept-key &optional extra-headers)
   "Write a 101 Switching Protocols response for WebSocket upgrade.
-   EXTRA-HEADERS is a plist of additional headers to include."
+   EXTRA-HEADERS is a plist of additional headers to include.
+   The socket then belongs to WebSocket: woo writes no HTTP response for
+   this request (see SOCKET-UPGRADED-P)."
+  (mark-socket-upgraded socket)
   (with-async-writing (socket)
-    (write-socket-data socket #.(string-to-utf-8-bytes "HTTP/1.1 101 Switching Protocols\r\n"))
-    (write-socket-data socket #.(string-to-utf-8-bytes "Upgrade: websocket\r\n"))
-    (write-socket-data socket #.(string-to-utf-8-bytes "Connection: Upgrade\r\n"))
+    ;; "\r\n" in a Lisp string is the letters r and n, not CR LF: end each
+    ;; line with WRITE-SOCKET-CRLF.
+    (write-socket-data socket #.(string-to-utf-8-bytes "HTTP/1.1 101 Switching Protocols"))
+    (write-socket-crlf socket)
+    (write-socket-data socket #.(string-to-utf-8-bytes "Upgrade: websocket"))
+    (write-socket-crlf socket)
+    (write-socket-data socket #.(string-to-utf-8-bytes "Connection: Upgrade"))
+    (write-socket-crlf socket)
     (write-socket-data socket #.(string-to-utf-8-bytes "Sec-WebSocket-Accept: "))
     (write-socket-string socket accept-key)
     (write-socket-crlf socket)

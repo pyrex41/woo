@@ -28,15 +28,35 @@
            (optimize (speed 3) (safety 0)))
   *response*)
 
+(defun positive-integer-or-nil (n)
+  (and (integerp n) (plusp n) n))
+
+(defun cpu-count ()
+  "Online CPU count, or NIL if unknown. sysconf's _SC_NPROCESSORS_ONLN is
+   84 on Linux only (on macOS it is 58 and 84 returns -1), so ask sysctl
+   there."
+  (positive-integer-or-nil
+   (ignore-errors
+     #+darwin
+     (parse-integer (uiop:run-program '("sysctl" "-n" "hw.ncpu")
+                                      :output :string)
+                    :junk-allowed t)
+     #+(and sbcl linux)
+     (sb-alien:alien-funcall
+      (sb-alien:extern-alien "sysconf"
+                             (function sb-alien:long sb-alien:int))
+      84)                               ; _SC_NPROCESSORS_ONLN
+     #-(or darwin (and sbcl linux))
+     nil)))
+
 (defun get-worker-count ()
-  "Get optimal worker count based on CPU cores"
-  (or (ignore-errors 
-        (parse-integer (uiop:getenv "WORKERS") :junk-allowed t))
-      #+sbcl (sb-alien:alien-funcall 
-              (sb-alien:extern-alien "sysconf" 
-                                     (function sb-alien:long sb-alien:int)) 
-              84) ; _SC_NPROCESSORS_ONLN
-      8))
+  "Get optimal worker count based on CPU cores. Always a positive integer,
+   as woo:run requires."
+  (or (positive-integer-or-nil
+       (ignore-errors
+         (parse-integer (uiop:getenv "WORKERS") :junk-allowed t)))
+      (cpu-count)
+      1))
 
 (let ((workers (get-worker-count)))
   (format t "~%=== Woo Benchmark Server ===~%")
