@@ -28,14 +28,38 @@
 
 (defun run-client (program &rest args)
   "Run PROGRAM with ARGS, killed after *client-timeout-seconds*.
-   Returns (values stdout stderr exit-code)."
-  (multiple-value-bind (out err code)
-      (uiop:run-program (list* "perl" "-e" "alarm shift @ARGV; exec @ARGV or exit 127"
-                               (princ-to-string *client-timeout-seconds*)
-                               program args)
-                        :output :string :error-output :string
-                        :ignore-error-status t)
-    (values out err code)))
+   Returns (values stdout stderr exit-code). The exit code is 127 when
+   PROGRAM cannot be started, and :timeout when it was killed. Output goes
+   to files, so a client that writes a lot cannot block on a full pipe."
+  (let ((out-path (temp-path "client-out"))
+        (err-path (temp-path "client-err")))
+    (unwind-protect
+         (let ((proc (handler-case
+                         (uiop:launch-program (cons program args)
+                                              :output out-path
+                                              :if-output-exists :supersede
+                                              :error-output err-path
+                                              :if-error-output-exists :supersede)
+                       (error (e)
+                         (return-from run-client
+                           (values "" (princ-to-string e) 127)))))
+               (deadline (+ (get-internal-real-time)
+                            (* *client-timeout-seconds* internal-time-units-per-second))))
+           (loop while (and (uiop:process-alive-p proc)
+                            (< (get-internal-real-time) deadline))
+                 do (sleep 0.05))
+           (let ((code (cond
+                         ((uiop:process-alive-p proc)
+                          (uiop:terminate-process proc :urgent t)
+                          (uiop:wait-process proc)
+                          :timeout)
+                         (t (uiop:wait-process proc)))))
+             (values (uiop:read-file-string out-path)
+                     (uiop:read-file-string err-path)
+                     code)))
+      (dolist (path (list out-path err-path))
+        (when (probe-file path)
+          (delete-file path))))))
 
 (defun curl-http2-p ()
   (ignore-errors
@@ -117,6 +141,9 @@
   `(let* ((file-path (temp-path "file"))
           (expected-file (file-pattern *file-size*))
           (clack.test:*clack-test-handler* :woo)
+          ;; As in the WebSocket e2e tests: an error in the server is a
+          ;; failed request, not a debugger prompt that hangs the run.
+          (clack.test:*enable-debug* nil)
           (clack.test:*clackup-additional-args*
             (append (and ,tls
                          (list :ssl-cert-file (cert-path "localhost.crt")
