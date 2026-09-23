@@ -476,6 +476,9 @@
   (path nil)
   (path-offset 0 :type integer)
   (path-end 0 :type integer)
+  ;; The file's identity when the response began (open-file-identity). The
+  ;; file is reopened for each send, and must still be the same file.
+  (path-identity nil)
   ;; END_STREAM follows the octets above. NIL while a writer may add more.
   (end-stream nil))
 
@@ -535,11 +538,26 @@
                  (setf (pending-tail pending) nil))))
     nil))
 
+(defun open-file-identity (in)
+  "What identifies the file open on IN, compared with EQUAL. On SBCL its
+   inode, device, size and mtime, from the open descriptor, so a file
+   renamed over the path or grown in place does not match. Elsewhere its
+   write date and length."
+  #+sbcl
+  (let ((st (sb-posix:fstat (sb-sys:fd-stream-fd in))))
+    (list (sb-posix:stat-ino st)
+          (sb-posix:stat-dev st)
+          (sb-posix:stat-size st)
+          (sb-posix:stat-mtime st)))
+  #-sbcl
+  (list (file-write-date in) (file-length in)))
+
 (defun send-pending-path (conn stream pending)
   "Send the pathname body as the window allows, reading at most
    *pathname-chunk-size* octets at a time. The file is open only during this
-   call. Returns :finished, :blocked, :failed (the file got shorter, or can
-   no longer be opened or read), or NIL."
+   call. Returns :finished, :blocked, :failed (the file was replaced or
+   changed since the response began, got shorter, or can no longer be
+   opened or read), or NIL."
   (when (pending-path-done-p pending)
     (return-from send-pending-path nil))
   (when (<= (send-window-available conn stream) 0)
@@ -550,6 +568,12 @@
      (with-open-file (in (pending-path pending) :element-type '(unsigned-byte 8))
       (when *pathname-body-open-hook*
         (funcall *pathname-body-open-hook* in))
+      ;; Octets from another file, or from a changed one, would reach the
+      ;; peer as one body under the content-length already sent.
+      (unless (equal (open-file-identity in) (pending-path-identity pending))
+        (vom:error "HTTP/2 pathname body ~A changed while being sent"
+                   (pending-path pending))
+        (return-from send-pending-path :failed))
       (file-position in (pending-path-offset pending))
       (loop until (pending-path-done-p pending)
             do (let ((n (min *pathname-chunk-size* max
@@ -727,16 +751,18 @@
   (let ((pending (make-pending-response :end-stream t)))
     (cond
       ((pathnamep body)
-       (let ((size (with-open-file (in body :element-type '(unsigned-byte 8))
-                     (file-length in)))
-             (headers (copy-list headers)))
-         (unless (response-header-present-p headers :content-type)
-           (setf (getf headers :content-type) (mimes:mime body)))
-         (unless (response-header-present-p headers :content-length)
-           (setf (getf headers :content-length) size))
-         (setf (pending-path pending) body
-               (pending-path-end pending) size)
-         (values headers pending)))
+       (multiple-value-bind (size identity)
+           (with-open-file (in body :element-type '(unsigned-byte 8))
+             (values (file-length in) (open-file-identity in)))
+         (let ((headers (copy-list headers)))
+           (unless (response-header-present-p headers :content-type)
+             (setf (getf headers :content-type) (mimes:mime body)))
+           (unless (response-header-present-p headers :content-length)
+             (setf (getf headers :content-length) size))
+           (setf (pending-path pending) body
+                 (pending-path-end pending) size
+                 (pending-path-identity pending) identity)
+           (values headers pending))))
       (t
        (dolist (octets (body-chunks body))
          (pending-append pending octets))

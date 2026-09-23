@@ -1330,6 +1330,77 @@
         (ok (end-stream-p (car (last frames))))
         (ok (null (gethash 1 (http2-connection-streams conn))) "the stream is closed")))))
 
+;;; A pathname body whose file changes mid-send is reset, not sent mixed
+
+(defun replace-file-by-rename (path size)
+  "Write a new file of SIZE octets, different from write-pattern-file's,
+   and rename it over PATH, so PATH names a new inode."
+  (let ((tmp (make-pathname :type "new" :defaults path))
+        (bytes (make-array size :element-type '(unsigned-byte 8) :initial-element #xEE)))
+    (with-open-file (out tmp :direction :output :if-exists :supersede
+                             :element-type '(unsigned-byte 8))
+      (write-sequence bytes out))
+    (rename-file tmp path)))
+
+(defun append-to-file (path size)
+  (with-open-file (out path :direction :output :if-exists :append
+                            :element-type '(unsigned-byte 8))
+    (write-sequence (make-array size :element-type '(unsigned-byte 8) :initial-element #xAA)
+                    out)))
+
+(defun check-changed-file-resets (name change)
+  "Send a 200000-octet file on stream 1 and a small body on stream 3, call
+   CHANGE with the path once the first window is used, then open the windows."
+  (let* ((path (merge-pathnames name (uiop:temporary-directory)))
+         (conn (make-http2-connection))
+         (file-stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+         (other (make-http2-stream :id 3 :state +state-half-closed-remote+))
+         (body (make-array 1000 :element-type '(unsigned-byte 8) :initial-element 5)))
+    (register-stream conn file-stream)
+    (register-stream conn other)
+    (setf (woo.http2.connection::http2-connection-last-stream-id conn) 3)
+    (unwind-protect
+         (let ((expected (write-pattern-file path 200000))
+               (first-part nil))
+           (multiple-value-bind (sent frames) (capture-response conn file-stream 200 nil path)
+             (ok (not sent))
+             (setf first-part (data-bytes frames)))
+           (ok (equalp first-part (subseq expected 0 (length first-part)))
+               "the first window comes from the original file")
+           (ok (not (send-http2-response conn other 200 nil body)))
+           (funcall change path)
+           (let* ((frames (capture-frames
+                           (lambda ()
+                             (connection-process-frame conn (make-window-update-frame 1 300000))
+                             (connection-process-frame conn (make-window-update-frame 0 300000)))))
+                  (rst (rst-frames frames 1)))
+             (ok (= (length rst) 1) "stream 1 is reset")
+             (when rst
+               (ok (= (rst-code (first rst)) woo.http2.constants:+internal-error+)))
+             (ok (null (frames-of-type (frames-on-stream frames 1) +frame-data+))
+                 "no octets of the changed file are sent")
+             (ok (equalp (data-bytes (frames-on-stream frames 3)) body)
+                 "stream 3 gets its whole body"))
+           (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))
+               "the entry is dropped")
+           (ok (null (capture-frames
+                      (lambda ()
+                        (connection-process-frame conn (make-window-update-frame 0 100)))))
+               "a later WINDOW_UPDATE sends nothing")
+           (ok (not (http2-connection-goaway-sent conn))))
+      (when (probe-file path) (delete-file path)))))
+
+(deftest changed-pathname-bodies
+  (testing "a file replaced by one of equal size mid-send is reset"
+    (check-changed-file-resets "woo-h2-replace-equal.bin"
+                               (lambda (path) (replace-file-by-rename path 200000))))
+  (testing "a file replaced by a larger one mid-send is reset"
+    (check-changed-file-resets "woo-h2-replace-larger.bin"
+                               (lambda (path) (replace-file-by-rename path 300000))))
+  (testing "a file appended to in place mid-send is reset"
+    (check-changed-file-resets "woo-h2-append.bin"
+                               (lambda (path) (append-to-file path 1000)))))
+
 ;;; Streamed writes are bounded
 
 (defun writer-conn (&key (stream-ids '(1)))
