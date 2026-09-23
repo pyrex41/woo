@@ -35,7 +35,9 @@
                 :send-pong
                 :send-close
                 :write-websocket-upgrade-response
-                :socket-upgraded-p)
+                :socket-upgraded-p
+                :feed-websocket-data
+                :take-pending-websocket-data)
   (:import-from :woo.http2.clack
                 :make-http2-app-handler)
   (:import-from :woo.http2.constants
@@ -53,6 +55,9 @@
                 :http-method
                 :http-resource
                 :http-headers
+                :http-upgrade-p
+                :http-chunked-p
+                :http-content-length
                 :http-major-version
                 :http-minor-version
                 :parsing-error
@@ -287,40 +292,145 @@
     (otherwise (error-invalid-http-version major minor))))
 
 (defun setup-parser (socket)
+  ;; A request with an Upgrade header may be followed, in the same read, by
+  ;; octets of the new protocol: a WebSocket client need not wait for the
+  ;; 101. fast-http stops at the end of such a request but does not say
+  ;; where that is, so the reader feeds it one piece at a time, each ending
+  ;; at a CR LF CR LF (every header block ends there) or at the end of the
+  ;; request's Content-Length body. Once the application has upgraded the
+  ;; socket, or is still deciding (a delayed response), the rest of the
+  ;; read and every later one go to FEED-WEBSOCKET-DATA, never to fast-http.
   (let ((http (make-http-request))
-        (body-buffer (make-smart-buffer)))
-    (setf (wev:socket-data socket)
-          (make-parser http
-                       :body-callback
-                       (lambda (data start end)
-                         (declare (type (simple-array (unsigned-byte 8) (*)) data))
-                         (if (smart-buffer::buffer-on-memory-p body-buffer)
-                             (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
-                             (write-to-buffer body-buffer data start end)))
-                       :finish-callback
-                       (flet ((main (env)
-                                (handle-response http socket
-                                                 (if *debug*
-                                                     (funcall *app* env)
-                                                     (if-let (res (handler-case (funcall *app* env)
-                                                                    (error (error)
-                                                                      (vom:error (princ-to-string error))
-                                                                      nil)))
-                                                             res
-                                                             '(500 nil nil))))))
+        (body-buffer (make-smart-buffer))
+        ;; The request being parsed carries an Upgrade header.
+        (upgrade-request nil)
+        ;; Octets of that request's body not yet fed to fast-http.
+        (body-remaining 0)
+        ;; An upgrade request's delayed response has not been given yet.
+        (response-pending nil)
+        ;; Octets are being held for WebSocket while RESPONSE-PENDING.
+        (holding nil)
+        ;; Length of the CR LF CR LF prefix that ends the octets scanned.
+        (crlf-match 0)
+        parser
+        reader)
+    (declare (type fixnum body-remaining crlf-match))
+    (labels ((next-split (data start end)
+               (declare (type (simple-array (unsigned-byte 8) (*)) data)
+                        (type fixnum start end))
+               (if (plusp body-remaining)
+                   (let ((split (min end (+ start body-remaining))))
+                     (decf body-remaining (- split start))
+                     (setq crlf-match 0)
+                     split)
+                   (loop for i of-type fixnum from start below end
+                         for b = (aref data i)
+                         do (setq crlf-match
+                                  (cond ((= b (if (evenp crlf-match) 13 10)) (1+ crlf-match))
+                                        ((= b 13) 1)
+                                        (t 0)))
+                            (when (= crlf-match 4)
+                              ;; The trailing CR LF may start the next match.
+                              (setq crlf-match 2)
+                              (return (1+ i)))
+                         finally (return end))))
+             (hold-for-websocket (data start end)
+               ;; From now on reads are buffered until SETUP-WEBSOCKET
+               ;; installs its reader (or, if it already has, parsed by it).
+               (when (eq (wev:socket-data socket) reader)
+                 (setf (wev:socket-data socket)
+                       (lambda (data &key (start 0) (end (length data)))
+                         (feed-websocket-data socket data :start start :end end))))
+               (setq holding (not (socket-upgraded-p socket)))
+               (feed-websocket-data socket data :start start :end end))
+             (resume-http ()
+               ;; A delayed response declined the upgrade: the held octets
+               ;; are HTTP after all.
+               (when (and holding
+                          (not (socket-upgraded-p socket))
+                          (woo.ev.socket:socket-open-p socket))
+                 (setq holding nil)
+                 (let ((held (take-pending-websocket-data socket)))
+                   (setf (wev:socket-data socket) reader)
+                   (when held
+                     (read-cb socket held)))))
+             (watch-response (upgrading res)
+               (if (and upgrading (functionp res))
+                   (progn
+                     (setq response-pending t)
+                     (lambda (responder)
+                       (funcall res
+                                (lambda (clack-res)
+                                  (setq response-pending nil)
+                                  (prog1 (funcall responder clack-res)
+                                    (resume-http))))))
+                   res)))
+      (setq parser
+            (make-parser http
+                         :header-callback
+                         (lambda (headers)
+                           (declare (ignore headers))
+                           (when (http-upgrade-p http)
+                             (setq upgrade-request t)
+                             ;; fast-http would take a Content-Length body for
+                             ;; the new protocol's first octets. Let it read the
+                             ;; body; NEXT-SPLIT stops the piece where it ends.
+                             ;; A chunked body cannot be delimited that way.
+                             (unless (http-chunked-p http)
+                               (setf (http-upgrade-p http) nil)
+                               (let ((n (http-content-length http)))
+                                 (when (and (integerp n) (plusp n))
+                                   (setq body-remaining n))))))
+                         :body-callback
+                         (lambda (data start end)
+                           (declare (type (simple-array (unsigned-byte 8) (*)) data))
+                           (if (smart-buffer::buffer-on-memory-p body-buffer)
+                               (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
+                               (write-to-buffer body-buffer data start end)))
+                         :finish-callback
                          (lambda ()
-                           (block result
-                             (let ((raw-body (finalize-buffer body-buffer)))
-                               (setq body-buffer (make-smart-buffer))
-                               (handler-bind
-                                   ((error ;; handle errors inside woo
-                                      (lambda (e)
-                                        (unless *debug*
-                                          (vom:crit (princ-to-string e))
-                                          (return-from result (handle-response http socket '(500 nil nil)))))))
-                                 (let ((env (nconc (list :raw-body raw-body)
-                                                   (handle-request http socket))))
-                                   (main env)))))))))))
+                           (let ((upgrading upgrade-request))
+                             ;; fast-http never clears the flag itself.
+                             (setq upgrade-request nil)
+                             (setf (http-upgrade-p http) nil)
+                             (flet ((main (env)
+                                      (handle-response http socket
+                                                       (watch-response
+                                                        upgrading
+                                                        (if *debug*
+                                                            (funcall *app* env)
+                                                            (if-let (res (handler-case (funcall *app* env)
+                                                                           (error (error)
+                                                                             (vom:error (princ-to-string error))
+                                                                             nil)))
+                                                                    res
+                                                                    '(500 nil nil)))))))
+                               (block result
+                                 (let ((raw-body (finalize-buffer body-buffer)))
+                                   (setq body-buffer (make-smart-buffer))
+                                   (handler-bind
+                                       ((error ;; handle errors inside woo
+                                          (lambda (e)
+                                            (unless *debug*
+                                              (vom:crit (princ-to-string e))
+                                              (return-from result (handle-response http socket '(500 nil nil)))))))
+                                     (let ((env (nconc (list :raw-body raw-body)
+                                                       (handle-request http socket))))
+                                       (main env))))))))))
+      (setq reader
+            (lambda (data &key (start 0) (end (length data)))
+              (declare (type (simple-array (unsigned-byte 8) (*)) data)
+                       (type fixnum start end))
+              (loop
+                (when (>= start end)
+                  (return))
+                ;; No HTTP parsing once the socket belongs to WebSocket.
+                (when (or (socket-upgraded-p socket) response-pending)
+                  (return (hold-for-websocket data start end)))
+                (let ((split (next-split data start end)))
+                  (funcall parser data :start start :end split)
+                  (setq start split)))))
+      (setf (wev:socket-data socket) reader))))
 
 (defun stop (server)
   (wev:close-tcp-server server))
