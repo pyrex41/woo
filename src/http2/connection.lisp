@@ -827,11 +827,11 @@
     (return-from handle-window-update-frame
       (connection-protocol-error conn +frame-size-error+)))
   (let ((increment (parse-window-update-payload (frame-payload frame))))
-    (when (zerop increment)
-      (return-from handle-window-update-frame
-        (connection-protocol-error conn +protocol-error+)))
     (if (zerop (frame-stream-id frame))
         (let ((new (+ (http2-connection-remote-window-size conn) increment)))
+          (when (zerop increment)
+            (return-from handle-window-update-frame
+              (connection-protocol-error conn +protocol-error+)))
           (when (> new +max-window-size+)
             (return-from handle-window-update-frame
               (connection-protocol-error conn +flow-control-error+)))
@@ -843,6 +843,12 @@
           (cond
             ((or (null stream)
                  (= (http2-stream-state stream) +state-idle+))
+             (connection-protocol-error conn +protocol-error+))
+            ;; A closed stream sends nothing more, and a placeholder has no
+            ;; real window to overflow. RFC 9113 §5.1: MUST ignore.
+            ((stream-closed-p stream)
+             nil)
+            ((zerop increment)
              (connection-protocol-error conn +protocol-error+))
             (t
              (let ((new (+ (http2-stream-window-size stream) increment)))

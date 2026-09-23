@@ -2000,3 +2000,40 @@
         (ok (= (cdr (assoc +settings-max-concurrent-streams+ settings)) (+ 2728 99))
             "the latest value wins")
         (ok (null (assoc #x100 settings)) "unknown ids are not stored")))))
+
+;;; WINDOW_UPDATE on closed streams (RFC 9113 §5.1, §6.9)
+
+(deftest window-update-on-closed-stream-is-ignored
+  (testing "the largest legal increment on a closed stream is not FLOW_CONTROL_ERROR"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (complete-stream conn 1)
+      (connection-process-frame conn (make-window-update-frame 1 +max-window-size+))
+      (connection-process-frame conn (make-window-update-frame 1 +max-window-size+))
+      (ok (null (funcall err)))
+      (ok (not (http2-connection-goaway-sent conn)))))
+
+  (testing "a stream we reset takes a large increment too"
+    (let ((woo.http2.connection:*max-request-body-size* 3))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (reset-open-stream-1 conn)
+        (connection-process-frame conn (make-window-update-frame 1 +max-window-size+))
+        (ok (= (funcall err) +cancel+))
+        (ok (not (http2-connection-goaway-sent conn))))))
+
+  (testing "increment 0 on a closed stream is ignored as well (§5.1)"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (complete-stream conn 1)
+      (with-sent-frames (sent)
+        (connection-process-frame conn (make-window-update-frame 1 0))
+        (ok (null (funcall err)))
+        (ok (null (sent)) "no RST_STREAM or GOAWAY"))))
+
+  (testing "an open stream still overflows at 2^31-1"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (connection-process-frame conn (make-headers-frame 1 (empty-octets) :end-headers t))
+      (connection-process-frame conn (make-window-update-frame 1 +max-window-size+))
+      (ok (= (funcall err) +flow-control-error+)))))
