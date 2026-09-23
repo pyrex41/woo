@@ -1786,3 +1786,112 @@
         (ok (null (funcall err)))
         (ok (not (http2-connection-goaway-sent conn)))
         (ok (equal (funcall calls) '((1 16384 t))))))))
+
+;;; CONTINUATION flood (CVE-2024-27316 class)
+
+(defun open-header-block (conn stream-id)
+  "Start a header block on STREAM-ID that awaits CONTINUATION."
+  (connection-process-frame
+   conn (make-headers-frame stream-id (empty-octets) :end-headers nil)))
+
+(deftest continuation-frame-count-is-capped
+  (testing "empty CONTINUATIONs past the cap are GOAWAY ENHANCE_YOUR_CALM"
+    (ok (<= woo.http2.connection:*max-continuation-frames* 64)
+        "a literal: raising the default must fail this test")
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (with-sent-frames (sent)
+        (open-header-block conn 1)
+        (dotimes (i woo.http2.connection:*max-continuation-frames*)
+          (connection-process-frame conn (make-continuation-frame 1 (empty-octets)
+                                                                  :end-headers nil)))
+        (ok (null (funcall err)) "up to the cap is accepted")
+        (ok (= 1 (http2-connection-awaiting-continuation-stream-id conn)))
+        (connection-process-frame conn (make-continuation-frame 1 (empty-octets)
+                                                                :end-headers nil))
+        (ok (= (funcall err) +enhance-your-calm+))
+        (ok (http2-connection-goaway-sent conn))
+        (ok (null (http2-connection-awaiting-continuation-stream-id conn)))
+        (ok (null (woo.http2.connection::http2-connection-awaiting-continuation-stream conn)))
+        (let ((goaway (find +frame-goaway+ (sent) :key #'woo.http2.frames:frame-type)))
+          (ok goaway)
+          (ok (= (nth-value 1 (woo.http2.frames:parse-goaway-payload
+                               (frame-payload goaway)))
+                 +enhance-your-calm+))))))
+
+  (testing "100,000 empty CONTINUATIONs stop at the cap"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (open-header-block conn 1)
+      (let ((processed 0))
+        (loop repeat 100000
+              until (http2-connection-goaway-sent conn)
+              do (connection-process-frame conn (make-continuation-frame 1 (empty-octets)
+                                                                         :end-headers nil))
+                 (incf processed))
+        (ok (= processed (1+ woo.http2.connection:*max-continuation-frames*))
+            (format nil "~D frames before GOAWAY" processed))
+        (ok (= (funcall err) +enhance-your-calm+)))))
+
+  (testing "a block split over the maximum number of CONTINUATIONs decodes"
+    (multiple-value-bind (conn err)
+        (test-conn)
+      (let* ((headers '((":method" . "GET") (":scheme" . "https")
+                        (":path" . "/split") (":authority" . "example.com")))
+             (block (hpack-block headers))
+             (n woo.http2.connection:*max-continuation-frames*)
+             (got nil))
+        (setf (woo.http2.connection::http2-connection-on-headers conn)
+              (lambda (stream h end-stream)
+                (declare (ignore stream end-stream))
+                (setf got h)))
+        (connection-process-frame
+         conn (make-headers-frame 1 (subseq block 0 1) :end-headers nil :end-stream t))
+        ;; The rest one octet at a time, padded out with empty frames.
+        (loop for i from 1 below (length block)
+              do (connection-process-frame
+                  conn (make-continuation-frame 1 (subseq block i (1+ i)) :end-headers nil)))
+        (loop repeat (- n (length block))
+              do (connection-process-frame
+                  conn (make-continuation-frame 1 (empty-octets) :end-headers nil)))
+        (connection-process-frame conn (make-continuation-frame 1 (empty-octets)
+                                                                :end-headers t))
+        (ok (< (length block) n))
+        (ok (null (funcall err)))
+        (ok (not (http2-connection-goaway-sent conn)))
+        (ok (equal got headers))
+        (ok (stream-half-closed-remote-p (connection-get-stream conn 1)))))))
+
+(deftest continuation-header-buffer-grows-geometrically
+  (testing "a block over 4000 CONTINUATIONs copies O(n) octets, not O(n^2)"
+    (let ((woo.http2.connection:*max-continuation-frames* 100000))
+      (multiple-value-bind (conn err)
+          (test-conn)
+        (set-header-list-limit conn (* 1024 1024))
+        (open-header-block conn 1)
+        (let ((stream (connection-get-stream conn 1))
+              (frames 4000)
+              (chunk 16)
+              (growths 0)
+              (copied 0))
+          (dotimes (i frames)
+            (let* ((before (woo.http2.stream:http2-stream-header-buffer stream))
+                   (capacity (if before (array-total-size before) 0))
+                   (len (if before (length before) 0)))
+              (connection-process-frame conn (make-continuation-frame 1 (ub8 chunk 1)
+                                                                      :end-headers nil))
+              ;; Each reallocation copies the octets already buffered.
+              (let ((after (woo.http2.stream:http2-stream-header-buffer stream)))
+                (when (/= (array-total-size after) capacity)
+                  (incf growths)
+                  (incf copied len)))))
+          (ok (null (funcall err)))
+          (ok (= (length (woo.http2.stream:http2-stream-header-buffer stream))
+                 (* frames chunk)))
+          ;; Doubling from 1024 to 64000 octets is 6 growths. An exact-fit
+          ;; buffer grows on every frame and copies ~128 MB here.
+          (ok (<= growths 10) (format nil "~D growths" growths))
+          (ok (<= copied (* 2 frames chunk)) (format nil "~D octets copied" copied))
+          (ok (<= (woo.http2.connection::http2-connection-header-octets-copied conn)
+                  (* 4 frames chunk))
+              "the connection's own count agrees"))))))

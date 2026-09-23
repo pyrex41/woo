@@ -47,6 +47,7 @@
            :*max-request-body-size*
            :*max-connection-body-buffer*
            :*max-closed-stream-data-resets*
+           :*max-continuation-frames*
            :*connection-specific-headers*
            :connection-specific-header-p
            :http-token-name-p
@@ -96,6 +97,12 @@
   (local-max-frame-size +default-max-frame-size+ :type integer)
   (local-max-concurrent-streams 100 :type integer)
   (awaiting-continuation-stream-id nil)
+  ;; The stream object holding the pending header block. A stream we reset
+  ;; is only a placeholder, so it cannot be found again by id.
+  (awaiting-continuation-stream nil)
+  ;; Octets copied into and out of pending header block buffers. Growth is
+  ;; geometric, so this stays a small multiple of the header octets received.
+  (header-octets-copied 0 :type integer)
   ;; Set when the client preface is accepted. The next frame must be SETTINGS.
   (awaiting-first-settings nil :type boolean)
   ;; Closed streams are removed from STREAMS so they do not accumulate. Only
@@ -137,6 +144,11 @@
   "RST_STREAMs a connection may earn with DATA on half-closed (remote) or
    closed streams. That DATA gets its connection credit back, so without a
    bound a peer could stream it forever. Past this, GOAWAY ENHANCE_YOUR_CALM.")
+
+(defparameter *max-continuation-frames* 64
+  "CONTINUATION frames accepted for one header block. Past this, GOAWAY
+   ENHANCE_YOUR_CALM. Empty frames never reach the header-list cap, so
+   without a count a peer could send them forever (CVE-2024-27316).")
 
 (defun connection-stream-id-closed-p (conn stream-id)
   "True for an id that is not open and has been closed. A client id at or
@@ -391,11 +403,44 @@
   (when stream
     (setf (http2-stream-header-buffer stream) nil
           (http2-stream-awaiting-continuation stream) nil
-          (http2-stream-pending-end-stream stream) nil))
-  (setf (http2-connection-awaiting-continuation-stream-id conn) nil))
+          (http2-stream-pending-end-stream stream) nil
+          (http2-stream-continuation-frames stream) 0))
+  (setf (http2-connection-awaiting-continuation-stream-id conn) nil
+        (http2-connection-awaiting-continuation-stream conn) nil))
+
+;; Smallest capacity allocated for a pending header block.
+(defconstant +min-header-buffer-capacity+ 1024)
+
+(defun header-buffer-append (conn stream octets)
+  "Append OCTETS to the stream's pending header block. Capacity at least
+   doubles when it runs out, up to the header-list cap, so a block split
+   over N frames copies O(size) octets in total rather than O(N * size)."
+  (let* ((buf (or (http2-stream-header-buffer stream)
+                  (make-array 0 :element-type '(unsigned-byte 8)
+                                :adjustable t :fill-pointer 0)))
+         (old-len (fill-pointer buf))
+         (new-len (+ old-len (length octets)))
+         (capacity (array-total-size buf)))
+    (when (> new-len capacity)
+      (let ((grown (max new-len
+                        (min (max (* 2 capacity) +min-header-buffer-capacity+)
+                             (connection-header-list-limit conn)))))
+        (incf (http2-connection-header-octets-copied conn) old-len)
+        (setf buf (adjust-array buf grown))))
+    (setf (fill-pointer buf) new-len)
+    (replace buf octets :start1 old-len)
+    (incf (http2-connection-header-octets-copied conn) (length octets))
+    (setf (http2-stream-header-buffer stream) buf)))
+
+(defun take-header-buffer (conn stream)
+  "The complete pending header block as a simple octet vector."
+  (let ((buf (http2-stream-header-buffer stream)))
+    (incf (http2-connection-header-octets-copied conn) (length buf))
+    (subseq buf 0)))
 
 (defun reject-header-list-size (conn stream)
-  "Oversized header block: GOAWAY and drop any partial continuation."
+  "Oversized or over-fragmented header block: GOAWAY and drop any partial
+   continuation."
   (clear-header-continuation conn stream)
   (connection-protocol-error conn +enhance-your-calm+))
 
@@ -608,17 +653,24 @@
             (if end-headers
                 (finish-header-block conn stream stream-id header-block end-stream)
                 (progn
-                  (setf (http2-stream-header-buffer stream) header-block
-                        (http2-stream-awaiting-continuation stream) t
+                  (setf (http2-stream-header-buffer stream) nil
+                        (http2-stream-continuation-frames stream) 0)
+                  (header-buffer-append conn stream header-block)
+                  (setf (http2-stream-awaiting-continuation stream) t
                         (http2-stream-pending-end-stream stream) end-stream
                         (http2-connection-awaiting-continuation-stream-id conn)
-                        stream-id)))))))))
+                        stream-id
+                        (http2-connection-awaiting-continuation-stream conn)
+                        stream)))))))))
 
 (defun handle-continuation-frame (conn frame)
   "Handle received CONTINUATION frame."
   (let* ((stream-id (frame-stream-id frame))
          (awaiting (http2-connection-awaiting-continuation-stream-id conn))
-         (stream (connection-find-stream conn stream-id)))
+         (pending (http2-connection-awaiting-continuation-stream conn))
+         (stream (if (and pending (= (http2-stream-id pending) stream-id))
+                     pending
+                     (connection-find-stream conn stream-id))))
     (unless (and awaiting stream
                  (= awaiting stream-id)
                  (http2-stream-awaiting-continuation stream))
@@ -629,15 +681,18 @@
            (old-buffer (http2-stream-header-buffer stream))
            (total (+ (if old-buffer (length old-buffer) 0)
                      (length payload))))
+      (when (> (incf (http2-stream-continuation-frames stream))
+               *max-continuation-frames*)
+        (return-from handle-continuation-frame
+          (reject-header-list-size conn stream)))
       (when (header-block-too-large-p conn total)
         (return-from handle-continuation-frame
           (reject-header-list-size conn stream)))
-      (let ((new-buffer (concatenate '(vector (unsigned-byte 8))
-                                     old-buffer payload)))
-        (if end-headers
-            (finish-header-block conn stream stream-id new-buffer
-                                 (http2-stream-pending-end-stream stream))
-            (setf (http2-stream-header-buffer stream) new-buffer))))))
+      (header-buffer-append conn stream payload)
+      (when end-headers
+        (finish-header-block conn stream stream-id
+                             (take-header-buffer conn stream)
+                             (http2-stream-pending-end-stream stream))))))
 
 (defun replenish-connection-window (conn)
   "Return consumed DATA credit to the peer (RFC 9113 §6.9). A WINDOW_UPDATE

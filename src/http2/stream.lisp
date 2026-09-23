@@ -15,6 +15,7 @@
            :http2-stream-header-buffer
            :http2-stream-awaiting-continuation
            :http2-stream-pending-end-stream
+           :http2-stream-continuation-frames
            :http2-stream-refused
            :http2-stream-trailers
            :http2-stream-trailers-received
@@ -61,6 +62,8 @@
   (header-buffer nil)
   (awaiting-continuation nil :type boolean)
   (pending-end-stream nil :type boolean)
+  ;; CONTINUATION frames received for the pending header block.
+  (continuation-frames 0 :type fixnum)
   ;; Set when the stream id is consumed but the request is refused.
   ;; The header block is still decoded; :recv-headers is not run.
   (refused nil :type boolean)
