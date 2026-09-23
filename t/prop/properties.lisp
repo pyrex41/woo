@@ -30,6 +30,7 @@
   (:import-from :woo.http2.constants
                 :+frame-data+
                 :+frame-headers+
+                :+frame-continuation+
                 :+frame-settings+
                 :+frame-window-update+
                 :+flag-end-headers+
@@ -604,3 +605,233 @@
                         (rng-choose rng '(#x10 #x20 #x40 #x70)))
                       :shrinker (lambda (r) (list #x10)))
       "RSV bits must be 0"))
+
+;;; Random frame sequences against one connection
+
+(defun gen-octets (rng n &optional (byte nil))
+  (let ((v (make-array n :element-type '(unsigned-byte 8))))
+    (dotimes (i n v)
+      (setf (aref v i) (or byte (rng-int rng 0 255))))))
+
+(defun u32-octets (n)
+  (let ((v (make-array 4 :element-type '(unsigned-byte 8))))
+    (dotimes (i 4 v)
+      (setf (aref v i) (ldb (byte 8 (* 8 (- 3 i))) n)))))
+
+(defun gen-stream-id (rng)
+  ;; Mostly a few client ids so streams are reused, reset and closed;
+  ;; sometimes 0 or an even id, which are illegal for most frame types.
+  (if (< (rng-int rng 0 9) 8)
+      (1+ (* 2 (rng-int rng 0 5)))
+      (rng-choose rng '(0 2 101))))
+
+(defun gen-header-block (rng)
+  (case (rng-int rng 0 7)
+    ;; custom-key: custom-header with incremental indexing (RFC 7541 C.2.1)
+    (0 (make-array 26 :element-type '(unsigned-byte 8)
+                      :initial-contents
+                      '(#x40 #x0a #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x6b #x65 #x79
+                        #x0d #x63 #x75 #x73 #x74 #x6f #x6d #x2d #x68 #x65 #x61 #x64
+                        #x65 #x72)))
+    (1 (gen-octets rng (rng-int rng 0 40)))           ; usually undecodable
+    (t (hpack-encode-headers
+        (make-hpack-context)
+        (append '((":method" . "POST") (":scheme" . "https") (":path" . "/"))
+                (when (rng-bool rng)
+                  (list (cons "content-length" (princ-to-string (rng-int rng 0 3000)))))
+                (gen-header-list rng 4))))))
+
+(defun gen-settings-payload (rng)
+  (let ((entries (loop repeat (rng-int rng 0 6)
+                       collect (cons (rng-choose rng '(1 2 3 4 5 6 #x77))
+                                     (rng-choose rng (list 0 1 100 16384 65535
+                                                           +max-window-size+
+                                                           (1+ +max-window-size+)
+                                                           (rng-int rng 0 #xFFFFFF)))))))
+    (let ((v (make-array (* 6 (length entries)) :element-type '(unsigned-byte 8))))
+      (loop for (id . value) in entries
+            for i from 0 by 6
+            do (setf (aref v i) (ldb (byte 8 8) id)
+                     (aref v (+ i 1)) (ldb (byte 8 0) id))
+               (replace v (u32-octets value) :start1 (+ i 2)))
+      (if (zerop (rng-int rng 0 15))
+          (subseq v 0 (max 0 (1- (length v)))) ; a bad length
+          v))))
+
+(defun gen-valid-settings-payload (rng)
+  (let ((entries (loop repeat (rng-int rng 0 4)
+                       collect (rng-choose rng (list (cons 1 (rng-choose rng '(0 100 4096)))
+                                                     (cons 2 0)
+                                                     (cons 3 100)
+                                                     (cons 4 (rng-choose rng (list 0 1000 65535
+                                                                                   1000000)))
+                                                     (cons 5 (rng-choose rng '(16384 32768)))
+                                                     (cons 6 1000)
+                                                     (cons #x77 (rng-int rng 0 1000)))))))
+    (let ((v (make-array (* 6 (length entries)) :element-type '(unsigned-byte 8))))
+      (loop for (id . value) in entries
+            for i from 0 by 6
+            do (setf (aref v i) (ldb (byte 8 8) id)
+                     (aref v (+ i 1)) (ldb (byte 8 0) id))
+               (replace v (u32-octets value) :start1 (+ i 2)))
+      v)))
+
+(defun gen-one-frame (rng)
+  "A frame spec (type flags stream-id payload): valid or not."
+  (let ((sid (gen-stream-id rng)))
+    (case (rng-int rng 0 9)
+      ((0 1)
+       (list +frame-headers+
+             (logior (if (rng-bool rng) +flag-end-headers+ 0)
+                     (if (rng-bool rng) 1 0)) ; END_STREAM
+             sid (gen-header-block rng)))
+      (2
+       (list +frame-continuation+ (if (rng-bool rng) +flag-end-headers+ 0)
+             sid (gen-octets rng (rng-int rng 0 8))))
+      ((3 4)
+       (let ((n (rng-choose rng (list 0 1 100 1000 16384 (rng-int rng 0 2000)))))
+         (list +frame-data+ (if (rng-bool rng) 1 0) sid (gen-octets rng n 7))))
+      (5
+       (list 3 0 sid (if (zerop (rng-int rng 0 7))
+                         (gen-octets rng 3)
+                         (u32-octets (rng-int rng 0 13)))))
+      ((6 7)
+       (list +frame-window-update+ 0 (if (rng-bool rng) 0 sid)
+             (u32-octets (rng-choose rng (list 0 1 1000 65535 +max-window-size+
+                                               (rng-int rng 1 +max-window-size+))))))
+      (t
+       (list +frame-settings+ (if (zerop (rng-int rng 0 7)) +flag-ack+ 0)
+             (if (zerop (rng-int rng 0 15)) 1 0)
+             (gen-settings-payload rng))))))
+
+(defun gen-header-run (rng sid block end-stream)
+  "HEADERS carrying BLOCK on SID, split over CONTINUATIONs about a third of
+   the time. A run is sometimes padded with empty frames past the count cap."
+  (if (< (rng-int rng 0 2) 2)
+      (list (list +frame-headers+ (logior +flag-end-headers+ (if end-stream 1 0))
+                  sid block))
+      (let* ((cut (rng-int rng 0 (length block)))
+             (empties (rng-choose rng (list 0 0 1 10 62 63 64 (rng-int rng 0 150)))))
+        (append (list (list +frame-headers+ (if end-stream 1 0) sid (subseq block 0 cut)))
+                (loop repeat empties
+                      collect (list +frame-continuation+ 0 sid (gen-octets rng 0)))
+                (list (list +frame-continuation+ +flag-end-headers+ sid
+                            (subseq block cut)))))))
+
+(defun gen-frame-sequence (rng size)
+  "Mostly well-formed traffic on a handful of streams, with invalid frames
+   mixed in: requests (some split over CONTINUATION), trailers, DATA (some
+   past the body cap, so we RST), RST_STREAM, WINDOW_UPDATE and SETTINGS."
+  (let ((frames nil)
+        (next-id 1)
+        (used nil)
+        (chaos (rng-choose rng '(0 2 5 20))))  ; percent of arbitrary frames
+    (flet ((emit (list) (dolist (f list) (push f frames)))
+           (some-id ()
+             (if used (rng-choose rng used) 1)))
+      ;; One request first, so frames on a used id are not all idle errors.
+      (push (list +frame-headers+ +flag-end-headers+ 1
+                  (hpack-encode-headers (make-hpack-context)
+                                        '((":method" . "POST") (":path" . "/"))))
+            frames)
+      (setf next-id 3 used (list 1))
+      (loop repeat (rng-int rng 1 (+ 10 (* 4 size)))
+            do (if (< (rng-int rng 0 99) chaos)
+                   (emit (list (gen-one-frame rng)))
+                   (case (rng-int rng 0 9)
+                     ((0 1)
+                      (let ((sid next-id))
+                        (incf next-id 2)
+                        (push sid used)
+                        (emit (gen-header-run rng sid (gen-header-block rng)
+                                              (zerop (rng-int rng 0 3))))))
+                     (2
+                      (emit (gen-header-run rng (some-id)
+                                            (if (rng-bool rng)
+                                                (gen-header-block rng)
+                                                (hpack-encode-headers
+                                                 (make-hpack-context)
+                                                 '(("x-trailer" . "t"))))
+                                            (rng-int rng 0 5))))
+                     ((3 4 5)
+                      (emit (list (list +frame-data+ (if (zerop (rng-int rng 0 3)) 1 0)
+                                        (some-id)
+                                        (gen-octets rng (rng-choose rng '(0 1 100 1000 2999 4000
+                                                                         16384))
+                                                    7)))))
+                     (6
+                      (emit (list (list 3 0 (some-id) (u32-octets (rng-int rng 0 13))))))
+                     (7
+                      (emit (list (list +frame-window-update+ 0
+                                        (if (rng-bool rng) 0 (some-id))
+                                        (u32-octets
+                                         (rng-choose rng (list 1 1000 65535
+                                                               (rng-int rng 1 100000)
+                                                               (if (zerop (rng-int rng 0 4))
+                                                                   +max-window-size+
+                                                                   1))))))))
+                     (t
+                      (emit (list (list +frame-settings+ 0 0
+                                        (gen-valid-settings-payload rng))))))))
+      (nreverse frames))))
+
+(defun window-ok-p (n)
+  (<= (- +max-window-size+) n +max-window-size+))
+
+(defun connection-invariants-hold-p (specs)
+  "Feed SPECS to a fresh connection and check invariants after every frame."
+  (let* ((codes nil)
+         (sent nil)
+         (header-input 0)
+         (run 0)                        ; CONTINUATIONs since the last HEADERS
+         (conn (make-http2-connection
+                :on-error (lambda (c d) (declare (ignore d)) (push c codes))))
+         (woo.http2.connection:*http2-frame-sink* (lambda (f) (push f sent)))
+         (woo.http2.connection:*max-request-body-size* 3000))
+    (dolist (spec specs t)
+      (destructuring-bind (type flags sid payload) spec
+        (when (member type (list +frame-headers+ +frame-continuation+))
+          (incf header-input (length payload)))
+        (setf run (cond ((= type +frame-continuation+) (1+ run))
+                        ((= type +frame-headers+) 0)
+                        (t run)))
+        (let ((goaway-before (http2-connection-goaway-sent conn))
+              (sent-before (length sent)))
+          ;; Nothing escapes: the handler inside reports a Lisp error as
+          ;; INTERNAL_ERROR, which is also a failure here.
+          (connection-process-frame conn (make-frame :type type :flags flags
+                                                     :stream-id sid :payload payload))
+          (unless (and
+                   (not (member woo.http2.constants:+internal-error+ codes))
+                   (window-ok-p (woo.http2.connection:http2-connection-window-size conn))
+                   (window-ok-p (woo.http2.connection:http2-connection-remote-window-size conn))
+                   (loop for stream being the hash-values
+                           of (woo.http2.connection:http2-connection-streams conn)
+                         always (and (window-ok-p (woo.http2.stream:http2-stream-window-size stream))
+                                     (window-ok-p (woo.http2.stream:http2-stream-recv-window-size
+                                                   stream))))
+                   (<= (length (woo.http2.connection:http2-connection-remote-settings conn)) 6)
+                   (<= (hash-table-count
+                        (woo.http2.connection::http2-connection-closed-streams conn))
+                       woo.http2.connection::*closed-stream-retention*)
+                   ;; After GOAWAY nothing more is sent.
+                   (or (not goaway-before) (= (length sent) sent-before))
+                   (<= (count woo.http2.constants:+frame-goaway+ sent
+                              :key #'frame-type)
+                       1)
+                   ;; A header block cannot be stretched past the frame cap.
+                   (or (<= run woo.http2.connection:*max-continuation-frames*)
+                       (http2-connection-goaway-sent conn))
+                   ;; Header buffering stays linear in the header octets received.
+                   (<= (woo.http2.connection::http2-connection-header-octets-copied conn)
+                       (+ 64 (* 4 header-input))))
+            (format t "~&invariant broken after ~S~%" (list type flags sid (length payload)))
+            (return nil)))))))
+
+(deftest prop-connection-frame-sequences
+  (ok (check-property "http2-connection-random-frames"
+                      #'connection-invariants-hold-p
+                      #'gen-frame-sequence
+                      :shrinker (lambda (specs) (shrink-list specs (constantly nil)))
+                      :iters (* 5 (prop-iters)))
+      "random HEADERS/CONTINUATION/DATA/RST/WINDOW_UPDATE/SETTINGS keep the invariants"))
