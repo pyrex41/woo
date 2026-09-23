@@ -511,6 +511,24 @@
                  (expect-close-reply conn 4003))
             (conn-close conn)))))))
 
+(deftest e2e-held-octets-are-capped
+  (with-server (port #'echo-app)
+    (testing "2 MB sent while the app is still deciding closes the connection"
+      (let ((conn (connect port)))
+        (unwind-protect
+             (progn
+               ;; The server may close while this write is still going.
+               (handler-case
+                   (send-octets conn (cat (upgrade-request port "/ws-delayed")
+                                          (make-array (* 2 1024 1024)
+                                                      :element-type '(unsigned-byte 8)
+                                                      :initial-element 65)))
+                 (error () nil))
+               (let ((res (read-until-eof conn)))
+                 (ok (and (vectorp res) (zerop (length res)))
+                     "closed, with no 101 (the app had not answered yet)")))
+          (conn-close conn))))))
+
 (deftest e2e-declined-upgrade-stays-http
   (with-server (port #'echo-app)
     (dolist (path '("/plain" "/delayed-plain"))

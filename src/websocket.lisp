@@ -115,52 +115,105 @@
 (defun mark-socket-upgraded (socket)
   (setf (gethash socket *upgraded-sockets*) t))
 
-(defvar *websocket-input*
+(defvar *websocket-readers*
   #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized t)
   #+ccl (make-hash-table :test 'eq :weak :key)
   #+lispworks (make-hash-table :test 'eq :weak-kind :key)
   #-(or sbcl ccl lispworks) (make-hash-table :test 'eq)
-  "Per socket: octets that arrived after its upgrade request but before
-   SETUP-WEBSOCKET installed a reader, or :READER once one is installed.
-   Neither refers to the socket, so the weak table never keeps one alive.")
+  "Sockets whose SETUP-WEBSOCKET reader is installed (value T).")
 
-(defconstant +max-pending-websocket-octets+ (+ (* 16 1024 1024) 14)
-  "Octets buffered before SETUP-WEBSOCKET: one maximal frame (the payload
-   cap plus a 14-octet header).")
+(defvar *max-pending-websocket-octets* (* 1024 1024)
+  "Most octets one connection may send after its upgrade request and before
+   SETUP-WEBSOCKET runs. Early frames are small; a connection sending more
+   is closed.")
+
+(defvar *max-total-pending-websocket-octets* (* 64 1024 1024)
+  "Most octets held for all connections together before SETUP-WEBSOCKET.
+   A connection that would push the total past it is closed.")
+
+(defvar *pending-websocket-lock* (bt2:make-lock :name "woo-websocket-pending"))
+
+(defvar *pending-websocket-input* (make-hash-table :test 'eq)
+  "Per socket: octets that arrived after its upgrade request, before
+   SETUP-WEBSOCKET. A strong table, so the byte count below stays exact:
+   an entry leaves it when the octets are taken, when its connection is
+   closed for a cap, or (sockets have no close hook) when a sweep finds
+   the socket closed. Guarded by *PENDING-WEBSOCKET-LOCK*.")
+
+(defvar *pending-websocket-octets* 0
+  "Octets held in *PENDING-WEBSOCKET-INPUT*, all connections.")
+
+(defun release-closed-pending ()
+  "Drop the buffers of connections that closed before SETUP-WEBSOCKET.
+   Call with *PENDING-WEBSOCKET-LOCK* held."
+  (let ((closed nil))
+    (maphash (lambda (socket buf)
+               (declare (ignore buf))
+               (unless (socket-open-p socket)
+                 (push socket closed)))
+             *pending-websocket-input*)
+    (dolist (socket closed)
+      (decf *pending-websocket-octets* (length (gethash socket *pending-websocket-input*)))
+      (remhash socket *pending-websocket-input*))))
+
+(defun pending-websocket-octets ()
+  "Octets held before SETUP-WEBSOCKET, all connections, after dropping
+   those of closed connections."
+  (bt2:with-lock-held (*pending-websocket-lock*)
+    (release-closed-pending)
+    *pending-websocket-octets*))
+
+(defun buffer-pending-octets (socket data start end)
+  "Append DATA[START:END] to SOCKET's pending buffer. Returns T, or NIL
+   (and forgets the buffer) if a cap would be exceeded."
+  (bt2:with-lock-held (*pending-websocket-lock*)
+    (let* ((buf (gethash socket *pending-websocket-input*))
+           (old (if buf (length buf) 0))
+           (n (- end start)))
+      (when (and (<= (+ old n) *max-pending-websocket-octets*)
+                 (> (+ *pending-websocket-octets* n) *max-total-pending-websocket-octets*))
+        (release-closed-pending))
+      (cond
+        ((or (> (+ old n) *max-pending-websocket-octets*)
+             (> (+ *pending-websocket-octets* n) *max-total-pending-websocket-octets*))
+         (when buf
+           (remhash socket *pending-websocket-input*)
+           (decf *pending-websocket-octets* old))
+         nil)
+        (t
+         (let ((grown (grow-octet-buffer
+                       (or buf (make-array 0 :element-type '(unsigned-byte 8)
+                                             :adjustable t :fill-pointer 0))
+                       (+ old n) *max-pending-websocket-octets*)))
+           (replace grown data :start1 old :start2 start :end2 end)
+           (setf (gethash socket *pending-websocket-input*) grown)
+           (incf *pending-websocket-octets* n)
+           t))))))
 
 (defun feed-websocket-data (socket data &key (start 0) (end (length data)))
   "Hand octets read after SOCKET's upgrade request to its WebSocket reader.
    Until SETUP-WEBSOCKET installs one they are buffered, in order, and it
-   parses them first. A client that sends more than one maximal frame
-   before then is disconnected."
-  (let ((input (gethash socket *websocket-input*)))
-    (cond
-      ((eq input :reader)
-       (funcall (socket-data socket) data :start start :end end))
-      ((< start end)
-       (let* ((buf (or input
-                       (make-array 0 :element-type '(unsigned-byte 8)
-                                     :adjustable t :fill-pointer 0)))
-              (old (length buf))
-              (new (+ old (- end start))))
-         (cond
-           ((> new +max-pending-websocket-octets+)
-            (remhash socket *websocket-input*)
-            (when (socket-open-p socket)
-              (close-socket socket)))
-           (t
-            (let ((grown (grow-octet-buffer buf new +max-pending-websocket-octets+)))
-              (replace grown data :start1 old :start2 start :end2 end)
-              (setf (gethash socket *websocket-input*) grown)))))))))
+   parses them first. A connection that sends more than
+   *MAX-PENDING-WEBSOCKET-OCTETS* before then, or that would take the total
+   held for all connections past *MAX-TOTAL-PENDING-WEBSOCKET-OCTETS*, is
+   closed."
+  (cond
+    ((gethash socket *websocket-readers*)
+     (funcall (socket-data socket) data :start start :end end))
+    ((or (>= start end) (not (socket-open-p socket))))
+    ((not (buffer-pending-octets socket data start end))
+     (close-socket socket))))
 
 (defun take-pending-websocket-data (socket)
   "Remove and return the octets buffered for SOCKET by FEED-WEBSOCKET-DATA
-   (a simple octet vector), or NIL. Used when the upgrade is declined and
-   the connection goes back to HTTP."
-  (let ((input (gethash socket *websocket-input*)))
-    (when (vectorp input)
-      (remhash socket *websocket-input*)
-      (coerce input '(simple-array (unsigned-byte 8) (*))))))
+   (a simple octet vector), or NIL: on SETUP-WEBSOCKET, or when the upgrade
+   is declined and the connection goes back to HTTP."
+  (bt2:with-lock-held (*pending-websocket-lock*)
+    (let ((buf (gethash socket *pending-websocket-input*)))
+      (when buf
+        (remhash socket *pending-websocket-input*)
+        (decf *pending-websocket-octets* (length buf))
+        (coerce buf '(simple-array (unsigned-byte 8) (*)))))))
 
 (defstruct ws-state
   "WebSocket connection state."
@@ -684,7 +737,7 @@
     ;; as its upgrade request, or while the application was deciding) are
     ;; parsed now, ahead of any later read.
     (let ((pending (take-pending-websocket-data socket)))
-      (setf (gethash socket *websocket-input*) :reader)
+      (setf (gethash socket *websocket-readers*) t)
       (when pending
         (funcall (socket-data socket) pending :start 0 :end (length pending))))
     state))
