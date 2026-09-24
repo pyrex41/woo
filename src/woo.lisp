@@ -302,50 +302,83 @@
         ((= octet 13) 1)
         (t 0)))
 
-(defun upgrade-field-at-p (data i end)
-  "True if the header line starting at DATA[I] may be an Upgrade field (the
-   one fast-http flags): it starts with \"upgrade:\" (any case), or with a
-   prefix of it that the end of the read cuts off."
+(declaim (inline field-prefix-p))
+(defun field-prefix-p (data i end name)
+  "True if DATA[I..] starts with NAME (lower case, ending in #\:) in any
+   case, or with a prefix of it that the end of the read cuts off."
+  (declare (type (simple-array (unsigned-byte 8) (*)) data name)
+           (type fixnum i end)
+           (optimize (speed 3) (safety 0)))
+  ;; OR-ing #x20 folds ASCII upper case to lower; it leaves #\- and #\:.
+  (loop for k of-type fixnum from 0 below (length name)
+        do (cond ((>= (+ i k) end) (return t))
+                 ((/= (logior (aref data (+ i k)) #x20) (aref name k)) (return nil)))
+        finally (return t)))
+
+(defconstant +field-upgrade+ 1
+  "LINE-FIELD bit: an Upgrade field, the one fast-http flags.")
+(defconstant +field-body+ 2
+  "LINE-FIELD bit: a Content-Length or Transfer-Encoding field, the only
+   ones that give fast-http a request body.")
+
+(declaim (inline line-field))
+(defun line-field (data i end)
+  "LINE-FIELD bits for the header line starting at DATA[I]. A line the end
+   of the read cuts off may be either."
   (declare (type (simple-array (unsigned-byte 8) (*)) data)
            (type fixnum i end)
            (optimize (speed 3) (safety 0)))
-  (loop for k of-type fixnum from 0 below 8
-        for c of-type (unsigned-byte 8)
-          across #.(map '(simple-array (unsigned-byte 8) (*)) #'char-code "upgrade:")
-        do (cond ((>= (+ i k) end) (return t))
-                 ;; OR-ing #x20 folds ASCII upper case to lower; it leaves
-                 ;; #\: unchanged.
-                 ((/= (logior (aref data (+ i k)) #x20) c) (return nil)))
-        finally (return t)))
+  (if (>= i end)
+      (logior +field-upgrade+ +field-body+)
+      (macrolet ((octets (string)
+                   (map '(simple-array (unsigned-byte 8) (*)) #'char-code string)))
+        (case (logior (aref data i) #x20)
+          (#.(char-code #\u)
+           (if (field-prefix-p data i end (octets "upgrade:")) +field-upgrade+ 0))
+          (#.(char-code #\c)
+           (if (field-prefix-p data i end (octets "content-length:")) +field-body+ 0))
+          (#.(char-code #\t)
+           (if (field-prefix-p data i end (octets "transfer-encoding:")) +field-body+ 0))
+          (otherwise 0)))))
 
 (defun find-header-end (data start end match)
   "Scan DATA[START:END] for the CR LF CR LF that ends a header block. MATCH
    is the length of a prefix of it ending just before START (from the
    previous read). Values: the index after the CR LF CR LF, or END; the
    prefix length there (2 after a match: its CR LF can begin the next);
-   whether it was found; and whether a line scanned may be an Upgrade
-   field."
+   whether it was found; and the LINE-FIELD bits of the lines scanned."
   (declare (type (simple-array (unsigned-byte 8) (*)) data)
            (type fixnum start end)
            (type (integer 0 3) match)
            (optimize (speed 3) (safety 0)))
   (let ((i start)
-        (upgrade nil))
-    (declare (type fixnum i))
+        (fields 0))
+    (declare (type fixnum i fields))
     (loop
-      (when (zerop match)
-        ;; Skip to the next CR; most octets are not one.
-        (loop while (and (< i end) (/= (aref data i) 13))
-              do (incf i)))
-      (when (>= i end)
-        (return (values end match nil upgrade)))
-      (let ((next (crlf-match-step match (aref data i))))
-        (incf i)
-        (case next
-          (4 (return (values i 2 t upgrade)))
-          (2 (when (and (not upgrade) (upgrade-field-at-p data i end))
-               (setq upgrade t))))
-        (setq match next)))))
+      (cond
+        ((and (zerop match) (< (+ i 3) end))
+         ;; Fast path: find the next CR and look at what follows it.
+         (loop while (and (< i end) (/= (aref data i) 13))
+               do (incf i))
+         (cond
+           ((>= (+ i 3) end))           ; near the end: take the slow path
+           ((/= (aref data (+ i 1)) 10)
+            (incf i))
+           ((and (= (aref data (+ i 2)) 13) (= (aref data (+ i 3)) 10))
+            (return (values (+ i 4) 2 t fields)))
+           (t
+            (incf i 2)
+            (setq fields (logior fields (line-field data i end))))))
+        ((>= i end)
+         (return (values end match nil fields)))
+        (t
+         ;; Octet by octet: a match carried over, or the last 3 octets.
+         (let ((next (crlf-match-step match (aref data i))))
+           (incf i)
+           (case next
+             (4 (return (values i 2 t fields)))
+             (2 (setq fields (logior fields (line-field data i end)))))
+           (setq match next)))))))
 
 (defun crlf-match-after (data start end match)
   "The CR LF CR LF prefix length at END, having skipped DATA[START:END]
@@ -364,13 +397,14 @@
   ;; A request with an Upgrade header may be followed, in the same read, by
   ;; octets of the new protocol: a WebSocket client need not wait for the
   ;; 101. fast-http stops at the end of such a request but does not say
-  ;; where that is. So the reader scans each request head (not bodies) for
-  ;; the CR LF CR LF that ends it and for an Upgrade field; an upgrade
-  ;; request is fed only up to the end of its head, or of its Content-Length
-  ;; body. Other requests go in with the rest of the read, as before; an
-  ;; upgrade request pipelined behind one in the same read is parsed by
-  ;; fast-http alone and loses what follows it in that read (a chunked
-  ;; upgrade request's body too). Once the application has upgraded the
+  ;; where that is. So the reader scans request heads (never bodies) for
+  ;; the CR LF CR LF that ends each and for the fields that matter: an
+  ;; upgrade request is fed only up to the end of its head, or of its
+  ;; Content-Length body. Bodiless requests before it go in the same piece;
+  ;; from a request with a body on, the rest of the read goes in whole, as
+  ;; before, so an upgrade request pipelined behind a body in the same read
+  ;; is parsed by fast-http alone and loses what follows it in that read (a
+  ;; chunked upgrade request's body too). Once the application has upgraded the
   ;; socket, or is still deciding (a delayed response), the rest of the read
   ;; and every later one go to FEED-WEBSOCKET-DATA, never to fast-http.
   (let ((http (make-http-request))
@@ -380,8 +414,10 @@
         ;; The piece being parsed ends at the end of an Upgrade request's
         ;; head, so a head completing in it completes at its end.
         (aligned nil)
-        ;; The head being scanned may carry an Upgrade field.
-        (head-upgrade nil)
+        ;; LINE-FIELD bits of the head being scanned, so far.
+        (head-fields 0)
+        ;; A request with an Upgrade header has been answered.
+        (upgrade-seen nil)
         ;; An upgrade request's delayed response has not been given yet.
         (response-pending nil)
         ;; Octets are being held for WebSocket while RESPONSE-PENDING.
@@ -390,7 +426,8 @@
         (crlf-match 0)
         parser
         reader)
-    (declare (type (integer 0 3) crlf-match))
+    (declare (type (integer 0 3) crlf-match)
+             (type fixnum head-fields))
     (labels ((next-split (data start end)
                ;; The end of the next piece to feed fast-http. Second value:
                ;; true if octets after a completed head go in unscanned.
@@ -400,29 +437,41 @@
                  (cond
                    ((or (= state fast-http.http:+state-first-line+)
                         (= state fast-http.http:+state-headers+))
-                    (multiple-value-bind (split match found upgrade)
-                        (find-header-end data start end crlf-match)
-                      (declare (type fixnum split))
-                      (setq crlf-match match)
-                      (when upgrade
-                        (setq head-upgrade t))
-                      (cond
-                        ((not found)
-                         (setq aligned nil)
-                         end)
-                        (head-upgrade
-                         ;; Stop at the end of this head: what follows may
-                         ;; belong to the new protocol.
-                         (setq head-upgrade nil
-                               aligned t)
-                         split)
-                        (t
-                         ;; An ordinary request: the rest of the read goes in
-                         ;; whole, as fast-http would take it anyway.
-                         (setq head-upgrade nil
-                               aligned nil
-                               crlf-match (crlf-match-after data split end match))
-                         (values end (< split end))))))
+                    ;; Scan heads while their requests have no body: a run of
+                    ;; pipelined GETs is one piece, up to and including an
+                    ;; upgrade request's head.
+                    (let ((pos start))
+                      (declare (type fixnum pos))
+                      (loop
+                        (multiple-value-bind (split match found fields)
+                            (find-header-end data pos end crlf-match)
+                          (declare (type fixnum split fields))
+                          (setq crlf-match match
+                                head-fields (logior head-fields fields))
+                          (cond
+                            ((not found)
+                             (setq aligned nil)
+                             (return end))
+                            ((logtest head-fields +field-upgrade+)
+                             ;; Stop at the end of this head: what follows
+                             ;; may belong to the new protocol.
+                             (setq head-fields 0
+                                   aligned t)
+                             (return split))
+                            ((logtest head-fields +field-body+)
+                             ;; A body is not scanned: the rest of the read
+                             ;; goes in whole, as fast-http would take it.
+                             (setq head-fields 0
+                                   aligned nil
+                                   crlf-match (crlf-match-after data split end match))
+                             (return (values end (< split end))))
+                            ((= split end)
+                             (setq head-fields 0
+                                   aligned nil)
+                             (return end))
+                            (t
+                             (setq head-fields 0
+                                   pos split)))))))
                    (t
                     ;; A body is never scanned. Only an upgrade request's
                     ;; Content-Length body is cut at its end.
@@ -495,6 +544,8 @@
                            (let ((upgrading upgrade-request))
                              ;; fast-http never clears the flag itself.
                              (setq upgrade-request nil)
+                             (when upgrading
+                               (setq upgrade-seen t))
                              (setf (http-upgrade-p http) nil)
                              (flet ((main (env)
                                       (handle-response http socket
@@ -528,17 +579,21 @@
                 (when (>= start end)
                   (return))
                 ;; No HTTP parsing once the socket belongs to WebSocket.
-                (when (or (socket-upgraded-p socket) response-pending)
+                ;; Only an upgrade request's response can upgrade it
+                ;; (WEBSOCKET-P requires the header), so the lookup is
+                ;; skipped until one has been answered.
+                (when (or response-pending
+                          (and upgrade-seen (socket-upgraded-p socket)))
                   (return (hold-for-websocket data start end)))
                 (multiple-value-bind (split unscanned) (next-split data start end)
                   (funcall parser data :start start :end split)
                   (setq start split)
                   ;; fast-http may have read part of a later head unseen;
-                  ;; its Upgrade field, if any, is then unknown.
+                  ;; its fields are then unknown.
                   (when (and unscanned
                              (= (fast-http.http:http-state http)
                                 fast-http.http:+state-headers+))
-                    (setq head-upgrade t))))))
+                    (setq head-fields (logior +field-upgrade+ +field-body+)))))))
       (setf (wev:socket-data socket) reader))))
 
 (defun stop (server)

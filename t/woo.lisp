@@ -172,33 +172,32 @@
           (format nil "~D body writes for ~D reads" writes reads))
       (ok (< elapsed 10) (format nil "parsed in ~,2Fs" elapsed)))))
 
-(deftest http1-only-upgrade-heads-are-split
-  (testing "a read of pipelined ordinary requests is scanned only to its first head's end"
+(deftest http1-pipelined-heads-are-one-piece
+  (testing "16 pipelined GETs in one read go to fast-http in one call"
     (let* ((head (trivial-utf-8:string-to-utf-8-bytes
+                  ;; Upgrade-Insecure-Requests is not an Upgrade field.
                   (format nil "GET /a HTTP/1.1~C~CHost: x~C~CUpgrade-Insecure-Requests: 1~C~C~C~C"
                           #\Return #\Newline #\Return #\Newline #\Return #\Newline
                           #\Return #\Newline)))
            (read (apply #'concatenate '(simple-array (unsigned-byte 8) (*))
                         (make-list 16 :initial-element head)))
-           (scanned 0)
+           (calls 0)
            (requests 0)
            (socket (bare-socket))
-           (scan-fn (symbol-function 'woo::find-header-end)))
+           (parse-fn (symbol-function 'fast-http:parse-request)))
       (unwind-protect
            (let ((woo.specials:*app* (lambda (env)
                                        (declare (ignore env))
                                        (incf requests)
                                        (lambda (responder) (declare (ignore responder)))))
                  (woo.specials:*debug* t))
-             (setf (symbol-function 'woo::find-header-end)
-                   (lambda (data start end match)
-                     (multiple-value-bind (split m found upgrade)
-                         (funcall scan-fn data start end match)
-                       (incf scanned (- split start))
-                       (values split m found upgrade))))
+             ;; MAKE-PARSER takes the function when SETUP-PARSER runs.
+             (setf (symbol-function 'fast-http:parse-request)
+                   (lambda (&rest args)
+                     (incf calls)
+                     (apply parse-fn args)))
              (woo::setup-parser socket)
              (woo::read-cb socket read))
-        (setf (symbol-function 'woo::find-header-end) scan-fn))
+        (setf (symbol-function 'fast-http:parse-request) parse-fn))
       (ok (= requests 16) "every request is parsed")
-      (ok (= scanned (length head))
-          (format nil "~D octets scanned of ~D" scanned (length read))))))
+      (ok (= calls 1) (format nil "~D fast-http calls" calls)))))

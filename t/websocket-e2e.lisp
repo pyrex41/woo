@@ -480,6 +480,22 @@
                (expect-text conn "two")
                (expect-close-reply conn 4002))
           (conn-close conn))))
+    (testing "an ordinary GET, the upgrade request and a frame"
+      (let ((conn (connect port)))
+        (unwind-protect
+             (progn
+               (send-octets conn (cat (text (crlf "GET /plain HTTP/1.1" "Host: 127.0.0.1" ""))
+                                      (upgrade-request port "/ws")
+                                      (client-frame 1 (text "behind a GET"))))
+               (let ((plain (read-head conn)))
+                 (ok (and plain (search "HTTP/1.1 200" plain)) "the GET is answered"))
+               ;; Its chunked body: "5" CRLF "plain" CRLF "0" CRLF CRLF.
+               (read-exact conn 15)
+               (ok (equal (read-head conn) (expected-head *sample-accept*)) "then the 101")
+               (expect-text conn "behind a GET")
+               (send-octets conn (client-frame 8 (close-body 1000)))
+               (expect-close-reply conn 1000))
+          (conn-close conn))))
     (testing "a request with a Content-Length body, then frames"
       (multiple-value-bind (conn head)
           (ws-open-with port "/ws-body"
