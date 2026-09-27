@@ -84,6 +84,7 @@ Optional; each suite prints a visible rove `skip` when its tool is missing:
 | `curl` built with HTTP/2 | `t/http2-e2e.lisp` | h2c and TLS+ALPN against a live server |
 | Node.js 22+ (`http2`, global `WebSocket`) | `t/http2-e2e.lisp`, `t/websocket-e2e.lisp` | independent client implementations |
 | Go (1.23+) | `t/diff/diff.lisp` | differential oracle against `golang.org/x/net/http2`; first build may download modules |
+| Go (1.26+), Rust (1.97+), and Hegel | `t/hegel/` | live, shrinking HTTP/1, HTTP/2, and WebSocket properties plus parity with a lockfile-pinned axum server |
 | `woo-showcase` deps (ningle, djula, jonathan, …) | `t/showcase.lisp`, showcase part of `t/websocket-e2e.lisp` | fetch once with `(ql:quickload :woo-showcase)`; a real load error fails, only a missing system skips |
 
 Environment variables:
@@ -96,6 +97,25 @@ Environment variables:
 | `WOO_QC_SEED` | seed for the Quickcheck-style properties (`t/prop/qc.lisp`) |
 | `WOO_QC_FAILURE_FILE` | where failing Quickcheck cases are saved for replay (default under the XDG cache) |
 | `WOO_FUZZ_ITERS` | iterations for the coverage-guided fuzzer (`t/fuzz/guided.lisp`) |
+| `WOO_HEGEL_LISP` | Lisp launcher for `t/hegel/` (`sbcl` by default, `ros` in CI) |
+| `WOO_QUICKLISP_SETUP` | Quicklisp setup file for the Hegel server when SBCL does not load it automatically |
+| `WOO_HEGEL_FOREIGN_LIB_DIRS` | colon-separated native library directories for the Hegel server (e.g. libev and OpenSSL on macOS) |
+| `WOO_HEGEL_ORACLE_BIN` | prebuilt Rust oracle binary; if unset, the parity tests build it with `cargo build --locked` |
+
+Run the Hegel suite from the repository root:
+
+```sh
+go -C t/hegel test -count=1 -timeout 10m ./...
+```
+
+The suite launches Woo on a loopback port and fails if it cannot start. On
+macOS with Homebrew, set `WOO_HEGEL_FOREIGN_LIB_DIRS` to the `lib` directories
+of libev and OpenSSL if CFFI cannot find them. Hegel counterexamples are
+shrunk and shown by `go test`; the suite is also required in CI. The parity
+properties send the same generated cases to Woo and the pinned axum fixture in
+`t/hegel/oracle/`. Matching results are interoperability evidence; the
+diagnostic h2spec and Autobahn runners in `t/conformance/` check separate
+HTTP/2 and WebSocket cases.
 
 ### Test Suites
 
@@ -115,6 +135,7 @@ Environment variables:
 | `t/diff/` | differential tests against Go's HTTP/2 and HPACK |
 | `t/fuzz/` | coverage-guided fuzzing of the codecs (SBCL `sb-cover`) |
 | `t/mutate/` | mutation testing: each HPACK mutant must be caught |
+| `t/hegel/` | Hegel-driven live tests of HTTP/1 pipelining, HTTP/2 preface and frame batching, stream reuse, bodies crossing the flow-control window, and WebSocket upgrade and echo; shared valid-path parity cases against axum |
 
 ### Showcase Demo
 

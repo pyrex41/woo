@@ -143,17 +143,41 @@
                                                        (priority nil) (exclusive nil)
                                                        (stream-dependency 0) (weight 16))
   "Create HEADERS frame with encoded header block.
-   HEADER-BLOCK should be HPACK-encoded bytes."
-  (declare (ignore priority exclusive stream-dependency weight))
-  ;; TODO: Handle PRIORITY flag and fields
-  (let ((flags (logior (if end-stream +flag-end-stream+ 0)
-                       (if end-headers +flag-end-headers+ 0))))
+   HEADER-BLOCK should be HPACK-encoded bytes. When PRIORITY is true, the
+   five-byte priority field is prepended to the header block (RFC 9113
+   section 6.2). WEIGHT is the protocol weight in the range 1..256."
+  (when priority
+    ;; RFC 9113 retains this wire format but deprecates the RFC 7540
+    ;; dependency-tree semantics, including the old self-dependency rule.
+    (when (or (< stream-dependency 0) (> stream-dependency #x7fffffff))
+      (error "HTTP/2 stream dependency must be a 31-bit value: ~D"
+             stream-dependency))
+    (when (or (< weight 1) (> weight 256))
+      (error "HTTP/2 stream weight must be between 1 and 256: ~D" weight)))
+  (let* ((flags (logior (if end-stream +flag-end-stream+ 0)
+                        (if end-headers +flag-end-headers+ 0)
+                        (if priority +flag-priority+ 0)))
+         (header-block (if (typep header-block '(simple-array (unsigned-byte 8) (*)))
+                           header-block
+                           (coerce header-block '(simple-array (unsigned-byte 8) (*)))))
+         (payload (if priority
+                      (let ((result (make-array (+ 5 (length header-block))
+                                                :element-type '(unsigned-byte 8))))
+                        (setf (aref result 0)
+                              (logior (ldb (byte 8 24) stream-dependency)
+                                      (if exclusive #x80 0))
+                              (aref result 1) (ldb (byte 8 16) stream-dependency)
+                              (aref result 2) (ldb (byte 8 8) stream-dependency)
+                              (aref result 3) (ldb (byte 8 0) stream-dependency)
+                              ;; The wire value is the protocol weight minus one.
+                              (aref result 4) (1- weight))
+                        (replace result header-block :start1 5)
+                        result)
+                      header-block)))
     (make-frame :type +frame-headers+
                 :flags flags
                 :stream-id stream-id
-                :payload (if (typep header-block '(simple-array (unsigned-byte 8) (*)))
-                             header-block
-                             (coerce header-block '(simple-array (unsigned-byte 8) (*)))))))
+                :payload payload)))
 
 (defun make-continuation-frame (stream-id header-block &key (end-headers t))
   "Create CONTINUATION frame with a header-block fragment."
@@ -165,14 +189,28 @@
                            (coerce header-block '(simple-array (unsigned-byte 8) (*))))))
 
 (defun make-data-frame (stream-id data &key (end-stream nil) (padded nil) (pad-length 0))
-  "Create DATA frame."
-  (declare (ignore padded pad-length))
-  ;; TODO: Handle padding
-  (let ((payload (if (typep data '(simple-array (unsigned-byte 8) (*)))
-                     data
-                     (coerce data '(simple-array (unsigned-byte 8) (*))))))
+  "Create DATA frame.
+
+When PADDED is true, PAD-LENGTH is encoded in the first payload octet and
+that many zero octets are appended after DATA, as required by RFC 9113
+section 6.1."
+  (when (and padded (or (< pad-length 0) (> pad-length 255)))
+    (error "DATA padding length must be between 0 and 255: ~D" pad-length))
+  (let* ((data (if (typep data '(simple-array (unsigned-byte 8) (*)))
+                   data
+                   (coerce data '(simple-array (unsigned-byte 8) (*)))))
+         (flags (logior (if end-stream +flag-end-stream+ 0)
+                        (if padded +flag-padded+ 0)))
+         (payload (if padded
+                      (let ((result (make-array (+ 1 (length data) pad-length)
+                                                :element-type '(unsigned-byte 8)
+                                                :initial-element 0)))
+                        (setf (aref result 0) pad-length)
+                        (replace result data :start1 1)
+                        result)
+                      data)))
     (make-frame :type +frame-data+
-                :flags (if end-stream +flag-end-stream+ 0)
+                :flags flags
                 :stream-id stream-id
                 :payload payload)))
 

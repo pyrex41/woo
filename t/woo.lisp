@@ -116,10 +116,10 @@
         (clack.test:*use-https* t))
     (clack.test.suite:run-server-tests :woo)))
 
-;;; The HTTP/1 reader splits its input at CR LF CR LF only while fast-http
-;;; reads a request head. A body goes to fast-http whole, however many
-;;; CR LF CR LFs it holds: split, each piece was another body write, and
-;;; past smart-buffer's 1 MB memory limit each write reopened a temp file.
+;;; The HTTP/1 reader splits heads and fixed-length body boundaries, but
+;;; never scans inside a body for apparent CR LF CR LFs. Each body stays in
+;;; one write per socket read; splitting within a large body would reopen
+;;; smart-buffer's temporary file repeatedly.
 
 (defun bare-socket ()
   (woo.ev.socket::%make-socket
@@ -171,6 +171,26 @@
       (ok (<= writes (1+ reads))
           (format nil "~D body writes for ~D reads" writes reads))
       (ok (< elapsed 10) (format nil "parsed in ~,2Fs" elapsed)))))
+
+(deftest http1-upgrade-after-fixed-body
+  (testing "an upgrade behind a POST body keeps the early WebSocket octets"
+    (let* ((seen nil)
+           (socket (bare-socket))
+           (request (trivial-utf-8:string-to-utf-8-bytes
+                     (format nil "POST /first HTTP/1.1~C~CHost: x~C~CContent-Length: 4~C~C~C~CabcdGET /ws HTTP/1.1~C~CHost: x~C~CConnection: Upgrade~C~CUpgrade: websocket~C~C~C~Cxyz"
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline))))
+      (let ((woo.specials:*app*
+              (lambda (env)
+                (push (getf env :path-info) seen)
+                (lambda (responder) (declare (ignore responder)))))
+            (woo.specials:*debug* t))
+        (woo::setup-parser socket)
+        (woo::read-cb socket request)
+        (ok (equal (reverse seen) '("/first" "/ws")))
+        (ok (equalp (woo.websocket:take-pending-websocket-data socket)
+                    (trivial-utf-8:string-to-utf-8-bytes "xyz")))))))
 
 (deftest http1-pipelined-heads-are-one-piece
   (testing "16 pipelined GETs in one read go to fast-http in one call"

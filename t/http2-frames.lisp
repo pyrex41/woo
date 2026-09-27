@@ -348,6 +348,37 @@
            (frame (make-headers-frame 7 header-block :end-stream t :end-headers nil)))
       (ok (= (frame-flags frame) +flag-end-stream+)))))
 
+(deftest make-headers-frame-with-priority
+  (testing "make-headers-frame encodes the optional PRIORITY field"
+    (let* ((header-block #(65 66))
+           (frame (make-headers-frame 9 header-block :priority t
+                                      :exclusive t
+                                      :stream-dependency #x01020304
+                                      :weight 256))
+           (payload (frame-payload frame)))
+      (ok (= (frame-flags frame) (logior +flag-end-headers+ +flag-priority+)))
+      (ok (= (length payload) 7))
+      (ok (= (aref payload 0) #x81) "exclusive and dependency high octet")
+      (ok (= (aref payload 1) #x02))
+      (ok (= (aref payload 2) #x03))
+      (ok (= (aref payload 3) #x04))
+      (ok (= (aref payload 4) #xff) "wire weight is weight minus one")
+      (ok (equalp (subseq payload 5) header-block) "header block follows priority"))))
+
+(deftest make-headers-frame-rejects-invalid-priority
+  (testing "make-headers-frame rejects invalid priority fields"
+    (ok (handler-case
+            (progn (make-headers-frame 1 #() :priority t :weight 0) nil)
+          (error () t)))
+    (ok (handler-case
+            (progn (make-headers-frame 1 #() :priority t
+                                       :stream-dependency #x80000000) nil)
+          (error () t)))
+    (let ((frame (make-headers-frame 1 #() :priority t
+                                     :stream-dependency 1)))
+      (ok (= (frame-flags frame) (logior +flag-end-headers+ +flag-priority+))
+          "self dependency retains the RFC 9113 wire format"))))
+
 ;;; DATA frame tests
 
 (deftest make-data-frame-basic
@@ -379,6 +410,36 @@
            (frame (make-data-frame 7 data)))
       (ok (= (length (frame-payload frame)) 5))
       (ok (typep (frame-payload frame) '(simple-array (unsigned-byte 8) (*)))))))
+
+(deftest make-data-frame-with-padding
+  (testing "make-data-frame encodes PADDED payload shape"
+    (let* ((data #(65 66 67))
+           (frame (make-data-frame 9 data :end-stream t
+                                   :padded t :pad-length 2))
+           (payload (frame-payload frame)))
+      (ok (= (frame-flags frame) (logior +flag-end-stream+ +flag-padded+)))
+      (ok (= (length payload) 6))
+      (ok (= (aref payload 0) 2) "pad length octet")
+      (ok (equalp (subseq payload 1 4) data) "data precedes padding")
+      (ok (every #'zerop (subseq payload 4)) "padding octets are zero"))))
+
+(deftest make-data-frame-with-padding-and-empty-data
+  (testing "make-data-frame can pad an empty DATA payload"
+    (let* ((frame (make-data-frame 11 #() :padded t :pad-length 3))
+           (payload (frame-payload frame)))
+      (ok (= (frame-flags frame) +flag-padded+))
+      (ok (= (length payload) 4))
+      (ok (= (aref payload 0) 3))
+      (ok (every #'zerop (subseq payload 1))))))
+
+(deftest make-data-frame-rejects-invalid-padding-length
+  (testing "make-data-frame rejects a pad length outside the octet range"
+    (ok (handler-case
+            (progn (make-data-frame 1 #() :padded t :pad-length 256) nil)
+          (error () t)))
+    (ok (handler-case
+            (progn (make-data-frame 1 #() :padded t :pad-length -1) nil)
+          (error () t)))))
 
 ;;; WINDOW_UPDATE frame tests
 

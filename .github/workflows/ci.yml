@@ -32,3 +32,18 @@ jobs:
         run: |
           PATH="~/.roswell/bin:$PATH"
           rove woo-test.asd
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: t/hegel/go.mod
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.0
+      - name: Build pinned Rust parity oracle
+        timeout-minutes: 10
+        run: cargo build --locked --manifest-path t/hegel/oracle/Cargo.toml
+      - name: Run Hegel live protocol properties
+        timeout-minutes: 12
+        env:
+          LISP: ${{ matrix.lisp }}
+          WOO_HEGEL_LISP: ros
+        run: go -C t/hegel test -count=1 -timeout 10m ./...

@@ -725,18 +725,6 @@
        (replace out data :start2 start :end2 end)
        out))))
 
-(defun body-chunks (body)
-  "The non-empty octet vectors of a string, octet vector, or list body."
-  (flet ((chunk (part)
-           (etypecase part
-             (null nil)
-             (string (string-to-utf-8-bytes part))
-             ((vector (unsigned-byte 8)) part))))
-    (remove-if (lambda (octets) (or (null octets) (zerop (length octets))))
-               (if (listp body)
-                   (mapcar #'chunk body)
-                   (list (chunk body))))))
-
 (defun response-header-present-p (headers key)
   (loop for k in headers by #'cddr
         thereis (or (eq k key)
@@ -745,9 +733,9 @@
                     (and (stringp k)
                          (string-equal k (symbol-name key))))))
 
-(defun prepare-response-body (headers body)
-  "Return (values headers pending). A pathname body is not read here: its
-   size goes in content-length and it is streamed as the window allows."
+(defun prepare-response-body (conn headers body)
+  "Return (values headers pending), with NIL pending if the ordinary body
+   exceeds a queue budget. A pathname is streamed as the window allows."
   (let ((pending (make-pending-response :end-stream t)))
     (cond
       ((pathnamep body)
@@ -764,8 +752,21 @@
                  (pending-path-identity pending) identity)
            (values headers pending))))
       (t
-       (dolist (octets (body-chunks body))
-         (pending-append pending octets))
+       ;; Enforce the queue limits on ordinary responses too. Check each
+       ;; chunk before encoding/copying it, including when the peer has
+       ;; withheld all send-window credit.
+       (let ((total (connection-queued-bytes conn)))
+         (dolist (part (if (listp body) body (list body)))
+           (when part
+             (let ((n (etypecase part
+                        (string (trivial-utf-8:utf-8-byte-length part))
+                        ((vector (unsigned-byte 8)) (length part)))))
+               (when (or (> (+ (pending-queued pending) n)
+                            *max-queued-response-bytes*)
+                         (> (+ total (pending-queued pending) n)
+                            *max-connection-queued-response-bytes*))
+                 (return-from prepare-response-body (values headers nil)))
+               (pending-append pending (octets-of part))))))
        (values headers pending)))))
 
 (defun header-name-string (name)
@@ -830,8 +831,12 @@
    case nothing is sent."
   (unless (response-startable-p conn stream)
     (return-from send-http2-response nil))
-  (multiple-value-bind (headers pending) (prepare-response-body headers body)
-    (begin-response conn stream status headers pending)))
+  (multiple-value-bind (headers pending) (prepare-response-body conn headers body)
+    (if pending
+        (begin-response conn stream status headers pending)
+        (progn
+          (connection-stream-error conn stream +internal-error+)
+          nil))))
 
 (defun begin-streaming-response (conn stream status headers)
   "Send HEADERS without END_STREAM and queue an empty body for a writer.

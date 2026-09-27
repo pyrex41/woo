@@ -1417,6 +1417,37 @@
       (run-adapter-request conn id))
     (values conn (reverse writers))))
 
+(deftest normal-responses-are-bounded
+  (testing "a normal response cannot bypass the per-stream queue cap"
+    (let* ((woo.http2.clack:*max-queued-response-bytes* 100)
+           (conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+)))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (let ((frames (capture-frames
+                     (lambda ()
+                       (ok (null (send-http2-response conn stream 200 nil
+                                                      (list (make-string 60 :initial-element #\a)
+                                                            (make-string 60 :initial-element #\b)))))))))
+        (ok (= 1 (length (rst-frames frames 1))))
+        (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))))))
+  (testing "the total queue cap also applies to ordinary responses"
+    (let* ((woo.http2.clack:*max-queued-response-bytes* 200)
+           (woo.http2.clack:*max-connection-queued-response-bytes* 100)
+           (conn (make-http2-connection))
+           (first (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (second (make-http2-stream :id 3 :state +state-half-closed-remote+)))
+      (register-stream conn first)
+      (register-stream conn second)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (send-http2-response conn first 200 nil (make-string 60 :initial-element #\a))
+      (let ((frames (capture-frames
+                     (lambda ()
+                       (send-http2-response conn second 200 nil
+                                            (make-string 60 :initial-element #\b))))))
+        (ok (= 1 (length (rst-frames frames 3))))
+        (ok (= 60 (woo.http2.clack::connection-queued-bytes conn)))))))
+
 (deftest streamed-writes-are-bounded
   (testing "a writer past *max-queued-response-bytes* resets the stream and then drops writes"
     (let ((woo.http2.clack:*max-queued-response-bytes* 100000))
