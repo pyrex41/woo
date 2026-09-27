@@ -448,20 +448,21 @@
 (defstruct response-reservation entry (bytes 0) payload (active t))
 
 (defun cancel-budget-entry (entry)
-  (let ((budget (response-budget-entry-budget entry))
-        (pending nil))
+  (let ((budget (response-budget-entry-budget entry)))
     (bt2:with-lock-held ((response-budget-lock budget))
+      ;; Detach the owned copies before their capacity becomes reusable.
+      ;; This helper does not reacquire the budget lock.
+      (when (response-budget-entry-pending entry)
+        (clear-pending-response (response-budget-entry-pending entry)))
       (setf (response-budget-entry-dead entry) t
-            pending (response-budget-entry-pending entry)
-            (response-budget-entry-pending entry) nil
-            (response-budget-entry-queued entry) 0
-            (response-budget-entry-reserved entry) 0)
+            (response-budget-entry-pending entry) nil)
       (dolist (token (response-budget-entry-tokens entry))
         (setf (response-reservation-active token) nil
               (response-reservation-payload token) nil))
-      (setf (response-budget-entry-tokens entry) nil)
-      (remhash (response-budget-entry-id entry) (response-budget-entries budget)))
-    (when pending (discard-pending pending))))
+      (setf (response-budget-entry-tokens entry) nil
+            (response-budget-entry-queued entry) 0
+            (response-budget-entry-reserved entry) 0)
+      (remhash (response-budget-entry-id entry) (response-budget-entries budget)))))
 
 (defun cancel-response-budget (budget)
   (let ((entries (bt2:with-lock-held ((response-budget-lock budget))
@@ -532,11 +533,14 @@
   (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
     (response-budget-entry-dead entry)))
 
-(defun install-reservation-payload (token payload)
+(defun install-reservation-payload (token payload &key copy)
+  "Install PAYLOAD, or call its copy thunk while the reservation is protected.
+   Cancellation cannot return the capacity while the producer owns an
+   unfinished copy. Inactive reservations do not call the copy thunk."
   (let ((budget (response-budget-entry-budget (response-reservation-entry token))))
     (bt2:with-lock-held ((response-budget-lock budget))
       (when (response-reservation-active token)
-        (setf (response-reservation-payload token) payload)
+        (setf (response-reservation-payload token) (if copy (funcall payload) payload))
         t))))
 
 (defun call-with-response-reservation (run token thunk)
@@ -873,16 +877,24 @@
   (when (stream-closed-p stream)
     (connection-drop-closed-stream conn stream)))
 
-(defun discard-pending (pending)
-  "Let go of PENDING's unsent octets; a writer may still hold PENDING."
+(defun clear-pending-response (pending)
+  "Detach response data. Caller holds its budget lock, when it has one."
   (setf (pending-chunks pending) nil
         (pending-tail pending) nil
         (pending-offset pending) 0
         (pending-queued pending) 0
         (pending-source pending) nil
         (pending-source-offset pending) 0
-        (pending-source-byte-offset pending) 0)
-  (update-pending-budget pending))
+        (pending-source-byte-offset pending) 0))
+
+(defun discard-pending (pending)
+  "Detach owned copies and release their capacity in the same critical section."
+  (let ((entry (pending-budget-entry pending)))
+    (if entry
+        (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
+          (clear-pending-response pending)
+          (setf (response-budget-entry-queued entry) 0))
+        (clear-pending-response pending))))
 
 (defun drop-pending-response (conn stream)
   "Remove STREAM's entry from the send queue and discard its octets."
@@ -1224,7 +1236,8 @@
                      ;; Do not allocate until the shared budget accepted this
                      ;; write. The thunk retains TOKEN, not DATA or OCTETS.
                      (handler-case
-                         (install-reservation-payload token (octets-of data :start start :end end))
+                         (install-reservation-payload
+                          token (lambda () (octets-of data :start start :end end)) :copy t)
                        (error (e)
                          (release-response-reservation token)
                          (error e)))
