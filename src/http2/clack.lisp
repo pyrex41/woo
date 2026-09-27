@@ -528,6 +528,10 @@
               (response-reservation-active token) nil
               (response-reservation-payload token) nil)))))
 
+(defun response-budget-entry-dead-p (entry)
+  (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
+    (response-budget-entry-dead entry)))
+
 (defun install-reservation-payload (token payload)
   (let ((budget (response-budget-entry-budget (response-reservation-entry token))))
     (bt2:with-lock-held ((response-budget-lock budget))
@@ -1169,7 +1173,8 @@
         (connection-limit *max-connection-queued-response-bytes*))
     (labels ((reset ()
                (funcall run (lambda ()
-                              (when (http2-socket-accepts-p socket)
+                              (when (and (http2-socket-accepts-p socket)
+                                         (stream-sendable-p conn stream))
                                 (reset-response conn stream)))))
              (reserve (data &key (start 0) end)
                (reserve-response-bytes entry (response-octet-length data :start start :end end)
@@ -1211,7 +1216,10 @@
                    (let ((token (reserve data :start start :end end)))
                      (unless token
                        (mark-dead)
-                       (reset)
+                       ;; A reset or completed stream also refuses new
+                       ;; reservations. It must not emit another RST_STREAM.
+                       (unless (response-budget-entry-dead-p entry)
+                         (reset))
                        (return-from nil nil))
                      ;; Do not allocate until the shared budget accepted this
                      ;; write. The thunk retains TOKEN, not DATA or OCTETS.
