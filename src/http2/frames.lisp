@@ -143,17 +143,41 @@
                                                        (priority nil) (exclusive nil)
                                                        (stream-dependency 0) (weight 16))
   "Create HEADERS frame with encoded header block.
-   HEADER-BLOCK should be HPACK-encoded bytes."
-  (declare (ignore priority exclusive stream-dependency weight))
-  ;; TODO: Handle PRIORITY flag and fields
-  (let ((flags (logior (if end-stream +flag-end-stream+ 0)
-                       (if end-headers +flag-end-headers+ 0))))
+   HEADER-BLOCK should be HPACK-encoded bytes. When PRIORITY is true, the
+   five-byte priority field is prepended to the header block (RFC 9113
+   section 6.2.1). WEIGHT is the protocol weight in the range 1..256."
+  (when priority
+    (when (or (< stream-dependency 0) (> stream-dependency #x7fffffff))
+      (error "HTTP/2 stream dependency must be a 31-bit value: ~D"
+             stream-dependency))
+    (when (or (< weight 1) (> weight 256))
+      (error "HTTP/2 stream weight must be between 1 and 256: ~D" weight))
+    (when (= stream-id stream-dependency)
+      (error "HTTP/2 stream cannot depend on itself: ~D" stream-id)))
+  (let* ((flags (logior (if end-stream +flag-end-stream+ 0)
+                        (if end-headers +flag-end-headers+ 0)
+                        (if priority +flag-priority+ 0)))
+         (header-block (if (typep header-block '(simple-array (unsigned-byte 8) (*)))
+                           header-block
+                           (coerce header-block '(simple-array (unsigned-byte 8) (*)))))
+         (payload (if priority
+                      (let ((result (make-array (+ 5 (length header-block))
+                                                :element-type '(unsigned-byte 8))))
+                        (setf (aref result 0)
+                              (logior (ldb (byte 8 24) stream-dependency)
+                                      (if exclusive #x80 0))
+                              (aref result 1) (ldb (byte 8 16) stream-dependency)
+                              (aref result 2) (ldb (byte 8 8) stream-dependency)
+                              (aref result 3) (ldb (byte 8 0) stream-dependency)
+                              ;; The wire value is the protocol weight minus one.
+                              (aref result 4) (1- weight))
+                        (replace result header-block :start1 5)
+                        result)
+                      header-block)))
     (make-frame :type +frame-headers+
                 :flags flags
                 :stream-id stream-id
-                :payload (if (typep header-block '(simple-array (unsigned-byte 8) (*)))
-                             header-block
-                             (coerce header-block '(simple-array (unsigned-byte 8) (*)))))))
+                :payload payload)))
 
 (defun make-continuation-frame (stream-id header-block &key (end-headers t))
   "Create CONTINUATION frame with a header-block fragment."

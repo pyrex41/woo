@@ -348,6 +348,37 @@
            (frame (make-headers-frame 7 header-block :end-stream t :end-headers nil)))
       (ok (= (frame-flags frame) +flag-end-stream+)))))
 
+(deftest make-headers-frame-with-priority
+  (testing "make-headers-frame encodes the optional PRIORITY field"
+    (let* ((header-block #(65 66))
+           (frame (make-headers-frame 9 header-block :priority t
+                                      :exclusive t
+                                      :stream-dependency #x01020304
+                                      :weight 256))
+           (payload (frame-payload frame)))
+      (ok (= (frame-flags frame) (logior +flag-end-headers+ +flag-priority+)))
+      (ok (= (length payload) 7))
+      (ok (= (aref payload 0) #x81) "exclusive and dependency high octet")
+      (ok (= (aref payload 1) #x02))
+      (ok (= (aref payload 2) #x03))
+      (ok (= (aref payload 3) #x04))
+      (ok (= (aref payload 4) #xff) "wire weight is weight minus one")
+      (ok (equalp (subseq payload 5) header-block) "header block follows priority"))))
+
+(deftest make-headers-frame-rejects-invalid-priority
+  (testing "make-headers-frame rejects invalid priority fields"
+    (ok (handler-case
+            (progn (make-headers-frame 1 #() :priority t :weight 0) nil)
+          (error () t)))
+    (ok (handler-case
+            (progn (make-headers-frame 1 #() :priority t
+                                       :stream-dependency #x80000000) nil)
+          (error () t)))
+    (ok (handler-case
+            (progn (make-headers-frame 1 #() :priority t
+                                       :stream-dependency 1) nil)
+          (error () t)))))
+
 ;;; DATA frame tests
 
 (deftest make-data-frame-basic
