@@ -1417,6 +1417,69 @@
       (run-adapter-request conn id))
     (values conn (reverse writers))))
 
+(deftest ordinary-responses-stream-from-retained-source
+  (testing "a body larger than the queue cap completes as windows reopen"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (body (make-string (1+ woo.http2.clack:*max-queued-response-bytes*)
+                              :initial-element #\a))
+           (sent 0)
+           (ended nil)
+           (resets 0))
+      (register-stream conn stream)
+      (let ((woo.http2.clack:*http2-frame-sink*
+              (lambda (frame)
+                (case (frame-type frame)
+                  (#.+frame-data+
+                   (incf sent (length (frame-payload frame)))
+                   (when (logtest (frame-flags frame) +flag-end-stream+)
+                     (setf ended t)))
+                  (#.woo.http2.constants:+frame-rst-stream+ (incf resets))))))
+        (send-http2-response conn stream 200 nil body)
+        (loop repeat 9 until ended
+              do (connection-process-frame conn (make-window-update-frame 0 1048576))
+                 (connection-process-frame conn (make-window-update-frame 1 1048576)))
+        (ok ended)
+        (ok (= sent (length body)))
+        (ok (zerop resets))
+        (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))))))
+  (testing "a withheld window stages no copied body bytes"
+    (let* ((woo.http2.clack:*max-queued-response-bytes* 100)
+           (conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (body (list "é" (make-string 120 :initial-element #\b))))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (let ((frames (capture-frames
+                     (lambda () (send-http2-response conn stream 200 nil body)))))
+        (ok (null (rst-frames frames 1)))
+        (ok (zerop (woo.http2.clack::connection-queued-bytes conn)))
+        (ok (= 1 (length (frames-of-type frames +frame-headers+)))))))
+  (testing "UTF-8 strings and octet vectors keep list order across a window update"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (parts (list "é" (octets "AB") "😀")))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (send-http2-response conn stream 200 nil parts)
+      (let ((frames (capture-frames
+                     (lambda ()
+                       (connection-process-frame conn
+                         (make-window-update-frame 0 32))))))
+        (ok (equalp (data-bytes frames)
+                    (trivial-utf-8:string-to-utf-8-bytes "éAB😀")))
+        (ok (end-stream-p (car (last (frames-of-type frames +frame-data+))))))))
+  (testing "reset releases retained ordinary body parts"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+)))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (send-http2-response conn stream 200 nil (make-string 1000))
+      (let ((pending (gethash 1 (woo.http2.connection:http2-connection-send-queue conn))))
+        (ok (woo.http2.clack::pending-source pending))
+        (woo.http2.clack::drop-pending-response conn stream)
+        (ok (null (woo.http2.clack::pending-source pending)))))))
+
 (deftest streamed-writes-are-bounded
   (testing "a writer past *max-queued-response-bytes* resets the stream and then drops writes"
     (let ((woo.http2.clack:*max-queued-response-bytes* 100000))

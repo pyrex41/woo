@@ -192,6 +192,12 @@ Remember to pass ":debug nil" to turn off the debugger mode on production enviro
   :use-default-middlewares nil)
 ```
 
+For HTTP/2 responses with an in-memory body (a string, octet vector, or list
+of them), Woo retains the body parts and sends them as flow-control credit
+becomes available. Keep those objects unchanged until the response finishes
+or the stream closes. Woo copies only the next frame-sized slice while sending;
+a withheld send window does not copy the whole body into its queue.
+
 ### Cluster
 
 ```common-lisp

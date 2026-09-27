@@ -472,6 +472,11 @@
   (offset 0 :type fixnum)
   ;; Octets in CHUNKS not yet sent.
   (queued 0 :type integer)
+  ;; Ordinary Clack body parts are retained as a source. Only a frame-sized
+  ;; copy is staged when send-window credit is available. Applications must
+  ;; leave these strings/vectors unchanged until END_STREAM or reset.
+  (source nil :type list)
+  (source-offset 0 :type fixnum)
   ;; A pathname body, sent from PATH-OFFSET up to PATH-END.
   (path nil)
   (path-offset 0 :type integer)
@@ -488,6 +493,7 @@
 
 (defun pending-empty-p (pending)
   (and (null (pending-chunks pending))
+       (null (pending-source pending))
        (pending-path-done-p pending)))
 
 (defun pending-append (pending octets)
@@ -519,6 +525,7 @@
                           (let* ((end (+ start n))
                                  (last (and (= end len)
                                             (null (rest (pending-chunks pending)))
+                                            (null (pending-source pending))
                                             (pending-path-done-p pending)
                                             (pending-end-stream pending))))
                             (emit-frame conn
@@ -536,6 +543,34 @@
                (setf (pending-offset pending) 0)
                (unless (pending-chunks pending)
                  (setf (pending-tail pending) nil))))
+    nil))
+
+(defun send-pending-source (conn stream pending)
+  "Materialize at most one frame of an ordinary body at a time, and only
+   when the peer has send-window credit. SOURCE retains the app's body parts
+   in order; PENDING-QUEUED counts only the temporary copied frame."
+  (let ((max (connection-send-max-frame-size conn)))
+    (loop while (pending-source pending)
+          do (when (<= (send-window-available conn stream) 0)
+               (return-from send-pending-source :blocked))
+             (let* ((part (first (pending-source pending)))
+                    (start (pending-source-offset pending))
+                    ;; Four UTF-8 octets per character is the maximum.
+                    (end (min (length part)
+                              (+ start (if (stringp part)
+                                           (max 1 (floor max 4))
+                                           max)))))
+               (if (= start end)
+                   (setf (pending-source pending) (rest (pending-source pending))
+                         (pending-source-offset pending) 0)
+                   (progn
+                     (pending-append pending (octets-of part :start start :end end))
+                     (setf (pending-source-offset pending) end)
+                     (when (= end (length part))
+                       (setf (pending-source pending) (rest (pending-source pending))
+                             (pending-source-offset pending) 0))
+                     (let ((result (send-pending-chunks conn stream pending)))
+                       (when result (return-from send-pending-source result)))))))
     nil))
 
 (defun open-file-identity (in)
@@ -604,6 +639,9 @@
   (let ((result (send-pending-chunks conn stream pending)))
     (when result
       (return-from pump-response result)))
+  (let ((result (send-pending-source conn stream pending)))
+    (when result
+      (return-from pump-response result)))
   (let ((result (send-pending-path conn stream pending)))
     (when result
       (return-from pump-response result)))
@@ -630,7 +668,9 @@
   (setf (pending-chunks pending) nil
         (pending-tail pending) nil
         (pending-offset pending) 0
-        (pending-queued pending) 0))
+        (pending-queued pending) 0
+        (pending-source pending) nil
+        (pending-source-offset pending) 0))
 
 (defun drop-pending-response (conn stream)
   "Remove STREAM's entry from the send queue and discard its octets."
@@ -725,18 +765,6 @@
        (replace out data :start2 start :end2 end)
        out))))
 
-(defun body-chunks (body)
-  "The non-empty octet vectors of a string, octet vector, or list body."
-  (flet ((chunk (part)
-           (etypecase part
-             (null nil)
-             (string (string-to-utf-8-bytes part))
-             ((vector (unsigned-byte 8)) part))))
-    (remove-if (lambda (octets) (or (null octets) (zerop (length octets))))
-               (if (listp body)
-                   (mapcar #'chunk body)
-                   (list (chunk body))))))
-
 (defun response-header-present-p (headers key)
   (loop for k in headers by #'cddr
         thereis (or (eq k key)
@@ -745,9 +773,10 @@
                     (and (stringp k)
                          (string-equal k (symbol-name key))))))
 
-(defun prepare-response-body (headers body)
-  "Return (values headers pending). A pathname body is not read here: its
-   size goes in content-length and it is streamed as the window allows."
+(defun prepare-response-body (conn headers body)
+  "Return (values headers pending). Ordinary body parts are retained until
+   sent, with only frame-sized copies made when the send window permits."
+  (declare (ignore conn))
   (let ((pending (make-pending-response :end-stream t)))
     (cond
       ((pathnamep body)
@@ -764,8 +793,13 @@
                  (pending-path-identity pending) identity)
            (values headers pending))))
       (t
-       (dolist (octets (body-chunks body))
-         (pending-append pending octets))
+       (setf (pending-source pending)
+             (remove-if (lambda (part)
+                          (or (null part)
+                              (zerop (length (etypecase part
+                                               (string part)
+                                               ((vector (unsigned-byte 8)) part))))))
+                        (if (listp body) body (list body))))
        (values headers pending)))))
 
 (defun header-name-string (name)
@@ -830,7 +864,7 @@
    case nothing is sent."
   (unless (response-startable-p conn stream)
     (return-from send-http2-response nil))
-  (multiple-value-bind (headers pending) (prepare-response-body headers body)
+  (multiple-value-bind (headers pending) (prepare-response-body conn headers body)
     (begin-response conn stream status headers pending)))
 
 (defun begin-streaming-response (conn stream status headers)
