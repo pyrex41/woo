@@ -122,6 +122,9 @@
   ;; (lambda (entry)) installed by the response writer. Called with a
   ;; send-queue entry when its stream is dropped, to let go of its octets.
   (discard-sends nil)
+  ;; Adapter-owned accounting and cancellation for responses awaiting dispatch.
+  (response-budget nil)
+  (cancel-responses nil)
   ;; Callbacks
   on-stream       ; (lambda (stream)) - called for new stream
   on-headers      ; (lambda (stream headers end-stream))
@@ -193,6 +196,8 @@
           (setf (http2-stream-body-buffer stream)
                 (make-array 0 :element-type '(unsigned-byte 8)
                               :adjustable t :fill-pointer 0))))
+      (when (http2-connection-cancel-responses conn)
+        (funcall (http2-connection-cancel-responses conn) id))
       (remhash id (http2-connection-streams conn))
       ;; A writer may still hold the entry: empty it, so its octets and
       ;; its share of the queue budgets go now, not at its next write.
@@ -252,6 +257,8 @@
    the write callback, so the queued GOAWAY is flushed first. Idempotent."
   (unless (http2-connection-closing conn)
     (setf (http2-connection-closing conn) t)
+    (when (http2-connection-cancel-responses conn)
+      (funcall (http2-connection-cancel-responses conn) nil))
     (when (http2-connection-on-close conn)
       (funcall (http2-connection-on-close conn) conn))
     (let ((socket (http2-connection-socket conn)))
