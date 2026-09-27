@@ -1503,6 +1503,18 @@
       (ok (= (length reason) 120))
       (ok (woo.websocket::valid-utf-8-p reason)))))
 
+(deftest test-send-control-frame-rejects-oversized-payload
+  (with-fake-event-loop ()
+    (let ((socket (make-bare-socket))
+          (payload (make-array 126 :element-type '(unsigned-byte 8)
+                               :initial-element 65)))
+      (ok (null (send-ping socket payload))
+          "an oversized ping is not queued")
+      (ok (null (send-pong socket payload))
+          "an oversized pong is not queued")
+      (ok (zerop (length (queued-octets socket)))
+          "no invalid control frame reaches the socket"))))
+
 (deftest test-ws-data-before-setup
   (testing "octets fed before setup-websocket are parsed by it, in order"
     (with-stubbed-close (closed)

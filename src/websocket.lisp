@@ -609,6 +609,12 @@
    sent (RFC 6455 5.5.1). CLOSE-AFTER also closes the socket once it is flushed.
    Every frame installs the same flush callback, so a later write cannot
    cancel a pending close."
+  ;; Control frames cannot be fragmented and their payload is limited to 125
+  ;; octets (RFC 6455 Section 5.5). Do not put an invalid frame on the wire
+  ;; when an application passes an oversized ping or pong payload.
+  (when (and (control-opcode-p opcode)
+             (> (length payload) 125))
+    (return-from send-frame nil))
   (let ((close-state (socket-close-state socket)))
     (when (or (not (socket-open-p socket))
               (ws-close-sent close-state))
