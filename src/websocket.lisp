@@ -62,13 +62,36 @@
              (format s "WebSocket protocol error: ~A"
                      (websocket-protocol-error-reason c)))))
 
+(defun header-token-p (value token)
+  "True when comma-separated VALUE contains TOKEN as a whole token."
+  (when (stringp value)
+    (loop with start = 0
+          for end = (or (position #\, value :start start) (length value))
+          for item = (string-trim '(#\Space #\Tab) (subseq value start end))
+          thereis (string-equal item token)
+          until (= end (length value))
+          do (setf start (1+ end)))))
+
+(defun valid-websocket-key-p (key)
+  "Validate the RFC 6455 Sec-WebSocket-Key encoding and decoded length."
+  (and (stringp key)
+       (handler-case
+           (let ((decoded (cl-base64:base64-string-to-usb8-array key)))
+             ;; Re-encoding rejects decoder-tolerated non-canonical input and
+             ;; ensures the value is exactly the 16-octet nonce required by
+             ;; RFC 6455 Section 4.1.
+             (and (= (length decoded) 16)
+                  (string= (cl-base64:usb8-array-to-base64-string decoded)
+                           key)))
+         (error () nil))))
+
 (defun websocket-p (env)
-  "Check if request is a WebSocket upgrade request."
+  "Check if request is a valid RFC 6455 WebSocket upgrade request."
   (and (eq (getf env :request-method) :GET)
        (let ((headers (getf env :headers)))
-         (and (string-equal (gethash "upgrade" headers) "websocket")
-              (search "upgrade" (string-downcase (or (gethash "connection" headers) "")))
-              (gethash "sec-websocket-key" headers)
+         (and (header-token-p (gethash "upgrade" headers) "websocket")
+              (header-token-p (gethash "connection" headers) "upgrade")
+              (valid-websocket-key-p (gethash "sec-websocket-key" headers))
               (string= (gethash "sec-websocket-version" headers) "13")))))
 
 (defun compute-accept-key (client-key)
