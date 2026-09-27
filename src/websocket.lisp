@@ -62,13 +62,36 @@
              (format s "WebSocket protocol error: ~A"
                      (websocket-protocol-error-reason c)))))
 
+(defun header-token-p (value token)
+  "True when comma-separated VALUE contains TOKEN as a whole token."
+  (when (stringp value)
+    (loop with start = 0
+          for end = (or (position #\, value :start start) (length value))
+          for item = (string-trim '(#\Space #\Tab) (subseq value start end))
+          thereis (string-equal item token)
+          until (= end (length value))
+          do (setf start (1+ end)))))
+
+(defun valid-websocket-key-p (key)
+  "Validate the RFC 6455 Sec-WebSocket-Key encoding and decoded length."
+  (and (stringp key)
+       (handler-case
+           (let ((decoded (cl-base64:base64-string-to-usb8-array key)))
+             ;; Re-encoding rejects decoder-tolerated non-canonical input and
+             ;; ensures the value is exactly the 16-octet nonce required by
+             ;; RFC 6455 Section 4.1.
+             (and (= (length decoded) 16)
+                  (string= (cl-base64:usb8-array-to-base64-string decoded)
+                           key)))
+         (error () nil))))
+
 (defun websocket-p (env)
-  "Check if request is a WebSocket upgrade request."
+  "Check if request is a valid RFC 6455 WebSocket upgrade request."
   (and (eq (getf env :request-method) :GET)
        (let ((headers (getf env :headers)))
-         (and (string-equal (gethash "upgrade" headers) "websocket")
-              (search "upgrade" (string-downcase (or (gethash "connection" headers) "")))
-              (gethash "sec-websocket-key" headers)
+         (and (header-token-p (gethash "upgrade" headers) "websocket")
+              (header-token-p (gethash "connection" headers) "upgrade")
+              (valid-websocket-key-p (gethash "sec-websocket-key" headers))
               (string= (gethash "sec-websocket-version" headers) "13")))))
 
 (defun compute-accept-key (client-key)
@@ -606,9 +629,17 @@
 (defun send-frame (socket opcode payload &key close-after)
   "Send a WebSocket frame over socket. Returns T if the frame was queued, or
    NIL if it was dropped: the socket is closed, or a close frame was already
-   sent (RFC 6455 5.5.1). CLOSE-AFTER also closes the socket once it is flushed.
+   sent (RFC 6455 5.5.1), or a control payload exceeds 125 octets.
+   Call only on the socket's owning event-loop thread.
+   CLOSE-AFTER also closes the socket once it is flushed.
    Every frame installs the same flush callback, so a later write cannot
    cancel a pending close."
+  ;; Control frames cannot be fragmented and their payload is limited to 125
+  ;; octets (RFC 6455 Section 5.5). Do not put an invalid frame on the wire
+  ;; when an application passes an oversized ping or pong payload.
+  (when (and (control-opcode-p opcode)
+             (> (length payload) 125))
+    (return-from send-frame nil))
   (let ((close-state (socket-close-state socket)))
     (when (or (not (socket-open-p socket))
               (ws-close-sent close-state))

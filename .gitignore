@@ -14,6 +14,10 @@ qlfile
 qlfile.lock
 t/certs/
 t/prop/.qc-failures
+/artifacts/h2spec/
+/artifacts/autobahn/
+/t/hegel/oracle/target/
+/t/conformance/__pycache__/
 
 # SCUD
 .scud/

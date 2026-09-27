@@ -5,8 +5,6 @@
                 :ev-loop-new
                 :ev-run
                 :+EVFLAG-FORKCHECK+)
-  (:import-from :cffi
-                :foreign-free)
   (:import-from :static-vectors
                 :make-static-vector
                 :free-static-vector)
@@ -73,21 +71,28 @@
      (unwind-protect (progn
                        ,@body
                        (lev:ev-run *evloop* 0))
-       ;; First, so that nothing touches the loop from another thread
-       ;; while it is torn down.
-       ;; A failing hook must not skip closing the sockets or freeing the loop.
-       (dolist (hook *evloop-exit-hooks*)
-         (handler-case (funcall hook)
-           (error (e) (vom:error "Error in event loop exit hook: ~A" e))))
-       (let ((close-socket-fn (intern #.(string :close-socket) (find-package #.(string :woo.ev.socket)))))
-         (maphash (lambda (fd socket)
-                    (declare (ignore fd))
-                    (funcall close-socket-fn socket))
-                  *data-registry*))
-       ,@(when cleanup-fn
-           `((funcall ,cleanup-fn)))
-       (free-static-vector *input-buffer*)
-       (cffi:foreign-free *evloop*))))
+       (unwind-protect
+            (progn
+              ;; First, so that nothing touches the loop from another thread
+              ;; while it is torn down. A failing hook must not skip sockets.
+              (dolist (hook *evloop-exit-hooks*)
+                (handler-case (funcall hook)
+                  (error (e) (vom:error "Error in event loop exit hook: ~A" e))))
+              ;; CLOSE-SOCKET removes its descriptor from *DATA-REGISTRY*.
+              ;; Snapshot the table before closing every accepted socket.
+              (let ((close-socket-fn (intern #.(string :close-socket) (find-package #.(string :woo.ev.socket))))
+                    (sockets (loop for socket being the hash-values of *data-registry*
+                                   collect socket)))
+                (dolist (socket sockets)
+                  (handler-case (funcall close-socket-fn socket)
+                    (error (e) (vom:error "Error closing socket on event loop exit: ~A" e)))))
+              ,@(when cleanup-fn
+                  `((funcall ,cleanup-fn))))
+         (unwind-protect
+              (free-static-vector *input-buffer*)
+           ;; Destroy the loop even if a caller's cleanup callback fails.
+           ;; libev owns backend descriptors and internal watcher memory.
+           (lev:ev-loop-destroy *evloop*))))))
 
 (defun check-event-loop-running ()
   (unless *evloop*

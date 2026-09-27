@@ -259,6 +259,10 @@
 ;;; When the loop stops, its dispatcher is marked stopped under its lock,
 ;;; so no thread wakes a loop that is being freed.
 
+(defvar *dispatch-drop-callback* nil
+  "Cleanup for the work currently being submitted if its loop drops it.")
+(defstruct dispatch-work thunk on-drop)
+
 (defstruct (loop-dispatcher (:conc-name dispatcher-))
   (id 0 :type fixnum)
   evloop
@@ -266,6 +270,11 @@
   (lock (bt2:make-lock :name "woo HTTP/2 dispatcher"))
   ;; Thunks waiting to run on the loop, newest first.
   (thunks nil :type list)
+  ;; Weak keys avoid retaining completed connections until the loop exits.
+  (budgets #+sbcl (make-hash-table :test 'eq :weakness :key)
+           #+ccl (make-hash-table :test 'eq :weak :key)
+           #+lispworks (make-hash-table :test 'eq :weak-kind :key)
+           #-(or sbcl ccl lispworks) (make-hash-table :test 'eq))
   ;; Set, under LOCK, before the loop and the watcher are freed.
   (stopped nil))
 
@@ -292,7 +301,8 @@
                       (setf (dispatcher-thunks dispatcher) nil)))))
       (unless thunks (return))
       (dolist (thunk thunks)
-        (handler-case (funcall thunk)
+        (handler-case (funcall (if (dispatch-work-p thunk)
+                                  (dispatch-work-thunk thunk) thunk))
           (error (e)
             (vom:error "Error in HTTP/2 response write: ~A" e)))))))
 
@@ -308,7 +318,10 @@
    hold the lock that stop-dispatcher takes before the loop is freed."
   (bt2:with-lock-held ((dispatcher-lock dispatcher))
     (unless (dispatcher-stopped dispatcher)
-      (push thunk (dispatcher-thunks dispatcher))
+      (push (if *dispatch-drop-callback*
+                (make-dispatch-work :thunk thunk :on-drop *dispatch-drop-callback*)
+                thunk)
+            (dispatcher-thunks dispatcher))
       (lev:ev-async-send (dispatcher-evloop dispatcher)
                          (dispatcher-watcher dispatcher))
       t)))
@@ -319,14 +332,24 @@
    write to sockets the loop is closing, and they hold connections and body
    octets. The watcher is stopped and freed, and the dispatcher forgotten."
   (let ((watcher nil)
-        (evloop nil))
+        (evloop nil)
+        (dropped nil))
     (bt2:with-lock-held ((dispatcher-lock dispatcher))
       (setf (dispatcher-stopped dispatcher) t
+            dropped (dispatcher-thunks dispatcher)
             (dispatcher-thunks dispatcher) nil
             watcher (dispatcher-watcher dispatcher)
             evloop (dispatcher-evloop dispatcher)
             (dispatcher-watcher dispatcher) nil
             (dispatcher-evloop dispatcher) nil))
+    (dolist (work dropped)
+      (when (dispatch-work-p work)
+        (funcall (dispatch-work-on-drop work))))
+    (maphash (lambda (budget ignored)
+               (declare (ignore ignored))
+               (cancel-response-budget budget))
+             (dispatcher-budgets dispatcher))
+    (clrhash (dispatcher-budgets dispatcher))
     (bt2:with-lock-held (*dispatchers-lock*)
       (remhash (dispatcher-id dispatcher) *dispatchers*))
     (when evloop
@@ -410,9 +433,141 @@
    writer drops later writes. Read on the event-loop thread.")
 
 (defparameter *max-connection-queued-response-bytes* (* 64 1024 1024)
-  "Most octets a connection's responses may hold queued for the send window.
+  "Most octets a connection's responses may hold queued for the send window
+   or reserved by work waiting to run on the event loop.
    A streamed write that takes the connection past it resets that stream, as
    for *max-queued-response-bytes*. Read on the event-loop thread.")
+
+;;; One lock protects both dispatcher reservations and snapshots of the loop's
+;;; pending queues. Work owns its payload through the reservation, so reset and
+;;; loop teardown can clear it even while its dispatch thunk is still queued.
+(defstruct response-budget
+  (lock (bt2:make-lock :name "woo HTTP/2 response budget"))
+  (entries (make-hash-table)))
+(defstruct response-budget-entry budget id (queued 0) (reserved 0) tokens pending dead)
+(defstruct response-reservation entry (bytes 0) payload (active t))
+
+(defun cancel-budget-entry (entry)
+  (let ((budget (response-budget-entry-budget entry)))
+    (bt2:with-lock-held ((response-budget-lock budget))
+      ;; Detach the owned copies before their capacity becomes reusable.
+      ;; This helper does not reacquire the budget lock.
+      (when (response-budget-entry-pending entry)
+        (clear-pending-response (response-budget-entry-pending entry)))
+      (setf (response-budget-entry-dead entry) t
+            (response-budget-entry-pending entry) nil)
+      (dolist (token (response-budget-entry-tokens entry))
+        (setf (response-reservation-active token) nil
+              (response-reservation-payload token) nil))
+      (setf (response-budget-entry-tokens entry) nil
+            (response-budget-entry-queued entry) 0
+            (response-budget-entry-reserved entry) 0)
+      (remhash (response-budget-entry-id entry) (response-budget-entries budget)))))
+
+(defun cancel-response-budget (budget)
+  (let ((entries (bt2:with-lock-held ((response-budget-lock budget))
+                   (alexandria:hash-table-values (response-budget-entries budget)))))
+    (dolist (entry entries) (cancel-budget-entry entry))))
+
+(defun response-budget-entry-for (conn stream)
+  "Called on the event loop, before a responder escapes to other threads."
+  (let ((budget (or (woo.http2.connection::http2-connection-response-budget conn)
+                    (setf (woo.http2.connection::http2-connection-response-budget conn)
+                          (make-response-budget)))))
+    (unless (woo.http2.connection::http2-connection-cancel-responses conn)
+      (setf (woo.http2.connection::http2-connection-cancel-responses conn)
+            (lambda (id)
+              (let ((entries
+                      (bt2:with-lock-held ((response-budget-lock budget))
+                        (if id
+                            (let ((entry (gethash id (response-budget-entries budget))))
+                              (when entry (list entry)))
+                            (alexandria:hash-table-values (response-budget-entries budget))))))
+                (dolist (entry entries) (cancel-budget-entry entry)))))
+      ;; Register once with the owner loop. The dispatcher's weak table does
+      ;; not retain completed connections, but teardown cancels survivors.
+      (let ((dispatcher (current-loop-dispatcher)))
+        (when dispatcher
+          (setf (gethash budget (dispatcher-budgets dispatcher)) t))))
+    (bt2:with-lock-held ((response-budget-lock budget))
+      (or (gethash (http2-stream-id stream) (response-budget-entries budget))
+          (setf (gethash (http2-stream-id stream) (response-budget-entries budget))
+                (make-response-budget-entry :budget budget :id (http2-stream-id stream)))))))
+
+(defun reserve-response-bytes (entry bytes stream-limit connection-limit &key partial)
+  (let ((budget (response-budget-entry-budget entry)))
+    (bt2:with-lock-held ((response-budget-lock budget))
+      (let ((total 0))
+        (maphash (lambda (id other)
+                   (declare (ignore id))
+                   (incf total (+ (response-budget-entry-queued other)
+                                 (response-budget-entry-reserved other))))
+                 (response-budget-entries budget))
+        (when partial
+          (setf bytes (min bytes
+                           (- stream-limit (response-budget-entry-queued entry)
+                              (response-budget-entry-reserved entry))
+                           (- connection-limit total))))
+        (unless (or (response-budget-entry-dead entry)
+                    (and partial (<= bytes 0))
+                    (> (+ bytes (response-budget-entry-queued entry)
+                          (response-budget-entry-reserved entry)) stream-limit)
+                    (> (+ bytes total) connection-limit))
+          (let ((token (make-response-reservation :entry entry :bytes bytes)))
+            (incf (response-budget-entry-reserved entry) bytes)
+            (push token (response-budget-entry-tokens entry))
+            token))))))
+
+(defun release-response-reservation (token)
+  (let* ((entry (response-reservation-entry token))
+         (budget (response-budget-entry-budget entry)))
+    (bt2:with-lock-held ((response-budget-lock budget))
+      (when (response-reservation-active token)
+        (decf (response-budget-entry-reserved entry) (response-reservation-bytes token))
+        (setf (response-budget-entry-tokens entry)
+              (delete token (response-budget-entry-tokens entry))
+              (response-reservation-active token) nil
+              (response-reservation-payload token) nil)))))
+
+(defun response-budget-entry-dead-p (entry)
+  (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
+    (response-budget-entry-dead entry)))
+
+(defun install-reservation-payload (token payload &key copy)
+  "Install PAYLOAD, or call its copy thunk while the reservation is protected.
+   Cancellation cannot return the capacity while the producer owns an
+   unfinished copy. Inactive reservations do not call the copy thunk."
+  (let ((budget (response-budget-entry-budget (response-reservation-entry token))))
+    (bt2:with-lock-held ((response-budget-lock budget))
+      (when (response-reservation-active token)
+        (setf (response-reservation-payload token) (if copy (funcall payload) payload))
+        t))))
+
+(defun call-with-response-reservation (run token thunk)
+  "THUNK receives the reserved payload on the owner loop. Always release it."
+  (let ((*dispatch-drop-callback*
+          (lambda () (cancel-budget-entry (response-reservation-entry token)))))
+    (if (funcall run
+                     (lambda ()
+                       (unwind-protect
+                            (when (response-reservation-active token)
+                              (funcall thunk (response-reservation-payload token)))
+                         (release-response-reservation token))))
+        t
+        (progn (release-response-reservation token) nil))))
+
+(defun response-octet-length (data &key (start 0) end)
+  "Size without allocating a copy; used before reserving dispatcher storage."
+  (etypecase data
+    (null 0)
+    (pathname 0)
+    (string
+     (loop for i from start below (or end (length data))
+           for code = (char-code (char data i))
+           sum (cond ((< code #x80) 1) ((< code #x800) 2)
+                     ((< code #x10000) 3) (t 4))))
+    ((vector (unsigned-byte 8)) (- (or end (length data)) start))
+    (list (loop for part in data sum (response-octet-length part)))))
 
 (defun connection-closing-p (conn)
   (woo.http2.connection::http2-connection-closing conn))
@@ -472,6 +627,13 @@
   (offset 0 :type fixnum)
   ;; Octets in CHUNKS not yet sent.
   (queued 0 :type integer)
+  ;; Shared accounting for this pending queue and dispatcher work.
+  (budget-entry nil)
+  ;; Retain caller-owned parts; only the budgeted copied slice is queued.
+  (source nil :type list)
+  (source-offset 0 :type fixnum)
+  ;; UTF-8 byte offset inside the current source character, for tiny budgets.
+  (source-byte-offset 0 :type (integer 0 3))
   ;; A pathname body, sent from PATH-OFFSET up to PATH-END.
   (path nil)
   (path-offset 0 :type integer)
@@ -482,12 +644,20 @@
   ;; END_STREAM follows the octets above. NIL while a writer may add more.
   (end-stream nil))
 
+(defun update-pending-budget (pending)
+  (let ((entry (pending-budget-entry pending)))
+    (when entry
+      (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
+        (unless (response-budget-entry-dead entry)
+          (setf (response-budget-entry-queued entry) (pending-queued pending)))))))
+
 (defun pending-path-done-p (pending)
   (or (null (pending-path pending))
       (>= (pending-path-offset pending) (pending-path-end pending))))
 
 (defun pending-empty-p (pending)
   (and (null (pending-chunks pending))
+       (null (pending-source pending))
        (pending-path-done-p pending)))
 
 (defun pending-append (pending octets)
@@ -497,7 +667,8 @@
       (if (pending-chunks pending)
           (setf (cdr (pending-tail pending)) cell)
           (setf (pending-chunks pending) cell))
-      (setf (pending-tail pending) cell))))
+      (setf (pending-tail pending) cell)
+      (update-pending-budget pending))))
 
 (defun empty-octets ()
   (make-array 0 :element-type '(unsigned-byte 8)))
@@ -519,6 +690,7 @@
                           (let* ((end (+ start n))
                                  (last (and (= end len)
                                             (null (rest (pending-chunks pending)))
+                                            (null (pending-source pending))
                                             (pending-path-done-p pending)
                                             (pending-end-stream pending))))
                             (emit-frame conn
@@ -529,6 +701,7 @@
                                                          :end-stream last))
                             (consume-send-window conn stream n)
                             (decf (pending-queued pending) n)
+                            (update-pending-budget pending)
                             (setf (pending-offset pending) end)
                             (when last
                               (return-from send-pending-chunks :finished)))))
@@ -536,6 +709,82 @@
                (setf (pending-offset pending) 0)
                (unless (pending-chunks pending)
                  (setf (pending-tail pending) nil))))
+    nil))
+
+(defun utf8-code-width (code)
+  (cond ((< code #x80) 1) ((< code #x800) 2) ((< code #x10000) 3) (t 4)))
+
+(defun source-octets (pending capacity)
+  "Copy at most CAPACITY bytes, even inside one UTF-8 character."
+  (let* ((part (first (pending-source pending)))
+         (start (pending-source-offset pending))
+         (byte-start (pending-source-byte-offset pending)))
+    (if (stringp part)
+        (let ((end start) (byte-end byte-start) (n 0))
+          ;; Find the exact allocation size in one bounded scan.
+          (loop while (and (< end (length part)) (< n capacity))
+                for width = (utf8-code-width (char-code (char part end)))
+                for take = (min (- width byte-end) (- capacity n))
+                do (incf n take) (incf byte-end take)
+                   (when (= byte-end width) (incf end) (setf byte-end 0)))
+          (let ((out (make-array n :element-type '(unsigned-byte 8)))
+                (pos start) (byte byte-start))
+            (dotimes (i n)
+              (let* ((code (char-code (char part pos)))
+                     (width (utf8-code-width code)))
+                (setf (aref out i)
+                      (if (= width 1) code
+                          (if (zerop byte)
+                              (logior (ecase width (2 #xC0) (3 #xE0) (4 #xF0))
+                                      (ash code (- (* 6 (1- width)))))
+                              (logior #x80
+                                      (logand #x3F (ash code (- (* 6 (- width byte 1)))))))))
+                (incf byte)
+                (when (= byte width) (incf pos) (setf byte 0))))
+            (setf (pending-source-offset pending) end
+                  (pending-source-byte-offset pending) byte-end)
+            out))
+        (let* ((end (min (length part) (+ start capacity)))
+               (out (octets-of part :start start :end end)))
+          (setf (pending-source-offset pending) end)
+          out))))
+
+(defun send-pending-source (conn stream pending)
+  "Stage only a reserved copy. A full copy budget resets the response, as
+   for a streaming writer; it cannot leave a budget-only waiter stranded."
+  (let ((max (connection-send-max-frame-size conn)))
+    (loop while (pending-source pending)
+          do (when (<= (send-window-available conn stream) 0)
+               (return-from send-pending-source :blocked))
+             (let* ((part (first (pending-source pending)))
+                    (start (pending-source-offset pending)))
+               (if (= start (length part))
+                   (setf (pending-source pending) (rest (pending-source pending))
+                         (pending-source-offset pending) 0
+                         (pending-source-byte-offset pending) 0)
+                   (let* ((requested (min max (send-window-available conn stream)
+                                          (- (* (- (length part) start)
+                                                (if (stringp part) 4 1))
+                                             (pending-source-byte-offset pending))))
+                          (token (reserve-response-bytes
+                                  (pending-budget-entry pending) requested
+                                  *max-queued-response-bytes*
+                                  *max-connection-queued-response-bytes* :partial t)))
+                     (unless token (return-from send-pending-source :failed))
+                     (unwind-protect
+                          (progn
+                            (pending-append pending
+                                            (source-octets pending (response-reservation-bytes token)))
+                            ;; Pending accounting now owns the bytes. Releasing
+                            ;; first would let another producer spend them twice.
+                            (release-response-reservation token)
+                            (when (= (pending-source-offset pending) (length part))
+                              (setf (pending-source pending) (rest (pending-source pending))
+                                    (pending-source-offset pending) 0
+                                    (pending-source-byte-offset pending) 0))
+                            (let ((result (send-pending-chunks conn stream pending)))
+                              (when result (return-from send-pending-source result))))
+                       (release-response-reservation token))))))
     nil))
 
 (defun open-file-identity (in)
@@ -604,6 +853,9 @@
   (let ((result (send-pending-chunks conn stream pending)))
     (when result
       (return-from pump-response result)))
+  (let ((result (send-pending-source conn stream pending)))
+    (when result
+      (return-from pump-response result)))
   (let ((result (send-pending-path conn stream pending)))
     (when result
       (return-from pump-response result)))
@@ -625,12 +877,24 @@
   (when (stream-closed-p stream)
     (connection-drop-closed-stream conn stream)))
 
-(defun discard-pending (pending)
-  "Let go of PENDING's unsent octets; a writer may still hold PENDING."
+(defun clear-pending-response (pending)
+  "Detach response data. Caller holds its budget lock, when it has one."
   (setf (pending-chunks pending) nil
         (pending-tail pending) nil
         (pending-offset pending) 0
-        (pending-queued pending) 0))
+        (pending-queued pending) 0
+        (pending-source pending) nil
+        (pending-source-offset pending) 0
+        (pending-source-byte-offset pending) 0))
+
+(defun discard-pending (pending)
+  "Detach owned copies and release their capacity in the same critical section."
+  (let ((entry (pending-budget-entry pending)))
+    (if entry
+        (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
+          (clear-pending-response pending)
+          (setf (response-budget-entry-queued entry) 0))
+        (clear-pending-response pending))))
 
 (defun drop-pending-response (conn stream)
   "Remove STREAM's entry from the send queue and discard its octets."
@@ -660,12 +924,13 @@
       (t
        (ecase (pump-response conn stream pending)
          (:finished
+          (discard-pending pending)
           (remhash id queue)
           (note-response-finished conn stream)
           t)
          (:failed
-          (vom:error "HTTP/2 pathname body ~A could not be sent whole"
-                     (pending-path pending))
+          (vom:error "HTTP/2 response on stream ~D could not be sent within its resource limits"
+                     id)
           (reset-response conn stream)
           nil)
          ((:blocked nil) nil))))))
@@ -725,18 +990,6 @@
        (replace out data :start2 start :end2 end)
        out))))
 
-(defun body-chunks (body)
-  "The non-empty octet vectors of a string, octet vector, or list body."
-  (flet ((chunk (part)
-           (etypecase part
-             (null nil)
-             (string (string-to-utf-8-bytes part))
-             ((vector (unsigned-byte 8)) part))))
-    (remove-if (lambda (octets) (or (null octets) (zerop (length octets))))
-               (if (listp body)
-                   (mapcar #'chunk body)
-                   (list (chunk body))))))
-
 (defun response-header-present-p (headers key)
   (loop for k in headers by #'cddr
         thereis (or (eq k key)
@@ -745,9 +998,10 @@
                     (and (stringp k)
                          (string-equal k (symbol-name key))))))
 
-(defun prepare-response-body (headers body)
-  "Return (values headers pending). A pathname body is not read here: its
-   size goes in content-length and it is streamed as the window allows."
+(defun prepare-response-body (conn headers body)
+  "Return (values headers pending). Ordinary body parts are retained until
+   sent, with only frame-sized copies made when the send window permits."
+  (declare (ignore conn))
   (let ((pending (make-pending-response :end-stream t)))
     (cond
       ((pathnamep body)
@@ -764,8 +1018,13 @@
                  (pending-path-identity pending) identity)
            (values headers pending))))
       (t
-       (dolist (octets (body-chunks body))
-         (pending-append pending octets))
+       (setf (pending-source pending)
+             (remove-if (lambda (part)
+                          (or (null part)
+                              (zerop (length (etypecase part
+                                               (string part)
+                                               ((vector (unsigned-byte 8)) part))))))
+                        (if (listp body) body (list body))))
        (values headers pending)))))
 
 (defun header-name-string (name)
@@ -809,6 +1068,11 @@
                        (response-header-fields status headers)))
         (done (and (pending-end-stream pending) (pending-empty-p pending))))
     (ensure-send-flush-hook conn)
+    (let ((entry (response-budget-entry-for conn stream)))
+      (setf (pending-budget-entry pending) entry)
+      (bt2:with-lock-held ((response-budget-lock (response-budget-entry-budget entry)))
+        (setf (response-budget-entry-pending entry) pending))
+      (update-pending-budget pending))
     (unless (send-header-block conn stream header-block :end-stream done)
       (return-from begin-response nil))
     (cond
@@ -830,8 +1094,12 @@
    case nothing is sent."
   (unless (response-startable-p conn stream)
     (return-from send-http2-response nil))
-  (multiple-value-bind (headers pending) (prepare-response-body headers body)
-    (begin-response conn stream status headers pending)))
+  (multiple-value-bind (headers pending) (prepare-response-body conn headers body)
+    (if pending
+        (begin-response conn stream status headers pending)
+        (progn
+          (connection-stream-error conn stream +internal-error+)
+          nil))))
 
 (defun begin-streaming-response (conn stream status headers)
   "Send HEADERS without END_STREAM and queue an empty body for a writer.
@@ -908,82 +1176,81 @@
          nil))))
 
 (defun make-responder (conn socket stream run)
-  "The Clack responder for a delayed response. A (status headers body)
-   response is sent whole. A (status headers) response returns a writer,
-   (lambda (data &key start end close)), like HTTP/1's streaming writer.
-   Both may be called from any thread; RUN puts the work on the loop.
-   An error while sending (a pathname body that cannot be opened, say) is
-   answered with 500, or RST_STREAM once HEADERS are out.
-
-   The writer returns T while the response takes writes, and NIL once it is
-   known to be finished, reset, or dropped for going over
-   *max-queued-response-bytes*; from then on writes are dropped. Called from
-   another thread, the write runs later on the loop, so T means only that
-   the response was alive when the write was queued; a later call returns
-   NIL once a queued write has found it dead."
-  (lambda (clack-res)
-    (destructuring-bind (status headers &optional (body nil body-p)) clack-res
-      (cond
-        (body-p
-         (funcall run
-                  (lambda ()
+  "A delayed responder with connection-wide reservations before dispatch.
+   A writer's T means accepted for dispatch; later socket/stream closure may
+   still discard it. Ordinary bodies retain caller-owned source references;
+   their bounded copies are accounted by the ordinary response pump."
+  (let ((entry (response-budget-entry-for conn stream))
+        (stream-limit *max-queued-response-bytes*)
+        (connection-limit *max-connection-queued-response-bytes*))
+    (labels ((reset ()
+               (funcall run (lambda ()
+                              (when (and (http2-socket-accepts-p socket)
+                                         (stream-sendable-p conn stream))
+                                (reset-response conn stream)))))
+             (reserve (data &key (start 0) end)
+               (reserve-response-bytes entry (response-octet-length data :start start :end end)
+                                       stream-limit connection-limit)))
+      (lambda (clack-res)
+        (destructuring-bind (status headers &optional (body nil body-p)) clack-res
+          (cond
+            (body-p
+             ;; Ordinary responses retain the application's source without
+             ;; copying it. A cancellable zero-byte token owns that reference;
+             ;; the ordinary pump accounts for any copies it makes later.
+             (let ((token (reserve-response-bytes entry 0 stream-limit connection-limit)))
+               (when token
+                 (install-reservation-payload token clack-res)
+                 (call-with-response-reservation
+                  run token
+                  (lambda (response)
                     (with-response-errors (conn socket stream "delayed response")
                       (when (http2-socket-accepts-p socket)
-                        (send-http2-response conn stream status headers body)))))
-         nil)
-        (t
-         (let ((pending nil)
-               (lock (bt2:make-lock :name "woo HTTP/2 writer"))
-               ;; Octets written and not yet run on the loop.
-               (in-transit 0)
-               (dead nil)
-               (limit *max-queued-response-bytes*))
-           (flet ((mark-dead ()
-                    (bt2:with-lock-held (lock) (setf dead t))))
-             (unless (funcall run
-                              (lambda ()
-                                (with-response-errors (conn socket stream "delayed response")
-                                  (when (http2-socket-accepts-p socket)
-                                    (setf pending
-                                          (begin-streaming-response conn stream status headers))))
-                                (unless pending (mark-dead))))
-               (mark-dead))
-             (lambda (data &key (start 0) end close)
-               (let* ((octets (octets-of data :start start :end end))
-                      (len (length octets))
-                      (verdict (bt2:with-lock-held (lock)
-                                 (cond
-                                   (dead :dead)
-                                   ((> (+ in-transit len) limit)
-                                    (setf dead t)
-                                    :over)
-                                   (t (incf in-transit len)
-                                      :ok)))))
-                 (ecase verdict
-                   (:dead nil)
-                   (:over
-                    (vom:warn "HTTP/2 stream ~D: writes outpace the event loop; resetting"
-                              (http2-stream-id stream))
-                    (funcall run
-                             (lambda ()
-                               (when (and pending
-                                          (eq pending (gethash (http2-stream-id stream)
-                                                               (http2-connection-send-queue conn))))
-                                 (reset-response conn stream))))
-                    nil)
-                   (:ok
-                    (unless (funcall run
-                                     (lambda ()
-                                       (bt2:with-lock-held (lock) (decf in-transit len))
-                                       (unless (with-response-errors
-                                                   (conn socket stream "streaming response")
-                                                 (and pending
-                                                      (http2-socket-accepts-p socket)
-                                                      (streaming-write conn stream pending
-                                                                       octets close)))
-                                         (mark-dead))))
-                      (mark-dead))
-                    (bt2:with-lock-held (lock) (not dead)))))))))))))
+                        (destructuring-bind (status headers body) response
+                          (send-http2-response conn stream status headers body))))))))
+             nil)
+            (t
+             (let ((pending nil)
+                   (lock (bt2:make-lock :name "woo HTTP/2 writer"))
+                   (dead nil))
+               (flet ((mark-dead () (bt2:with-lock-held (lock) (setf dead t))))
+                 (unless (funcall run
+                                  (lambda ()
+                                    (with-response-errors (conn socket stream "delayed response")
+                                      (when (http2-socket-accepts-p socket)
+                                        (setf pending (begin-streaming-response conn stream status headers))))
+                                    (unless pending (mark-dead))))
+                   (mark-dead))
+                 (lambda (data &key (start 0) end close)
+                   (block nil
+                   (when (bt2:with-lock-held (lock) dead)
+                     (return-from nil nil))
+                   (let ((token (reserve data :start start :end end)))
+                     (unless token
+                       (mark-dead)
+                       ;; A reset or completed stream also refuses new
+                       ;; reservations. It must not emit another RST_STREAM.
+                       (unless (response-budget-entry-dead-p entry)
+                         (reset))
+                       (return-from nil nil))
+                     ;; Do not allocate until the shared budget accepted this
+                     ;; write. The thunk retains TOKEN, not DATA or OCTETS.
+                     (handler-case
+                         (install-reservation-payload
+                          token (lambda () (octets-of data :start start :end end)) :copy t)
+                       (error (e)
+                         (release-response-reservation token)
+                         (error e)))
+                     (unless
+                         (call-with-response-reservation
+                          run token
+                          (lambda (octets)
+                            (unless (with-response-errors (conn socket stream "streaming response")
+                                      (and pending (http2-socket-accepts-p socket)
+                                           (streaming-write conn stream pending octets close)))
+                              (mark-dead))))
+                       (mark-dead))
+                     (bt2:with-lock-held (lock) (not dead))))))))))))))
 
 (defun dispatch-clack-response (conn socket stream response)
   "Send a Clack response. A function is a delayed response, same as HTTP/1."

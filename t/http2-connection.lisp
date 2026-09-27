@@ -49,6 +49,7 @@
                 :+frame-continuation+
                 :+frame-settings+
                 :+frame-ping+
+                :+frame-priority+
                 :+frame-goaway+
                 :+frame-rst-stream+
                 :+frame-push-promise+
@@ -115,6 +116,41 @@
     (ok (= #x49 (aref +connection-preface+ 2)) "Third byte is 'I'")
     (ok (= #x0d (aref +connection-preface+ 14)) "Contains CR")
     (ok (= #x0a (aref +connection-preface+ 15)) "Contains LF")))
+
+(deftest split-preface-and-batched-frames
+  (testing "a preface split after its frame-sized prefix is not parsed as a frame"
+    (let* ((conn (make-http2-connection))
+           (settings (serialize-frame (make-settings-frame nil)))
+           (ping (serialize-frame (make-ping-frame (make-array 8 :element-type '(unsigned-byte 8)))))
+           (tail (concat-octets (subseq +connection-preface+ 12) settings ping ping)))
+      (woo.http2.connection::parse-connection-data conn +connection-preface+ 0 12)
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (not (woo.http2.connection::http2-connection-preface-received conn)))
+      (woo.http2.connection::parse-connection-data conn tail 0 (length tail))
+      (ok (woo.http2.connection::http2-connection-preface-received conn))
+      (ok (not (http2-connection-goaway-sent conn)))
+      (ok (zerop (length (woo.http2.connection::http2-connection-buffer conn))))))
+  (testing "a partial frame after complete frames survives compaction"
+    (let* ((conn (make-http2-connection))
+           (ping (serialize-frame (make-ping-frame (make-array 8 :element-type '(unsigned-byte 8)))))
+           (input (concat-octets +connection-preface+
+                                 (serialize-frame (make-settings-frame nil))
+                                 ping (subseq ping 0 10))))
+      (woo.http2.connection::parse-connection-data conn input 0 (length input))
+      (ok (= 10 (length (woo.http2.connection::http2-connection-buffer conn))))
+      (woo.http2.connection::parse-connection-data conn ping 10 (length ping))
+      (ok (zerop (length (woo.http2.connection::http2-connection-buffer conn))))
+      (ok (not (http2-connection-goaway-sent conn))))))
+
+(deftest malformed-priority-frames
+  (dolist (case (list (list 0 (make-array 5 :element-type '(unsigned-byte 8)) +protocol-error+)
+                      (list 1 (empty-octets) +frame-size-error+)))
+    (destructuring-bind (id payload expected) case
+      (multiple-value-bind (conn err) (test-conn)
+        (connection-process-frame conn (make-frame :type +frame-priority+
+                                                   :stream-id id :payload payload))
+        (ok (= (funcall err) expected))
+        (ok (http2-connection-goaway-sent conn))))))
 
 (deftest connection-creation
   (testing "make-http2-connection creates connection with initial state"

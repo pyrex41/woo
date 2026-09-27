@@ -116,10 +116,10 @@
         (clack.test:*use-https* t))
     (clack.test.suite:run-server-tests :woo)))
 
-;;; The HTTP/1 reader splits its input at CR LF CR LF only while fast-http
-;;; reads a request head. A body goes to fast-http whole, however many
-;;; CR LF CR LFs it holds: split, each piece was another body write, and
-;;; past smart-buffer's 1 MB memory limit each write reopened a temp file.
+;;; The HTTP/1 reader splits heads and fixed-length body boundaries, but
+;;; never scans inside a body for apparent CR LF CR LFs. Each body stays in
+;;; one write per socket read; splitting within a large body would reopen
+;;; smart-buffer's temporary file repeatedly.
 
 (defun bare-socket ()
   (woo.ev.socket::%make-socket
@@ -172,6 +172,26 @@
           (format nil "~D body writes for ~D reads" writes reads))
       (ok (< elapsed 10) (format nil "parsed in ~,2Fs" elapsed)))))
 
+(deftest http1-upgrade-after-fixed-body
+  (testing "an upgrade behind a POST body keeps the early WebSocket octets"
+    (let* ((seen nil)
+           (socket (bare-socket))
+           (request (trivial-utf-8:string-to-utf-8-bytes
+                     (format nil "POST /first HTTP/1.1~C~CHost: x~C~CContent-Length: 4~C~C~C~CabcdGET /ws HTTP/1.1~C~CHost: x~C~CConnection: Upgrade~C~CUpgrade: websocket~C~C~C~Cxyz"
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline #\Return #\Newline))))
+      (let ((woo.specials:*app*
+              (lambda (env)
+                (push (getf env :path-info) seen)
+                (lambda (responder) (declare (ignore responder)))))
+            (woo.specials:*debug* t))
+        (woo::setup-parser socket)
+        (woo::read-cb socket request)
+        (ok (equal (reverse seen) '("/first" "/ws")))
+        (ok (equalp (woo.websocket:take-pending-websocket-data socket)
+                    (trivial-utf-8:string-to-utf-8-bytes "xyz")))))))
+
 (deftest http1-pipelined-heads-are-one-piece
   (testing "16 pipelined GETs in one read go to fast-http in one call"
     (let* ((head (trivial-utf-8:string-to-utf-8-bytes
@@ -201,3 +221,104 @@
         (setf (symbol-function 'fast-http:parse-request) parse-fn))
       (ok (= requests 16) "every request is parsed")
       (ok (= calls 1) (format nil "~D fast-http calls" calls)))))
+
+(deftest graceful-stop-by-server-thread
+  "A host can stop Woo's event loop without destroying its thread."
+  (let ((port (+ 51000 (random 1000)))
+        (thread nil)
+        (client nil))
+    (unwind-protect
+         (progn
+           (setf thread
+                 (bt2:make-thread
+                  (lambda ()
+                    (woo:run (lambda (env)
+                               (declare (ignore env))
+                               '(200 () ("ok")))
+                             :port port :debug nil))
+                  :name "woo-graceful-stop-test"))
+           (loop repeat 500
+                 until (gethash thread woo::*stop-controls*)
+                 do (sleep 0.01))
+           (ok (gethash thread woo::*stop-controls*)
+               "the running server is addressable by its thread")
+           (setf client (usocket:socket-connect "127.0.0.1" port))
+           ;; Keep an accepted socket open while the loop is stopped.
+           (sleep 0.05)
+           (ok (woo:stop-gracefully thread)
+               "the thread stop request is accepted")
+           (loop repeat 500 while (bt2:thread-alive-p thread)
+                 do (sleep 0.01))
+           (ok (not (bt2:thread-alive-p thread))
+               "the server thread exits within five seconds")
+           (unless (bt2:thread-alive-p thread)
+             (bt2:join-thread thread))
+           (ok (null (sb-ext:with-timeout 5
+                       (read-char (usocket:socket-stream client) nil nil)))
+               "the accepted socket closes on stop")
+           (ok (null (gethash thread woo::*stop-controls*))
+               "the thread control is removed after cleanup"))
+      (when client
+        (ignore-errors (usocket:socket-close client)))
+      (when (and thread (bt2:thread-alive-p thread))
+        (bt2:destroy-thread thread)))))
+
+(deftest graceful-stop-closes-worker-sockets
+  "A clustered shutdown closes every accepted client, including idle requests."
+  (let ((port (+ 52000 (random 1000)))
+        (thread nil)
+        (clients nil))
+    (unwind-protect
+         (progn
+           (setf thread
+                 (bt2:make-thread
+                  (lambda ()
+                    (woo:run (lambda (env)
+                               (declare (ignore env))
+                               '(200 () ("ok")))
+                             :port port :worker-num 2 :debug nil))
+                  :name "woo-worker-stop-test"))
+           (loop repeat 500
+                 until (gethash thread woo::*stop-controls*)
+                 do (sleep 0.01))
+           (ok (gethash thread woo::*stop-controls*)
+               "clustered server registers a graceful stop control")
+           (loop repeat 12 do
+             (let ((client (usocket:socket-connect "127.0.0.1" port)))
+               (push client clients)
+               (write-string (format nil "GET /pending HTTP/1.1~C~CHost: localhost~C~C"
+                                     #\Return #\Linefeed #\Return #\Linefeed)
+                             (usocket:socket-stream client))
+               (force-output (usocket:socket-stream client))))
+           (sleep 0.1)
+           (ok (woo:stop-gracefully thread) "clustered stop request is accepted")
+           (loop repeat 1200 while (bt2:thread-alive-p thread)
+                 do (sleep 0.01))
+           (ok (not (bt2:thread-alive-p thread))
+               "clustered server exits within twelve seconds")
+           (unless (bt2:thread-alive-p thread)
+             (bt2:join-thread thread))
+           (dolist (client clients)
+             (ok (null (sb-ext:with-timeout 5
+                         (read-char (usocket:socket-stream client) nil nil)))
+                 "an accepted worker socket closes on stop")))
+      (dolist (client clients)
+        (ignore-errors (usocket:socket-close client)))
+      (when (and thread (bt2:thread-alive-p thread))
+        (bt2:destroy-thread thread)))))
+
+#+sbcl
+(deftest event-loop-backend-descriptors-close
+  "libev's loop destructor releases its kernel backend descriptors."
+  (let ((before (length (directory #P"/dev/fd/*"))))
+    (dotimes (i 12)
+      (declare (ignore i))
+      (woo.ev:with-event-loop ()))
+    (dotimes (i 12)
+      (declare (ignore i))
+      (handler-case
+          (woo.ev:with-event-loop (:cleanup-fn (lambda () (error "cleanup failed"))))
+        (error () nil)))
+    (let ((after (length (directory #P"/dev/fd/*"))))
+      (ok (<= after (1+ before))
+          (format nil "descriptors before=~D after=~D" before after)))))

@@ -105,6 +105,15 @@
       (ok (websocket-p env)
           "Should handle 'upgrade' in connection header with other values")))
 
+  (testing "Valid when Upgrade and Connection contain token lists"
+    (let ((env (make-test-env
+                '("upgrade" "h2c, WebSocket"
+                  "connection" "keep-alive, Upgrade, TE"
+                  "sec-websocket-key" "dGhlIHNhbXBsZSBub25jZQ=="
+                  "sec-websocket-version" "13"))))
+      (ok (websocket-p env)
+          "should match whole case-insensitive header tokens")))
+
   (testing "Invalid: missing upgrade header"
     (let ((env (make-test-env
                 '("connection" "Upgrade"
@@ -155,7 +164,26 @@
                   "sec-websocket-key" "dGhlIHNhbXBsZSBub25jZQ=="
                   "sec-websocket-version" "13"))))
       (ok (not (websocket-p env))
-          "Should reject non-websocket upgrade"))))
+          "Should reject non-websocket upgrade")))
+
+  (testing "Invalid: connection only contains upgrade as a substring"
+    (let ((env (make-test-env
+                '("upgrade" "websocket"
+                  "connection" "x-upgrade"
+                  "sec-websocket-key" "dGhlIHNhbXBsZSBub25jZQ=="
+                  "sec-websocket-version" "13"))))
+      (ok (not (websocket-p env))
+          "Should reject a non-token connection value")))
+
+  (testing "Invalid: key is not a canonical 16-byte nonce"
+    (dolist (key '("not-base64" "dGVzdA==" "dGhlIHNhbXBsZSBub25jZQ"))
+      (let ((env (make-test-env
+                  (list "upgrade" "websocket"
+                        "connection" "Upgrade"
+                        "sec-websocket-key" key
+                        "sec-websocket-version" "13"))))
+        (ok (not (websocket-p env))
+            (format nil "Should reject invalid key ~S" key))))))
 
 ;;; Test Suite 4: Frame construction via make-frame (internal symbol)
 (deftest test-make-frame-small-payload
@@ -1502,6 +1530,18 @@
                     (make-string 40 :initial-element (code-char #x1F600))))))
       (ok (= (length reason) 120))
       (ok (woo.websocket::valid-utf-8-p reason)))))
+
+(deftest test-send-control-frame-rejects-oversized-payload
+  (with-fake-event-loop ()
+    (let ((socket (make-bare-socket))
+          (payload (make-array 126 :element-type '(unsigned-byte 8)
+                               :initial-element 65)))
+      (ok (null (send-ping socket payload))
+          "an oversized ping is not queued")
+      (ok (null (send-pong socket payload))
+          "an oversized pong is not queued")
+      (ok (zerop (length (queued-octets socket)))
+          "no invalid control frame reaches the socket"))))
 
 (deftest test-ws-data-before-setup
   (testing "octets fed before setup-websocket are parsed by it, in order"

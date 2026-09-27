@@ -122,6 +122,9 @@
   ;; (lambda (entry)) installed by the response writer. Called with a
   ;; send-queue entry when its stream is dropped, to let go of its octets.
   (discard-sends nil)
+  ;; Adapter-owned accounting and cancellation for responses awaiting dispatch.
+  (response-budget nil)
+  (cancel-responses nil)
   ;; Callbacks
   on-stream       ; (lambda (stream)) - called for new stream
   on-headers      ; (lambda (stream headers end-stream))
@@ -193,6 +196,8 @@
           (setf (http2-stream-body-buffer stream)
                 (make-array 0 :element-type '(unsigned-byte 8)
                               :adjustable t :fill-pointer 0))))
+      (when (http2-connection-cancel-responses conn)
+        (funcall (http2-connection-cancel-responses conn) id))
       (remhash id (http2-connection-streams conn))
       ;; A writer may still hold the entry: empty it, so its octets and
       ;; its share of the queue budgets go now, not at its next write.
@@ -252,6 +257,8 @@
    the write callback, so the queued GOAWAY is flushed first. Idempotent."
   (unless (http2-connection-closing conn)
     (setf (http2-connection-closing conn) t)
+    (when (http2-connection-cancel-responses conn)
+      (funcall (http2-connection-cancel-responses conn) nil))
     (when (http2-connection-on-close conn)
       (funcall (http2-connection-on-close conn) conn))
     (let ((socket (http2-connection-socket conn)))
@@ -912,9 +919,13 @@
                last-stream-id error-code debug-data))))
 
 (defun handle-priority-frame (conn frame)
-  "Handle received PRIORITY frame (deprecated in RFC 9113, ignore)."
-  (declare (ignore conn frame))
-  nil)
+  "Validate PRIORITY framing even though priorities are not used."
+  (cond
+    ((zerop (frame-stream-id frame))
+     (connection-protocol-error conn +protocol-error+))
+    ((/= (length (frame-payload frame)) 5)
+     (connection-protocol-error conn +frame-size-error+))
+    (t nil)))
 
 (defun process-frame (conn frame)
   "Process a received frame by dispatching to the appropriate handler."
@@ -979,8 +990,12 @@
     ;; Append new data to buffer
     (let ((old-len (length buf))
           (new-len (- end start)))
-      (adjust-array buf (+ old-len new-len)
-                    :fill-pointer (+ old-len new-len))
+      (let ((needed (+ old-len new-len)))
+        (if (> needed (array-total-size buf))
+            (setf buf (adjust-array buf (max needed (* 2 (max 1 (array-total-size buf))))
+                                    :fill-pointer needed)
+                  (http2-connection-buffer conn) buf)
+            (setf (fill-pointer buf) needed)))
       (replace buf data :start1 old-len :start2 start :end2 end))
 
     ;; Check for connection preface if not yet received
@@ -1000,26 +1015,33 @@
               (connection-close conn)
               (return-from parse-connection-data)))))
 
-    ;; Parse frames
-    (loop
-      (multiple-value-bind (frame consumed)
-          (parse-frame buf
-                       :max-frame-size
-                       (http2-connection-local-max-frame-size conn))
-        (cond
-          ((eq consumed :frame-size-error)
-           (connection-protocol-error conn +frame-size-error+)
-           (return))
-          ((null frame)
-           (return))
-          (t
-           (process-frame conn frame)
-           (when (http2-connection-goaway-sent conn)
-             (setf (fill-pointer buf) 0)
+    ;; The preface may be split anywhere, including after its first nine
+    ;; octets (which must never be mistaken for a frame header).
+    (unless (http2-connection-preface-received conn)
+      (return-from parse-connection-data))
+
+    ;; Parse at an offset; moving the tail after each small frame makes a
+    ;; read containing many frames quadratic. Compact once before returning.
+    (let ((offset 0))
+      (loop
+        (multiple-value-bind (frame consumed)
+            (parse-frame buf :start offset
+                             :max-frame-size
+                             (http2-connection-local-max-frame-size conn))
+          (cond
+            ((eq consumed :frame-size-error)
+             (connection-protocol-error conn +frame-size-error+)
              (return))
-           (let ((remaining (- (length buf) consumed)))
-             (replace buf buf :start2 consumed)
-             (setf (fill-pointer buf) remaining))))))))
+            ((null frame) (return))
+            (t
+             (process-frame conn frame)
+             (when (http2-connection-goaway-sent conn)
+               (setf (fill-pointer buf) 0)
+               (return-from parse-connection-data))
+             (incf offset consumed)))))
+      (when (plusp offset)
+        (replace buf buf :start2 offset)
+        (decf (fill-pointer buf) offset)))))
 
 (defun setup-http2-parser (socket &key on-stream on-headers on-data on-goaway on-error on-close)
   "Set up HTTP/2 handling on socket.

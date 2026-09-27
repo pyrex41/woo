@@ -382,6 +382,12 @@
 
 (defun close-tcp-server (watcher)
   (when watcher
+    ;; The listener is owned by the event-loop thread. Stop it before closing
+    ;; the descriptor and freeing the watcher; callers outside that thread
+    ;; should use WOO:STOP-GRACEFULLY to arrange this ordering.
+    (when (and *evloop*
+               (not (cffi:null-pointer-p *evloop*)))
+      (lev:ev-io-stop *evloop* watcher))
     (let ((fd (io-fd watcher)))
       (when fd
         (wsys:close fd)))

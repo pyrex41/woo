@@ -76,6 +76,7 @@
                 :if-let)
   (:export :run
            :stop
+           :stop-gracefully
            :*buffer-size*
            :*connection-timeout*
            :*default-backlog-size*
@@ -99,6 +100,62 @@
 
 (defvar *default-backlog-size* 128)
 (defvar *default-worker-num* nil)
+
+;; A threaded host must request shutdown on the event-loop thread.  Closing
+;; only the listener and destroying that thread can bypass WITH-EVENT-LOOP's
+;; socket cleanup.
+(defstruct (stop-control (:constructor make-stop-control))
+  listener thread evloop async cluster)
+(defvar *stop-controls* (make-hash-table :test #'eql))
+(defvar *stop-controls-by-async* (make-hash-table :test #'eql))
+(defvar *stop-controls-lock* (bt2:make-lock :name "woo-stop-controls"))
+
+(cffi:defcallback stop-async-cb :void
+    ((evloop :pointer) (async :pointer) (events :int))
+  (declare (ignore events))
+  (let ((control (bt2:with-lock-held (*stop-controls-lock*)
+                   (gethash (cffi:pointer-address async)
+                            *stop-controls-by-async*))))
+    (when control
+      (lev:ev-break evloop lev:+EVBREAK-ALL+))))
+
+(defun register-stop-control (listener cluster)
+  (let* ((async (cffi:foreign-alloc '(:struct lev:ev-async)))
+         (control (make-stop-control :listener listener
+                                     :thread (bt2:current-thread)
+                                     :evloop woo.ev:*evloop*
+                                     :async async
+                                     :cluster cluster)))
+    (lev:ev-async-init async 'stop-async-cb)
+    (lev:ev-async-start woo.ev:*evloop* async)
+    (bt2:with-lock-held (*stop-controls-lock*)
+      (setf (gethash (cffi:pointer-address listener) *stop-controls*) control
+            (gethash (bt2:current-thread) *stop-controls*) control
+            (gethash (cffi:pointer-address async) *stop-controls-by-async*) control))
+    control))
+
+(defun unregister-stop-control (control)
+  (when control
+    (bt2:with-lock-held (*stop-controls-lock*)
+      (remhash (cffi:pointer-address (stop-control-listener control)) *stop-controls*)
+      (remhash (stop-control-thread control) *stop-controls*)
+      (remhash (cffi:pointer-address (stop-control-async control))
+               *stop-controls-by-async*))
+    (lev:ev-async-stop (stop-control-evloop control)
+                       (stop-control-async control))
+    (cffi:foreign-free (stop-control-async control))))
+
+(defun stop-gracefully (server)
+  "Request that SERVER's owning event loop stop and clean up its sockets.
+SERVER may be the listener or the thread running WOO:RUN."
+  (bt2:with-lock-held (*stop-controls-lock*)
+    (let ((control (if (bt2:threadp server)
+                       (gethash server *stop-controls*)
+                       (gethash (cffi:pointer-address server) *stop-controls*))))
+      (when control
+        (lev:ev-async-send (stop-control-evloop control)
+                           (stop-control-async control))
+        t))))
 
 (defun http2-connection-preface-match (data start end)
   "Return T if DATA[START:END] contains a complete HTTP/2 connection preface."
@@ -151,6 +208,14 @@
                (unless http2-handler
                  (setf http2-handler (make-http2-app-handler *app*)))
                http2-handler)
+             (close-listener ()
+               ;; Listener cleanup runs on its owning event-loop thread,
+               ;; before WITH-EVENT-LOOP destroys libev. Clear the binding
+               ;; first so the outer unwind-protect remains idempotent.
+               (let ((listener *listener*))
+                 (setf *listener* nil)
+                 (when listener
+                   (wev:close-tcp-server listener))))
              (install-detected-protocol (socket use-http2)
                (if use-http2
                    (funcall (ensure-http2-handler) socket)
@@ -205,12 +270,17 @@
                (unless (getf vom::*config* :woo.signal)
                  (vom:config :woo.signal :info))
                (let ((*cluster* (woo.worker:make-cluster worker-num #'start-socket))
-                     (signal-watchers (make-signal-watchers)))
+                     (signal-watchers (make-signal-watchers))
+                     (stop-control nil))
                  (wev:with-sockaddr
                    (unwind-protect
-                        (wev:with-event-loop (:cleanup-fn
+                          (wev:with-event-loop (:cleanup-fn
                                               (lambda ()
-                                                (stop-signal-watchers *evloop* signal-watchers)))
+                                                (unwind-protect
+                                                     (close-listener)
+                                                  (unwind-protect
+                                                       (stop-signal-watchers *evloop* signal-watchers)
+                                                    (unregister-stop-control stop-control)))))
                           (start-signal-watchers *evloop* signal-watchers)
                           (setq *listener*
                                 (wev:tcp-server (or listen
@@ -221,16 +291,22 @@
                                                   (woo.worker:add-job-to-cluster *cluster* socket))
                                                 :backlog backlog
                                                 :fd fd
-                                                :sockopt wsock:+SO-REUSEADDR+)))
-                     (wev:close-tcp-server *listener*)
+                                                :sockopt wsock:+SO-REUSEADDR+))
+                          (setf stop-control (register-stop-control *listener* *cluster*)))
+                     (close-listener)
                      (woo.worker:stop-cluster *cluster*)))))
              (start-singlethread-server ()
-               (let ((signal-watchers (make-signal-watchers)))
+               (let ((signal-watchers (make-signal-watchers))
+                     (stop-control nil))
                  (wev:with-sockaddr
                    (unwind-protect
-                        (wev:with-event-loop (:cleanup-fn
+                          (wev:with-event-loop (:cleanup-fn
                                               (lambda ()
-                                                (stop-signal-watchers *evloop* signal-watchers)))
+                                                (unwind-protect
+                                                     (close-listener)
+                                                  (unwind-protect
+                                                       (stop-signal-watchers *evloop* signal-watchers)
+                                                    (unregister-stop-control stop-control)))))
                           (start-signal-watchers *evloop* signal-watchers)
                           (setq *listener*
                                 (wev:tcp-server (or listen
@@ -239,8 +315,9 @@
                                                 :connect-cb #'start-socket
                                                 :backlog backlog
                                                 :fd fd
-                                                :sockopt wsock:+SO-REUSEADDR+)))
-                     (wev:close-tcp-server *listener*))))))
+                                                :sockopt wsock:+SO-REUSEADDR+))
+                          (setf stop-control (register-stop-control *listener* nil)))
+                     (close-listener))))))
       (when ssl
         #+woo-no-ssl
         (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
@@ -401,10 +478,10 @@
   ;; the CR LF CR LF that ends each and for the fields that matter: an
   ;; upgrade request is fed only up to the end of its head, or of its
   ;; Content-Length body. Bodiless requests before it go in the same piece;
-  ;; from a request with a body on, the rest of the read goes in whole, as
-  ;; before, so an upgrade request pipelined behind a body in the same read
-  ;; is parsed by fast-http alone and loses what follows it in that read (a
-  ;; chunked upgrade request's body too). Once the application has upgraded the
+  ;; a fixed-length body is cut at its end so the next request can be
+  ;; scanned. Chunked bodies cannot be cut without parsing their trailers;
+  ;; an upgrade pipelined behind one in the same read is still handled by
+  ;; fast-http alone. Once the application has upgraded the
   ;; socket, or is still deciding (a delayed response), the rest of the read
   ;; and every later one go to FEED-WEBSOCKET-DATA, never to fast-http.
   (let ((http (make-http-request))
@@ -459,12 +536,12 @@
                                    aligned t)
                              (return split))
                             ((logtest head-fields +field-body+)
-                             ;; A body is not scanned: the rest of the read
-                             ;; goes in whole, as fast-http would take it.
+                             ;; Feed the head separately so fast-http tells
+                             ;; us whether the body has a fixed length. Never
+                             ;; scan the body for what looks like headers.
                              (setq head-fields 0
-                                   aligned nil
-                                   crlf-match (crlf-match-after data split end match))
-                             (return (values end (< split end))))
+                                   aligned t)
+                             (return split))
                             ((= split end)
                              (setq head-fields 0
                                    aligned nil)
@@ -473,12 +550,11 @@
                              (setq head-fields 0
                                    pos split)))))))
                    (t
-                    ;; A body is never scanned. Only an upgrade request's
-                    ;; Content-Length body is cut at its end.
+                    ;; A body is never scanned. Cut a fixed-length body at
+                    ;; its end, then scan the next request's head.
                     (setq aligned nil)
                     (let* ((n (http-content-length http))
-                           (split (if (and upgrade-request
-                                           (not (http-chunked-p http))
+                           (split (if (and (not (http-chunked-p http))
                                            (= state fast-http.http:+state-body+)
                                            (typep n 'fixnum)
                                            (plusp n))
@@ -486,7 +562,8 @@
                                       end)))
                       (declare (type fixnum split))
                       (setq crlf-match (crlf-match-after data start split crlf-match))
-                      (values split (not upgrade-request)))))))
+                      (values split (and (= split end)
+                                         (http-chunked-p http))))))))
              (hold-for-websocket (data start end)
                ;; From now on reads are buffered until SETUP-WEBSOCKET
                ;; installs its reader (or, if it already has, parsed by it).
@@ -597,7 +674,10 @@
       (setf (wev:socket-data socket) reader))))
 
 (defun stop (server)
-  (wev:close-tcp-server server))
+  (cond ((null server) nil)
+        ((stop-gracefully server) t)
+        ((bt2:threadp server) nil)
+        (t (wev:close-tcp-server server))))
 
 
 ;;

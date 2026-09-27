@@ -1417,6 +1417,69 @@
       (run-adapter-request conn id))
     (values conn (reverse writers))))
 
+(deftest ordinary-responses-stream-from-retained-source
+  (testing "a body larger than the queue cap completes as windows reopen"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (body (make-string (1+ woo.http2.clack:*max-queued-response-bytes*)
+                              :initial-element #\a))
+           (sent 0)
+           (ended nil)
+           (resets 0))
+      (register-stream conn stream)
+      (let ((woo.http2.clack:*http2-frame-sink*
+              (lambda (frame)
+                (case (frame-type frame)
+                  (#.+frame-data+
+                   (incf sent (length (frame-payload frame)))
+                   (when (logtest (frame-flags frame) +flag-end-stream+)
+                     (setf ended t)))
+                  (#.woo.http2.constants:+frame-rst-stream+ (incf resets))))))
+        (send-http2-response conn stream 200 nil body)
+        (loop repeat 9 until ended
+              do (connection-process-frame conn (make-window-update-frame 0 1048576))
+                 (connection-process-frame conn (make-window-update-frame 1 1048576)))
+        (ok ended)
+        (ok (= sent (1+ woo.http2.clack:*max-queued-response-bytes*)))
+        (ok (zerop resets))
+        (ok (null (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))))))
+  (testing "a withheld window stages no copied body bytes"
+    (let* ((woo.http2.clack:*max-queued-response-bytes* 100)
+           (conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (body (list "é" (make-string 120 :initial-element #\b))))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (let ((frames (capture-frames
+                     (lambda () (send-http2-response conn stream 200 nil body)))))
+        (ok (null (rst-frames frames 1)))
+        (ok (zerop (woo.http2.clack::connection-queued-bytes conn)))
+        (ok (= 1 (length (frames-of-type frames +frame-headers+)))))))
+  (testing "UTF-8 strings and octet vectors keep list order across a window update"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (parts (list "é" (octets "AB") "😀")))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (send-http2-response conn stream 200 nil parts)
+      (let ((frames (capture-frames
+                     (lambda ()
+                       (connection-process-frame conn
+                         (make-window-update-frame 0 32))))))
+        (ok (equalp (data-bytes frames)
+                    (trivial-utf-8:string-to-utf-8-bytes "éAB😀")))
+        (ok (end-stream-p (car (last (frames-of-type frames +frame-data+))))))))
+  (testing "reset releases retained ordinary body parts"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+)))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-window-size conn) 0)
+      (send-http2-response conn stream 200 nil (make-string 1000))
+      (let ((pending (gethash 1 (woo.http2.connection:http2-connection-send-queue conn))))
+        (ok (woo.http2.clack::pending-source pending))
+        (woo.http2.clack::drop-pending-response conn stream)
+        (ok (null (woo.http2.clack::pending-source pending)))))))
+
 (deftest streamed-writes-are-bounded
   (testing "a writer past *max-queued-response-bytes* resets the stream and then drops writes"
     (let ((woo.http2.clack:*max-queued-response-bytes* 100000))
@@ -1623,3 +1686,283 @@
               do (sleep 0.05)))
       (ok (<= (hash-table-count woo.http2.clack::*dispatchers*) before)
           "stopping the server removed it"))))
+
+;;; Dispatcher storage shares the pending-response budgets across all streams.
+(defun response-budget-counts (conn)
+  (let ((budget (woo.http2.connection::http2-connection-response-budget conn))
+        (queued 0) (reserved 0))
+    (when budget
+      (bt2:with-lock-held ((woo.http2.clack::response-budget-lock budget))
+        (maphash (lambda (id entry)
+                   (declare (ignore id))
+                   (incf queued (woo.http2.clack::response-budget-entry-queued entry))
+                   (incf reserved (woo.http2.clack::response-budget-entry-reserved entry)))
+                 (woo.http2.clack::response-budget-entries budget))))
+    (list queued reserved)))
+
+(deftest async-response-connection-budget
+  (testing "different writers cannot reserve more than the connection budget"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 8)
+          (woo.http2.clack:*max-connection-queued-response-bytes* 16)
+          (results nil) (frames nil))
+      (let ((*http2-frame-sink* (lambda (frame) (push frame frames))))
+        (woo.ev.event-loop:with-event-loop ()
+          (let* ((d (woo.http2.clack::current-loop-dispatcher))
+                 (conn (make-http2-connection))
+                 (writers
+                   (loop for id in '(1 3 5)
+                         for stream = (make-http2-stream :id id :state +state-half-closed-remote+ :window-size 0)
+                         do (register-stream conn stream)
+                         collect (funcall (woo.http2.clack::make-responder
+                                           conn nil stream (woo.http2.clack::dispatcher-runner d nil))
+                                          '(200 ())))))
+            (bt2:join-thread
+             (bt2:make-thread
+              (lambda ()
+                (dolist (writer writers)
+                  (push (funcall writer (make-array 8 :element-type '(unsigned-byte 8))) results)))))
+            (ok (equal (reverse results) '(t t nil)))
+            (ok (equal (response-budget-counts conn) '(0 16)) "reserved before dispatch")
+            (woo.http2.clack::drain-dispatcher d)
+            (ok (equal (response-budget-counts conn) '(16 0)) "reservation transfers to pending bytes")
+            (ok (= 1 (length (rst-frames frames 5)))))))))
+  (testing "a stream's existing pending bytes count against its next async write"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 8)
+          (woo.http2.clack:*max-connection-queued-response-bytes* 16)
+          (result :unset))
+      (woo.ev.event-loop:with-event-loop ()
+        (let* ((d (woo.http2.clack::current-loop-dispatcher))
+               (conn (make-http2-connection))
+               (stream (make-http2-stream :id 1 :state +state-half-closed-remote+ :window-size 0))
+               (writer (progn
+                         (register-stream conn stream)
+                         (funcall (woo.http2.clack::make-responder
+                                   conn nil stream (woo.http2.clack::dispatcher-runner d nil)) '(200 ())))))
+          (ok (funcall writer "123456"))
+          (bt2:join-thread (bt2:make-thread (lambda () (setf result (funcall writer "789")))))
+          (ok (null result))
+          (ok (equal (response-budget-counts conn) '(6 0)))
+          (woo.http2.clack::drain-dispatcher d)
+          (ok (equal (response-budget-counts conn) '(0 0)))))))
+  (testing "ordinary delayed sources retain a cancellable reference without copying"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 8)
+          (woo.http2.clack:*max-connection-queued-response-bytes* 12))
+      (woo.ev.event-loop:with-event-loop ()
+        (let* ((d (woo.http2.clack::current-loop-dispatcher))
+               (conn (make-http2-connection))
+               (stream (make-http2-stream :id 1 :state +state-half-closed-remote+ :window-size 0))
+               (body (make-string 100 :initial-element (code-char #xE9)))
+               (responder (progn
+                            (register-stream conn stream)
+                            (woo.http2.clack::make-responder conn nil stream
+                              (woo.http2.clack::dispatcher-runner d nil)))))
+          (bt2:join-thread (bt2:make-thread (lambda () (funcall responder (list 200 nil body)))))
+          (let* ((entry (woo.http2.clack::response-budget-entry-for conn stream))
+                 (token (first (woo.http2.clack::response-budget-entry-tokens entry))))
+            (ok token "a source reference awaits dispatch")
+            (ok (eq body (third (woo.http2.clack::response-reservation-payload token))) "no source copy")
+            (ok (equal (response-budget-counts conn) '(0 0)))
+            (woo.http2.connection:connection-stream-error conn stream woo.http2.constants:+cancel+)
+            (ok (null (woo.http2.clack::response-reservation-payload token)))
+            (woo.http2.clack::drain-dispatcher d)))))))
+
+(deftest async-response-reservation-cleanup
+  (testing "reset before dispatch releases payloads and prevents later writes"
+    (woo.ev.event-loop:with-event-loop ()
+      (let* ((d (woo.http2.clack::current-loop-dispatcher))
+             (conn (make-http2-connection))
+             (stream (make-http2-stream :id 1 :state +state-half-closed-remote+ :window-size 0))
+             (responder (progn
+                          (register-stream conn stream)
+                          (woo.http2.clack::make-responder conn nil stream
+                            (woo.http2.clack::dispatcher-runner d nil))))
+             (writer nil))
+        (bt2:join-thread
+         (bt2:make-thread (lambda ()
+                           (setf writer (funcall responder '(200 ())))
+                           (funcall writer "queued before HEADERS"))))
+        (let* ((entry (woo.http2.clack::response-budget-entry-for conn stream))
+               (token (first (woo.http2.clack::response-budget-entry-tokens entry))))
+          (ok (plusp (second (response-budget-counts conn))))
+          (woo.http2.connection:connection-stream-error conn stream woo.http2.constants:+cancel+)
+          (ok (equal (response-budget-counts conn) '(0 0)))
+          (ok (null (woo.http2.clack::response-reservation-payload token)))
+          (woo.http2.clack::drain-dispatcher d)
+          (ok (null (funcall writer "late")))))))
+  (testing "loop teardown clears queued payloads even when the writer survives"
+    (let ((conn (make-http2-connection)) (writer nil) (token nil))
+      (woo.ev.event-loop:with-event-loop ()
+        (let* ((d (woo.http2.clack::current-loop-dispatcher))
+               (stream (make-http2-stream :id 1 :state +state-half-closed-remote+ :window-size 0)))
+          (register-stream conn stream)
+          (setf writer (funcall (woo.http2.clack::make-responder
+                                 conn nil stream (woo.http2.clack::dispatcher-runner d nil)) '(200 ())))
+          ;; Keep pending bytes too: dropping the queued reservation must
+          ;; discard the response that a retained writer still references.
+          (funcall writer "pending")
+          (bt2:join-thread (bt2:make-thread (lambda () (funcall writer "in transit"))))
+          (setf token (first (woo.http2.clack::response-budget-entry-tokens
+                             (woo.http2.clack::response-budget-entry-for conn stream))))
+          ;; Stop explicitly before ev_run can consume the async notification.
+          (woo.http2.clack::stop-dispatcher d)))
+      (ok (equal (response-budget-counts conn) '(0 0)))
+      (ok (null (woo.http2.clack::response-reservation-payload token)))
+      (ok (null (funcall writer "late")))))
+  (testing "a rejected submission releases its ordinary-body reservation"
+    (let* ((conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (responder (woo.http2.clack::make-responder conn nil stream
+                        (lambda (thunk) (declare (ignore thunk)) nil))))
+      (bt2:join-thread (bt2:make-thread (lambda () (funcall responder '(200 nil "body")))))
+      (ok (equal (response-budget-counts conn) '(0 0))))))
+
+(deftest ordinary-response-copy-reservations
+  (testing "a large peer frame size still copies only the byte budget, including UTF-8"
+    (let* ((woo.http2.clack:*max-queued-response-bytes* 1)
+           (woo.http2.clack:*max-connection-queued-response-bytes* 1)
+           (conn (make-http2-connection))
+           (stream (make-http2-stream :id 1 :state +state-open+))
+           (body (list "é😀A" (octets "BC")))
+           (pending nil))
+      (register-stream conn stream)
+      (setf (http2-connection-remote-max-frame-size conn) #xFFFFFF
+            (http2-connection-remote-window-size conn) 0)
+      (send-http2-response conn stream 200 nil body)
+      (setf pending (gethash 1 (woo.http2.connection:http2-connection-send-queue conn)))
+      (let* ((frames (capture-frames
+                      (lambda ()
+                        (connection-process-frame conn (make-window-update-frame 0 64)))))
+             (data (frames-of-type frames +frame-data+)))
+        (ok (equalp (data-bytes frames) (trivial-utf-8:string-to-utf-8-bytes "é😀ABC")))
+        (ok (every (lambda (frame) (<= (length (frame-payload frame)) 1)) data))
+        (ok (end-stream-p (car (last data))))
+        (ok (null (rst-frames frames 1)))
+        (ok (equal (response-budget-counts conn) '(0 0)))
+        (ok (null (woo.http2.clack::pending-source pending)))
+        (ok (null (woo.http2.clack::pending-chunks pending))))))
+  (testing "ordinary copying cannot consume bytes reserved by another stream"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 8)
+          (woo.http2.clack:*max-connection-queued-response-bytes* 8))
+      (woo.ev.event-loop:with-event-loop ()
+        (let* ((d (woo.http2.clack::current-loop-dispatcher))
+               (conn (make-http2-connection))
+               (stream1 (make-http2-stream :id 1 :state +state-half-closed-remote+ :window-size 0))
+               (stream3 (make-http2-stream :id 3 :state +state-half-closed-remote+))
+               (writer (progn
+                         (register-stream conn stream1)
+                         (register-stream conn stream3)
+                         (funcall (woo.http2.clack::make-responder conn nil stream1
+                                    (woo.http2.clack::dispatcher-runner d nil)) '(200 ())))))
+          (bt2:join-thread (bt2:make-thread (lambda () (funcall writer "12345678"))))
+          (let ((frames (capture-frames
+                         (lambda () (send-http2-response conn stream3 200 nil "other")))))
+            (ok (= 1 (length (rst-frames frames 3))))
+            (ok (null (frames-of-type frames +frame-data+)))
+            (ok (equal (response-budget-counts conn) '(0 8))))
+          (woo.http2.clack::drain-dispatcher d)
+          (ok (equal (response-budget-counts conn) '(8 0))))))))
+
+(defun budget-lock-available-p (budget)
+  "Nonblocking probe; always return the lock if it was available."
+  (let ((lock (woo.http2.clack::response-budget-lock budget)))
+    (when (bt2:acquire-lock lock :wait nil)
+      (bt2:release-lock lock)
+      t)))
+
+(deftest response-budget-cancellation-atomicity
+  (testing "reset cannot reuse capacity while another thread owns an unfinished copy"
+    (let* ((woo.http2.clack:*max-queued-response-bytes* 8)
+           (woo.http2.clack:*max-connection-queued-response-bytes* 8)
+           (conn (make-http2-connection))
+           (stream1 (make-http2-stream :id 1 :state +state-half-closed-remote+))
+           (stream3 (make-http2-stream :id 3 :state +state-half-closed-remote+))
+           (queue-lock (bt2:make-lock))
+           (queue nil)
+           (run (lambda (thunk) (bt2:with-lock-held (queue-lock) (push thunk queue)) t))
+           (writer1 (funcall (woo.http2.clack::make-responder conn nil stream1 run) '(200 nil)))
+           (writer3 (funcall (woo.http2.clack::make-responder conn nil stream3 run) '(200 nil)))
+           (entry1 (woo.http2.clack::response-budget-entry-for conn stream1))
+           (entry3 (woo.http2.clack::response-budget-entry-for conn stream3))
+           (budget (woo.http2.clack::response-budget-entry-budget entry1))
+           (original (symbol-function 'woo.http2.clack::octets-of))
+           (input1 (copy-seq "12345678"))
+           (copied (bt2:make-semaphore))
+           (resume (bt2:make-semaphore))
+           (producer nil) (canceller nil) (competitor nil) (accepted nil))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'woo.http2.clack::octets-of)
+                   (lambda (&rest args)
+                     (let ((copy (apply original args)))
+                       (when (eq (first args) input1)
+                         ;; Model preemption after allocation, before its
+                         ;; result is installed in the dispatcher token.
+                         (bt2:signal-semaphore copied)
+                         (unless (bt2:wait-on-semaphore resume :timeout 5)
+                           (error "Timed out waiting to resume the test copy")))
+                       copy)))
+             (setf producer (bt2:make-thread (lambda () (funcall writer1 input1))))
+             (ok (bt2:wait-on-semaphore copied :timeout 5))
+             ;; This nonblocking check has no timing assumption: neither a
+             ;; reset nor another reservation can enter while COPY is owned.
+             (ok (not (budget-lock-available-p budget))
+                 "the eight copied bytes cannot be returned to the shared pool yet")
+             (setf canceller (bt2:make-thread (lambda () (woo.http2.clack::cancel-budget-entry entry1)))
+                   competitor (bt2:make-thread (lambda () (setf accepted (funcall writer3 "abcdefgh")))))
+             (bt2:signal-semaphore resume)
+             (bt2:join-thread producer)
+             (bt2:join-thread canceller)
+             (bt2:join-thread competitor)
+             (ok (zerop (woo.http2.clack::response-budget-entry-reserved entry1)))
+             (ok (null (woo.http2.clack::response-budget-entry-tokens entry1)))
+             ;; The competitor can win either side of cancellation: refuse
+             ;; while the old reservation exists, or accept after disposal.
+             (ok (<= (woo.http2.clack::response-budget-entry-reserved entry3) 8))
+             (when accepted
+               (ok (= 8 (woo.http2.clack::response-budget-entry-reserved entry3)))))
+        (bt2:signal-semaphore resume)
+        (dolist (thread (list producer canceller competitor))
+          (when thread (bt2:join-thread thread)))
+        (setf (symbol-function 'woo.http2.clack::octets-of) original)
+        (woo.http2.clack::cancel-budget-entry entry3))))
+  (testing "pending copies are detached before their capacity becomes reusable"
+    (let ((woo.http2.clack:*max-queued-response-bytes* 8)
+          (woo.http2.clack:*max-connection-queued-response-bytes* 8))
+      (multiple-value-bind (conn writers) (writer-conn)
+        (funcall (first writers) "12345678")
+        (let* ((stream (gethash 1 (http2-connection-streams conn)))
+               (entry (woo.http2.clack::response-budget-entry-for conn stream))
+               (budget (woo.http2.clack::response-budget-entry-budget entry))
+               (pending (woo.http2.clack::response-budget-entry-pending entry))
+               (original (symbol-function 'woo.http2.clack::clear-pending-response))
+               (detaching (bt2:make-semaphore))
+               (resume (bt2:make-semaphore))
+               (canceller nil))
+          (unwind-protect
+               (progn
+                 (setf (symbol-function 'woo.http2.clack::clear-pending-response)
+                       (lambda (response)
+                         (when (eq response pending)
+                           (bt2:signal-semaphore detaching)
+                           (unless (bt2:wait-on-semaphore resume :timeout 5)
+                             (error "Timed out waiting to detach test pending bytes")))
+                         (funcall original response)))
+                 (setf canceller (bt2:make-thread (lambda () (woo.http2.clack::cancel-budget-entry entry))))
+                 (ok (bt2:wait-on-semaphore detaching :timeout 5))
+                 (ok (= 8 (woo.http2.clack::pending-queued pending)))
+                 (ok (= 8 (woo.http2.clack::response-budget-entry-queued entry))
+                     "capacity remains charged until detachment finishes")
+                 (ok (not (budget-lock-available-p budget))
+                     "another producer cannot claim the still-owned pending bytes")
+                 (bt2:signal-semaphore resume)
+                 (bt2:join-thread canceller)
+                 (ok (null (woo.http2.clack::pending-chunks pending)))
+                 (ok (equal (response-budget-counts conn) '(0 0)))
+                 (let* ((next (make-http2-stream :id 3 :state +state-half-closed-remote+))
+                        (next-entry (woo.http2.clack::response-budget-entry-for conn next))
+                        (token (woo.http2.clack::reserve-response-bytes next-entry 8 8 8)))
+                   (ok token "capacity is reusable after detachment")
+                   (when token (woo.http2.clack::release-response-reservation token))))
+            (bt2:signal-semaphore resume)
+            (when canceller (bt2:join-thread canceller))
+            (setf (symbol-function 'woo.http2.clack::clear-pending-response) original)))))))
