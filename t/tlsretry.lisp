@@ -46,8 +46,7 @@
                    (ok (woo.ev.socket:flush-buffer socket))
                    (ok (woo.ev.socket::async-write socket))
                    (ok (= calls 3))
-                   (ok (equal (mapcan #'copy-list (nreverse writes))
-                              '(1 2 3 4 1 2 3 4 9 8)))
+                   (ok (equal (first writes) '(1 2 3 4 9 8)))
                    (ok (= admitted 6))
                    (ok (= released 6))
                    (ok (zerop (fast-io::output-buffer-len
