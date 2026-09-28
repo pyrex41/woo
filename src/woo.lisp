@@ -236,7 +236,7 @@
                                                    (handle-request http socket))))
                                    (main env (lambda ()
                                                (ignore-errors (close raw-body))
-                                               (ignore-errors (delete-stream-file raw-body))))))))))))
+                                               (ignore-errors (delete-stream-file raw-body)))))))))))))))
 
 (defun stop (server)
   (wev:close-tcp-server server))
