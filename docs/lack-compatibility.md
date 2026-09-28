@@ -1,14 +1,27 @@
 # Managed Lack compatibility
 
 `woo-lack-compat` provides an opt-in Clack adapter and explicit Lack middleware
-helpers. Qualification and production readiness remain **UNKNOWN** until all
-required gates pass on the exact source snapshot. See
-[production readiness](production-readiness.md) for deployment gates.
+helpers. The required compatibility gates passed for the
+[snapshot below](#qualification-snapshot). The profile remains experimental;
+[production readiness](production-readiness.md) is **UNKNOWN** pending complete
+protocol coverage and deployment validation.
 
 ## Start and stop
 
+Register this checkout with ASDF as shown in the
+[installation guide](../README.md#install-and-run). Loading the managed system
+requires the native zstd library in addition to Woo's native dependencies.
+
 ```lisp
 (ql:quickload :woo-lack-compat)
+
+(defun my-api (env)
+  (declare (ignore env))
+  '(200 (:content-type "application/json") ("{\"ok\":true}")))
+
+(defun my-app (env)
+  (declare (ignore env))
+  '(200 (:content-type "text/plain") ("Hello, World")))
 
 (defparameter *server*
   (woo.compat:clackup
@@ -29,8 +42,10 @@ required gates pass on the exact source snapshot. See
 The returned value is an ordinary Clack handle for `:server :woo-managed`.
 The adapter owns its network thread and application workers. Outer Clack
 threading must be disabled; `woo.compat:clackup` sets `:use-thread nil`,
-`:debug nil`, and `:use-default-middlewares nil`. Process signal handling belongs
-to the host application. Use `clack:stop` from its shutdown path.
+`:use-default-middlewares nil`, and defaults `:debug` to nil. Use explicit
+middleware. The managed profile uses one network loop and requires
+`:worker-num nil` (the default); set `:application-workers` instead. Process signal handling
+belongs to the host application. Use `clack:stop` from its shutdown path.
 
 Applications and delayed producers execute on a bounded worker pool. HTTP/1
 requests on a connection are answered in order. HTTP/2 streams execute
@@ -67,7 +82,7 @@ connection; HTTP/2 response errors reset that stream.
 
 Stop closes admission, sends HTTP/2 GOAWAY, and drains to the deadline before
 closing remaining sockets. An application that does not return is retained and
-reported with `woo.compat:shutdown-timeout`; the condition exposes live workers
+reported with `woo.compat:shutdown-timeout`; the condition exposes live threads
 through `shutdown-timeout-workers`. Release or finish those workers and retry
 `clack:stop`. Arbitrary application threads are not destroyed. Application-owned
 DB pools and stores remain the application's responsibility.
@@ -79,6 +94,11 @@ writers, Unicode/binary bodies, pathname bodies, HEAD, bodyless statuses and
 repeated Set-Cookie fields are supported. Responders accept headers once;
 writers return NIL after close or cancellation. Declared Content-Length must
 match emitted bytes. Header names and values are validated before sending.
+
+Managed TLS listeners advertise `h2` and `http/1.1` automatically. Their
+environment uses `:url-scheme "https"` and default Host port 443; an explicit
+Host port is preserved. Legacy HTTP/1 handling through `woo:run` keeps its
+historical TLS environment values (`"http"` and default Host port 80).
 
 Application responses use final status codes 200–599. Interim 1xx responses
 are not exposed by this adapter; websocket-driver performs its HTTP/1 upgrade
@@ -111,6 +131,12 @@ callbacks already run on the owner loop. Keep those callbacks short.
 | `:woo-accesslog` | Completion metadata; omits paths, queries, headers and bodies; queues the logger on workers |
 | `:woo-backtrace` | Catches synchronous and delayed producer errors; reports error types without printing conditions or request secrets |
 
+The default session store is in-memory and its state uses cookies. Supply
+`:store` and `:state` to `:woo-session` for other Lack store/state objects.
+SQLite and Redis stores and `:dbpool` require their corresponding Lack/DBI
+systems to be loaded. `:lock-timeout` defaults to 10 seconds; a request waiting
+too long for a session lease receives 503.
+
 Session locks are process-local and shared across helper instances using the
 same store or Redis connection. Session values in lists, hashes and arrays are
 copied recursively; hash key identity is preserved. Other application objects
@@ -135,16 +161,39 @@ Compression helpers require Salza2 and cl-zstd.
 
 ## Required validation
 
+Run from the repository root. `nix develop` provides SBCL and the native
+libraries, Redis, SQLite, zstd, Go, Python and resource-sampling tools. It does
+not install Quicklisp. For a fresh, private Quicklisp installation inside that
+shell:
+
 ```sh
 nix develop
-# Install Quicklisp and its frozen 2026-01-01 distribution first.
+woo_ql_dir=$(mktemp -d "${TMPDIR:-/tmp}/woo-quicklisp.XXXXXXXX")
+curl --fail --max-time 60 --location https://beta.quicklisp.org/quicklisp.lisp \
+  -o "$woo_ql_dir/bootstrap.lisp"
+python3 -c 'import hashlib, sys; assert hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() == "4a7a5c2aebe0716417047854267397e24a44d0cce096127411e9ce9ccfeb2c17"' \
+  "$woo_ql_dir/bootstrap.lisp"
+sbcl --non-interactive --load "$woo_ql_dir/bootstrap.lisp" \
+  --eval "(quicklisp-quickstart:install :path \"$woo_ql_dir/quicklisp/\")"
+export WOO_QUICKLISP_SETUP="$woo_ql_dir/quicklisp/setup.lisp"
+sbcl --non-interactive --load "$WOO_QUICKLISP_SETUP" \
+  --eval '(ql-dist:install-dist "http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt" :prompt nil :replace t)'
+
 python3 t/compat/check.py --dependencies /tmp/woo-compat-deps
 python3 t/compat/check.py --verify-receipt .artifacts/lack/receipt.json
 ```
 
+Alternatively, use an existing Quicklisp installation with the frozen
+`2026-01-01` distribution. The default setup path is `~/quicklisp/setup.lisp`;
+`WOO_QUICKLISP_SETUP` overrides it. Distribution selection changes that
+installation, so use the private setup above to keep a different distribution.
+
 The runner verifies immutable Clack/Lack/websocket-driver/Hunchentoot archive
-pins, owns a private loopback Redis with persistence disabled, generates test
-certificates, enforces time/log/descriptor budgets, and writes source-bound
+pins from [dependencies.json](../t/compat/dependencies.json), downloads them to
+the dependency directory, and registers those sources without patching the
+installed upstream systems. It owns a private loopback Redis with persistence
+disabled, generates test certificates, enforces time/log/descriptor budgets,
+and writes source-bound
 receipts. SQLite uses private fixtures. No missing service or dependency is
 silently skipped. `--soak-seconds 30` is a diagnostic run and cannot produce a
 qualification PASS.
@@ -167,5 +216,37 @@ Required gates:
 
 `.github/workflows/lack-compatibility.yml` runs the managed gates on Linux and
 macOS with a locked Nix environment and preserves receipts/logs on failure.
-A passing local subset, a diagnostic soak, or an old receipt does not qualify
-this profile or a production deployment.
+A receipt qualifies only its recorded Git HEAD, runtime/test source digest and
+dependency pins. The verifier rejects a receipt at another HEAD, including a
+later documentation commit. A local subset or diagnostic soak cannot qualify
+a new version or a production deployment.
+
+## Qualification snapshot
+
+The required gates passed on 2026-09-28 at
+[`fed54b345ce6e0084f32a960c91ad0846f5d9ca9`](https://github.com/pyrex41/woo/commit/fed54b345ce6e0084f32a960c91ad0846f5d9ca9).
+All three managed receipts verified the same runtime/test source digest:
+`072dd2bc2e6f35d030855706c510fa0d32f40b54e10152ce6d6a4014b652356e`.
+
+| Managed run | Result | Soak traffic |
+| --- | --- | ---: |
+| Native macOS | PASS, full 30-minute soak and cleanup | 543,460 requests |
+| Hosted Linux, `ubuntu-24.04` | PASS, full 30-minute soak and cleanup | 134,544 requests |
+| Hosted macOS, `macos-15` | PASS, full 30-minute soak and cleanup | 439,180 requests |
+
+Each managed run also passed the contracts, middleware/service tests, 100
+lifecycle cycles and four-transport preflight matrix listed above. Request
+counts describe executed test traffic.
+
+The [managed CI run](https://github.com/pyrex41/woo/actions/runs/36479314544)
+preserves `receipt.json` and bounded logs in
+`lack-compatibility-ubuntu-24.04` and `lack-compatibility-macos-15` artifacts.
+The [existing CI run](https://github.com/pyrex41/woo/actions/runs/36479314769)
+passed the Lisp suite, conformance-launcher regressions, pinned Rust oracle
+build and Hegel protocol properties at the same commit. Optional Lisp checks
+and the separate h2spec/Autobahn diagnostics retain their own coverage limits.
+
+This is evidence for the tested managed profile and dependency pins. It does
+not establish complete RFC compliance, application-specific production load
+behavior or a deployed system's readiness. Future runtime/dependency changes
+require fresh qualification.

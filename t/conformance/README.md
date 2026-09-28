@@ -2,6 +2,9 @@
 
 These launchers exercise a live Woo fixture from `t/hegel/server.lisp`. They are local diagnostics, **not required CI gates**. Their reports do not establish complete RFC 9113 or RFC 6455 coverage; see [production readiness](../../docs/production-readiness.md).
 
+The launcher regression tests below are required in the existing CI workflow.
+Running those tests does not execute h2spec or the Autobahn suite.
+
 | Runner | Scope | Local result on 2026-09-27 |
 | --- | --- | --- |
 | `h2spec.sh` | HTTP/2, HPACK, and generic cases from h2spec v2.6.0 | 143 of 146 passed; command exited nonzero |

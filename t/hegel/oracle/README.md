@@ -5,7 +5,7 @@ binds `127.0.0.1` and prints `READY 127.0.0.1:<port>` only after the listener
 has been created:
 
 ```sh
-cargo run --manifest-path t/hegel/oracle/Cargo.toml -- --port 0
+cargo run --locked --manifest-path t/hegel/oracle/Cargo.toml -- --port 0
 ```
 
 The harness may set `WOO_HEGEL_PORT`; an explicit `--port` takes precedence.

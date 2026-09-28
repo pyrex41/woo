@@ -1,8 +1,10 @@
-# Production readiness plan for the protocol extensions
+# Production readiness
 
-Status: **UNKNOWN**. Passing local tests is not a production qualification.
-The active Clack dependency, sustained traffic, remote CI, and deployment
-checks have not been qualified for this working tree.
+Status: **UNKNOWN**. The managed Clack/Lack profile passed its required local
+and hosted Linux/macOS gates at `fed54b3` on 2026-09-28, including full
+30-minute soaks. See the [qualification snapshot](lack-compatibility.md#qualification-snapshot)
+for the exact commit, source digest, dependency pins and CI evidence. Complete
+RFC coverage and staged production deployment have not been established.
 
 ## Scope and reference model
 
@@ -22,10 +24,10 @@ Parity alone cannot establish RFC compliance.
 | Gate | Required evidence | Current state |
 |------|-------------------|---------------|
 | Protocol inventory | RFC MUST/MUST NOT requirements mapped to code and tests, with unsupported features explicit | UNKNOWN |
-| Valid-path parity | Shared generated HTTP/1.1, HTTP/2, TLS/ALPN, and WebSocket scenarios against Woo and an independent server | PARTIAL: Hegel drives Woo and the lockfile-pinned axum fixture for HTTP/1.1, h2c, and WebSocket echo. Each generated HTTP history owns a fresh connection; HTTP/2 histories cannot redial. Raw Woo-only tests check two open request streams, stream and connection response-credit stalls/resumption, and an exact body above 8 MiB. TLS/ALPN and broader method/header/stream combinations remain unqualified. |
+| Valid-path parity | Shared generated HTTP/1.1, HTTP/2, TLS/ALPN, and WebSocket scenarios against Woo and an independent server | PARTIAL: Hegel compares HTTP/1.1, h2c and WebSocket echo with the pinned axum oracle. Managed tests cover HTTP/1, HTTPS, h2c and HTTP/2 TLS, with a separate Hunchentoot reference check. TLS oracle parity and broader generated methods/headers/multiplexing remain open. |
 | Invalid-path conformance | Fragmented and malformed frames, HPACK, stream states, WebSocket masking/fragmentation, request smuggling boundaries, and timeout/error outcomes | PARTIAL: existing Lisp and Hegel tests, the opt-in h2spec baseline, and nine Autobahn control-frame cases below; no complete RFC 9113 or RFC 6455 inventory yet. |
-| Resource safety | Connection/stream/body/header limits under slow peers and concurrent load; no unbounded descriptors, memory, or queue growth | PARTIAL: ordinary HTTP/2 bodies copy budgeted slices; asynchronous writers reserve against shared limits, with deterministic reset/copy and pending-detachment race tests. Thirty direct stop cycles held five descriptors, and the full local Lisp suite passed with a soft 256-descriptor limit. Slow peers, sustained concurrency, and the installed Clack threaded stop path remain unqualified. |
-| Soak | Sustained representative traffic, forced disconnects, restarts, and clean shutdown with bounded latency and resource use | UNKNOWN |
+| Resource safety | Connection/stream/body/header limits under slow peers and concurrent load; no unbounded descriptors, memory, or queue growth | PARTIAL: the managed snapshot passed admission/output budgets, cancellation, drain, uncooperative-worker reporting, 100 lifecycle cycles and descriptor/RSS checks. These budgets exclude application allocations. Broader slow-peer and adversarial connection/header workloads remain open; legacy threaded Clack cleanup needs its separate integration. |
+| Soak | Sustained representative traffic, forced disconnects, restarts, and clean shutdown with bounded latency and resource use | PARTIAL: required 30-minute managed transport soaks passed locally and on hosted Linux/macOS. Production-duration, application-specific and adversarial workloads remain unqualified. |
 | Deployment | Exact build and configuration, TLS/ALPN negotiation, observability, staged traffic, rollback, and customer-visible checks | UNKNOWN |
 
 ## Immediate work
@@ -39,13 +41,16 @@ Parity alone cannot establish RFC compliance.
 3. For legacy threaded `:server :woo`, apply and verify the
    [Clack integration patch](../integration/clack/README.md) in the active
    dependency, or land its upstream equivalent. The managed profile owns its
-   threads without patching Clack; qualify its separate lifecycle matrix.
-4. Add bounded adversarial and long-running tests. Record time, memory, open
-   descriptors, connection count, and error outcomes as artifacts.
-5. Run the complete gates in CI and a staged deployment before changing this
-   document's status.
+   threads without patching Clack and has passed its separate lifecycle matrix
+   at the recorded snapshot.
+4. Extend the managed resource/soak matrix with slow peers, adversarial
+   connection/header loads and longer application-specific traffic. Preserve
+   bounded deadlines, resource samples and source-bound receipts.
+5. Qualify the release snapshot and configuration in a staged deployment,
+   including observability, rollback and customer-visible checks, before
+   changing production status.
 
-## Local validation snapshot
+## Historical local validation: 2026-09-27
 
 | Check | Result | Limit |
 |------|--------|-------|
@@ -57,10 +62,10 @@ Parity alone cannot establish RFC compliance.
 
 These are local results from 2026-09-27, not remote CI or deployed evidence.
 
-## Current conformance evidence and limits
+## Historical conformance evidence and limits
 
-The local h2spec v2.6.0 run against the live Woo fixture executed 146 cases:
-143 passed and three failed. The runner and pinned tool are in
+The 2026-09-27 local h2spec v2.6.0 run against the live Woo fixture executed
+146 cases: 143 passed and three failed. The runner and pinned tool are in
 `t/conformance/`; this diagnostic is not a required CI gate yet. All three
 failures exercise legacy RFC 7540 expectations:
 
@@ -79,10 +84,10 @@ application behavior; it does not decide the permitted error response for
 malformed frames.
 
 The opt-in Autobahn runner in `t/conformance/` targets a bounded subset of
-WebSocket control-frame cases. The pinned container ran nine cases against
-this checkout; all nine had `OK` behavior and close behavior in its generated
-report. This is narrow WebSocket control-frame evidence, not qualification of
-the full RFC 6455 surface. The runner checks the report and fails if cases are
+WebSocket control-frame cases. The 2026-09-27 pinned-container run executed nine
+cases against that snapshot; all nine had `OK` behavior and close behavior in
+its generated report. This is narrow WebSocket control-frame evidence, not
+qualification of the full RFC 6455 surface. The runner checks the report and fails if cases are
 missing or any selected result is not `OK`.
 
 Both conformance launchers now reject an occupied port and require a per-run
@@ -99,9 +104,10 @@ five descriptors, and the full local Lisp suite passed with a soft limit of
 The earlier `CLOSE_WAIT` sockets observed in that suite were client-side
 Dexador connections: Clack's test harness disables pooling while its requests
 retain keep-alive, so ignored client streams can wait for garbage collection.
-Clack's installed threaded `stop` still destroys the Woo server thread. A
-source patch in `integration/clack/` passed 12 local start/stop cycles with
-stable descriptors, but has not been applied to the installed Clack or upstream.
+The Clack version used by that legacy test destroys the Woo server thread
+when its threaded `stop` path is used. A source patch in `integration/clack/`
+passed 12 local start/stop cycles with stable descriptors. Woo does not apply
+that patch to installed or upstream Clack.
 These local checks do not establish sustained production resource safety.
 
 ## Managed Lack profile
@@ -109,7 +115,7 @@ These local checks do not establish sustained production resource safety.
 The optional `woo-lack-compat` profile has a separate
 [compatibility contract and required matrix](lack-compatibility.md). It owns
 Clack lifecycle, application workers and draining shutdown. Both hosted
-Linux/macOS managed gates and existing protocol gates are required on the
-release source snapshot. Diagnostic soaks and partial receipts do not close
-those gates. Qualification and deployment readiness remain UNKNOWN until
-validated evidence is attached.
+Linux/macOS managed gates and existing protocol gates passed at the
+[recorded snapshot](lack-compatibility.md#qualification-snapshot). Future
+release snapshots need their own receipts; diagnostic soaks and partial
+receipts do not close those gates. Deployment readiness remains UNKNOWN.

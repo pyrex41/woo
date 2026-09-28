@@ -1,8 +1,9 @@
 # Woo
 
 [![CI](https://github.com/pyrex41/woo/actions/workflows/ci.yml/badge.svg)](https://github.com/pyrex41/woo/actions/workflows/ci.yml)
+[![Lack compatibility](https://github.com/pyrex41/woo/actions/workflows/lack-compatibility.yml/badge.svg)](https://github.com/pyrex41/woo/actions/workflows/lack-compatibility.yml)
 
-Woo is a Common Lisp HTTP server built on [libev](http://software.schmorp.de/pkg/libev.html). This fork adds HTTP/2, WebSocket, and TLS/ALPN support to the original HTTP/1.1 server.
+Woo is a Common Lisp HTTP server built on [libev](http://software.schmorp.de/pkg/libev.html). This fork adds HTTP/2, WebSocket, TLS/ALPN, and an optional managed Clack/Lack adapter to the original HTTP/1.1 server.
 
 **Release status:** HTTP/2 and WebSocket support are experimental. Local tests and interoperability checks pass within their stated scope, but production readiness is **UNKNOWN**. See [production readiness](docs/production-readiness.md) for the evidence and open gates.
 
@@ -10,10 +11,11 @@ Woo is a Common Lisp HTTP server built on [libev](http://software.schmorp.de/pkg
 
 Woo requires SBCL, libev, and a Unix-like system. TLS support also requires OpenSSL or LibreSSL. To omit the CL+SSL dependency, add `:woo-no-ssl` to `cl:*features*` before loading Woo. On macOS, `brew install libev openssl@3` supplies the native libraries.
 
-To load this checkout instead of the Quicklisp release:
+Start a fresh Lisp session with Quicklisp loaded, and register this checkout.
+Replace the path below with its absolute directory, including the trailing slash:
 
 ~~~common-lisp
-(push #P"path/to/woo/" asdf:*central-registry*)
+(push #P"/absolute/path/to/woo/" asdf:*central-registry*)
 (ql:quickload :woo)
 ~~~
 
@@ -33,6 +35,7 @@ Start a server with a Lack application:
 Clack can start Woo with `:server :woo`:
 
 ~~~common-lisp
+(ql:quickload :clack)
 (clack:clackup
   (lambda (env)
     (declare (ignore env))
@@ -49,20 +52,35 @@ Load the optional adapter for a bounded application pool and draining shutdown:
 (ql:quickload :woo-lack-compat)
 (defparameter *server*
   (woo.compat:clackup
-    (lack:builder :woo-backtrace :woo-accesslog :woo-deflater :woo-session app)
+    (lack:builder
+      :woo-backtrace :woo-accesslog :woo-deflater :woo-session
+      (lambda (env)
+        (declare (ignore env))
+        '(200 (:content-type "text/plain") ("Hello, World"))))
     :port 5000))
+
+;; Inspect resource counters, then stop from the application's shutdown path.
+(woo.compat:server-state *server*)
 (clack:stop *server*)
 ~~~
 
 This returns an ordinary Clack handle, owns its threads, and supports HTTP/1,
 HTTPS, h2c and HTTP/2 TLS. Applications run outside the network loop. Explicit
 middleware helpers cover delayed/streaming compression, session serialization,
-mount paths and redacted completion logging. The profile is experimental;
-qualification remains **UNKNOWN** until its required Linux/macOS gates pass.
-See [Lack compatibility](docs/lack-compatibility.md) for limits, cancellation,
-websocket-driver use and the test runner.
+mount paths and redacted completion logging. Loading this system also requires
+the native zstd library. It uses one network loop; configure
+`:application-workers` instead of legacy `:worker-num`.
+
+The profile remains experimental. Its required Linux/macOS gates and full
+30-minute soaks passed at `fed54b3` on 2026-09-28; see the
+[qualification snapshot](docs/lack-compatibility.md#qualification-snapshot).
+Production readiness remains **UNKNOWN**. The
+[Lack compatibility guide](docs/lack-compatibility.md) documents limits,
+cancellation, websocket-driver use and reproducible test setup.
 
 ### TLS and workers
+
+In this example, `app` is your Lack application function:
 
 ~~~common-lisp
 (woo:run app
@@ -78,7 +96,7 @@ Legacy Woo advertises HTTP/1.1 over TLS by default. Set `woo.ssl:*alpn-protocols
 
 For a server started on its own thread, call `(woo:stop-gracefully thread)` and then join the thread. This requests shutdown on the owning event loop and closes accepted sockets. **It does not drain active requests.** `SIGQUIT` requests orderly loop and worker shutdown; `SIGINT` and `SIGTERM` stop workers immediately. Active connections may be interrupted.
 
-For legacy `:server :woo`, the installed Clack threaded stop path destroys the server thread. Apply and verify the [Clack integration patch](integration/clack/README.md) before relying on that path for cleanup. The managed adapter owns its threads and uses `clack:stop` without patching Clack.
+For legacy `:server :woo`, the pinned Clack version's threaded stop path destroys the server thread. Verify your active Clack source and the [Clack integration patch](integration/clack/README.md) before relying on that path for cleanup. The managed adapter owns its threads and uses `clack:stop` without patching Clack.
 
 ## Protocol extensions
 
@@ -124,8 +142,8 @@ sh t/generate-certificates.sh
 Run the Lisp suite from this checkout:
 
 ~~~common-lisp
-(push #P"path/to/woo/" asdf:*central-registry*)
-(push #P"path/to/woo/showcase/" asdf:*central-registry*)
+(push #P"/absolute/path/to/woo/" asdf:*central-registry*)
+(push #P"/absolute/path/to/woo/showcase/" asdf:*central-registry*)
 (ql:quickload :woo-test)
 (asdf:test-system :woo-test)
 ~~~
@@ -149,6 +167,11 @@ go -C t/hegel test -count=1 -skip '^TestManaged' -timeout 10m ./...
 
 It is required in CI. Each generated HTTP history uses a fresh connection, and HTTP/2 histories cannot silently redial. Both fixtures require a per-run readiness nonce. Hegel shrinks counterexamples; consecutive TCP writes do not guarantee distinct server reads.
 
+Run the managed transport, middleware, lifecycle and service matrix through
+the [compatibility runner](docs/lack-compatibility.md#required-validation).
+It supplies the required pinned dependencies, SQLite/Redis fixtures and full
+soak configuration. The standalone Hegel command above excludes that matrix.
+
 Useful test settings:
 
 | Variable | Purpose |
@@ -164,6 +187,6 @@ The opt-in [h2spec and Autobahn diagnostics](t/conformance/README.md) exercise s
 
 ## Project
 
-See [benchmark.md](benchmark.md) for the original benchmark details. Woo was created by Eitaro Fukamachi and [contributors](https://github.com/fukamachi/woo/graphs/contributors). See [Lack](https://github.com/fukamachi/lack) and [Clack](https://github.com/fukamachi/clack) for the application interface.
+See [benchmark.md](benchmark.md) for historical upstream benchmark details. Woo was created by Eitaro Fukamachi and [contributors](https://github.com/fukamachi/woo/graphs/contributors). See [Lack](https://github.com/fukamachi/lack) and [Clack](https://github.com/fukamachi/clack) for the application interface.
 
 Licensed under the MIT License.
