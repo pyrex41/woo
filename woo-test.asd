@@ -7,6 +7,7 @@
   ((:file "t/woo")
    (:file "t/ipv6")
    (:file "t/file-size")
+   (:file "t/worker")
    (:file "t/response" :depends-on ("t/woo"))
    ;; HTTP/2 tests
    (:file "t/hpack")

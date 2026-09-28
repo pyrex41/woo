@@ -103,3 +103,15 @@
                  (sb-posix:close large-fd))))
         (ignore-errors (delete-file small))
         (ignore-errors (delete-file large))))))
+
+#+sbcl
+(deftest fd-file-size-closed-descriptor-tests
+  (testing "a closed descriptor fails instead of returning stale metadata"
+    (let ((path (temp-path "woo-fd-file-size-closed.dat")))
+      (unwind-protect
+           (progn
+             (write-file-of-size path *small-size*)
+             (let ((fd (sb-posix:open (namestring path) sb-posix:o-rdonly)))
+               (sb-posix:close fd)
+               (ok (signals (woo::fd-file-size fd)))))
+        (ignore-errors (delete-file path))))))
