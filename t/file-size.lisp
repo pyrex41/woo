@@ -76,7 +76,11 @@
                           (threads 8)
                           (iterations 10000))
                       (mapc
-                       (lambda (thread) (sb-thread:join-thread thread :timeout 20))
+                       ;; Wait for every worker before closing the descriptors.  A
+                       ;; fixed timeout can close them while a busy CI host is
+                       ;; still executing the loop, turning a race test into an
+                       ;; unrelated EBADF failure.
+                       (lambda (thread) (sb-thread:join-thread thread))
                        (loop for i from 0 below threads
                              collect
                              (let* ((use-large (evenp i))
