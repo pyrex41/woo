@@ -332,6 +332,7 @@ func TestManagedSoak(t *testing.T) {
 		}
 		peakFDs = max(peakFDs, fds)
 		peakRSS = max(peakRSS, rss)
+		t.Logf("soak sample: descriptors=%d RSS_KiB=%d", fds, rss)
 	}
 	nextSample := time.Now().Add(30 * time.Second)
 	deadline := time.Now().Add(time.Duration(seconds) * time.Second)

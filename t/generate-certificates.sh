@@ -1,6 +1,7 @@
 #!/bin/sh
+set -eu
 
-mkdir t/certs
+mkdir -p t/certs
 cd t/certs
 
 openssl genrsa -out localCA.key 2048

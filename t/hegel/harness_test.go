@@ -102,7 +102,10 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 	cmd.Env = append(os.Environ(),
 		"WOO_HEGEL_PORT="+strconv.Itoa(port),
 		"WOO_HEGEL_READY_NONCE="+nonce)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Managed gates own the enclosing process group so stage failure/timeout
+	// also removes fixtures. Standalone Hegel keeps its per-fixture groups.
+	ownGroup := os.Getenv("WOO_COMPAT_FIXTURE_GROUP") != "owned-stage"
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: ownGroup}
 	log := &boundedLog{}
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
@@ -119,7 +122,9 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 	}()
 	cleanup := func() {
 		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			if ownGroup {
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
 			_ = cmd.Process.Kill()
 		}
 		select {

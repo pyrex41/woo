@@ -80,6 +80,10 @@ repeated Set-Cookie fields are supported. Responders accept headers once;
 writers return NIL after close or cancellation. Declared Content-Length must
 match emitted bytes. Header names and values are validated before sending.
 
+Application responses use final status codes 200–599. Interim 1xx responses
+are not exposed by this adapter; websocket-driver performs its HTTP/1 upgrade
+through the raw socket API.
+
 The environment contains `:woo.request-cancelled-p`, a function applications can
 poll before starting additional work or committing application side effects.
 Cancellation does not interrupt application code. A session commit already in

@@ -528,7 +528,8 @@ SERVER may be the listener or the thread running WOO:RUN."
         ;; Length of the CR LF CR LF prefix that ends the octets read.
         (crlf-match 0)
         parser
-        reader)
+        reader
+        (request-completed nil))
     (declare (type (integer 0 3) crlf-match)
              (type fixnum head-fields))
     (labels ((next-split (data start end)
@@ -580,8 +581,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                     ;; its end, then scan the next request's head.
                     (setq aligned nil)
                     (let* ((n (http-content-length http))
-                           (split (if (and (not (http-chunked-p http))
-                                           (= state fast-http.http:+state-body+)
+                           (split (if (and (= state fast-http.http:+state-body+)
                                            (typep n 'fixnum)
                                            (plusp n))
                                       (min end (+ start n))
@@ -624,6 +624,10 @@ SERVER may be the listener or the thread running WOO:RUN."
                    res)))
       (setq parser
             (make-parser http
+                         :first-line-callback
+                         (lambda ()
+                           ;; fast-http retains these fields between messages.
+                           (setf (http-content-length http) nil (http-chunked-p http) nil))
                          :header-callback
                          (lambda (headers)
                            (declare (ignore headers))
@@ -648,6 +652,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                                (write-to-buffer body-buffer data start end)))
                          :finish-callback
                          (lambda ()
+                           (setf request-completed t)
                            (let ((upgrading upgrade-request))
                              ;; fast-http never clears the flag itself.
                              (setq upgrade-request nil)
@@ -697,7 +702,12 @@ SERVER may be the listener or the thread running WOO:RUN."
                           (and upgrade-seen (socket-upgraded-p socket)))
                   (return (hold-for-websocket data start end)))
                 (multiple-value-bind (split unscanned) (next-split data start end)
+                  (setf request-completed nil)
                   (funcall parser data :start start :end split)
+                  ;; Unlike fixed bodies, fast-http does not reset its state
+                  ;; after a chunked message. The next piece is a fresh request.
+                  (when (and request-completed (http-chunked-p http))
+                    (setf (fast-http.http:http-state http) fast-http.http:+state-first-line+))
                   (setq start split)
                   ;; fast-http may have read part of a later head unseen;
                   ;; its fields are then unknown.
