@@ -101,12 +101,11 @@
   (format nil "HTTP/1.1 ~D ~A~C~C" code
           (or (status-code-to-text code) "") #\Return #\Linefeed))
 
-;; Unassigned final statuses are valid application responses too.
-(clrhash *status-line*)
 (loop for status from 100 to 599
+      for status-line = (http/1.1 status)
       when (or (>= status 200) (status-code-to-text status))
         do (setf (gethash status *status-line*)
-                 (trivial-utf-8:string-to-utf-8-bytes (http/1.1 status))))
+                 (trivial-utf-8:string-to-utf-8-bytes status-line)))
 
 (defvar *empty-chunk*
   #.(trivial-utf-8:string-to-utf-8-bytes (format nil "0~C~C~C~C"
@@ -185,10 +184,7 @@
   *date-header*)
 
 (defun response-headers-bytes (socket status headers &optional keep-alive-p)
-  (incf (woo.ev.socket::socket-response-generation socket))
-  (wev:write-socket-data socket
-                         (or (gethash status *status-line*)
-                             (error "Unsupported HTTP response status: ~S" status)))
+  (wev:write-socket-data socket (gethash status *status-line*))
   ;; Send default headers
   (wev:write-socket-data socket #.(string-to-utf-8-bytes "Date: "))
   (write-socket-string socket (the simple-string (current-rfc-1123-timestamp)))
