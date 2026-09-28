@@ -161,7 +161,7 @@
 (defun charge-output (socket count)
   (when (socket-output-admitter socket)
     (unless (funcall (socket-output-admitter socket) count)
-      (error "Socket output budget exceeded"))
+      (error 'woo.ev.condition:output-limit-exceeded))
     (incf (socket-charged-output socket) count)))
 
 (defun release-buffer-charge (socket)
@@ -377,7 +377,8 @@
       (cffi:foreign-free io)
       (return-from async-write-cb))
 
-    (async-write socket)))
+    (handler-case (async-write socket)
+      (woo.ev.condition:output-limit-exceeded () (close-socket socket)))))
 
 (defmacro with-async-writing ((socket &key write-cb force-streaming) &body body)
   `(progn

@@ -4,6 +4,7 @@
   (:export :woo-error
            :tcp-error
            :socket-closed
+           :output-limit-exceeded
            :os-error))
 (in-package :woo.ev.condition)
 
@@ -20,5 +21,8 @@
 (define-condition tcp-error (woo-error) ())
 (define-condition socket-closed (tcp-error)
   ((description :initform "socket is already closed")))
+
+(define-condition output-limit-exceeded (tcp-error)
+  ((description :initform "socket output budget exceeded")))
 
 (define-condition os-error (woo-error) ())

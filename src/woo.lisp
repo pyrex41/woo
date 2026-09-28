@@ -356,6 +356,7 @@ SERVER may be the listener or the thread running WOO:RUN."
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
     (handler-case (funcall parser data :start start :end end)
+      (woo.ev.condition:output-limit-exceeded () (wev:close-socket socket))
       (request-body-limit-exceeded ()
         (wev:with-async-writing (socket :write-cb #'wev:close-socket)
           (write-response-headers socket 413 '(:content-length 0 :connection "close"))))

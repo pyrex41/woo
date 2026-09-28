@@ -74,11 +74,16 @@
   (ignore-errors
     (call-on-connection (mr-connection request)
       (lambda ()
-        (if (mr-h2-stream request)
-            (woo.http2.connection:connection-stream-error
-             (getf (mr-env request) :http2.connection) (mr-h2-stream request)
-             woo.http2.constants:+internal-error+)
-            (woo.ev.socket:close-socket (connection-socket (mr-connection request)))))))
+        (handler-case
+            (if (mr-h2-stream request)
+                (woo.http2.connection:connection-stream-error
+                 (getf (mr-env request) :http2.connection) (mr-h2-stream request)
+                 woo.http2.constants:+internal-error+)
+                (woo.ev.socket:close-socket (connection-socket (mr-connection request))))
+          (error ()
+            ;; A full socket budget may also prevent the reset frame. Closing
+            ;; the connection releases its queues instead of retaining them.
+            (woo.ev.socket:close-socket (connection-socket (mr-connection request))))))))
   (cancel-request request))
 
 (defun response-headers (headers)

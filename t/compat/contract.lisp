@@ -176,3 +176,19 @@
       (await-state handler (lambda (s) (and (zerop (getf s :requests))
                                           (zerop (getf s :output-bytes)))))
       (ok (funcall (getf observed :woo.request-cancelled-p))))))
+
+(deftest socket-budget-refusal-keeps-server-alive
+  (with-managed (handler port #'contract-app :max-server-queue-bytes 1)
+    (let ((client (usocket:socket-connect "127.0.0.1" port :element-type '(unsigned-byte 8))))
+      (unwind-protect
+           (progn
+             (write-sequence woo.http2.constants:+connection-preface+ (usocket:socket-stream client))
+             (force-output (usocket:socket-stream client))
+             (ok (null (sb-ext:with-timeout 5 (read-byte (usocket:socket-stream client) nil nil)))
+                 "HTTP/2 SETTINGS budget refusal closes the connection"))
+        (usocket:socket-close client)))
+    (let ((state (await-state handler (lambda (s) (zerop (getf s :connections))))))
+      (ok (eq (getf state :state) :running))
+      (ok (zerop (getf state :output-bytes))))
+    (ok (signals (get-body port)))
+    (ok (eq (getf (woo.compat:server-state handler) :state) :running))))
