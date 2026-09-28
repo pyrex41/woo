@@ -5,7 +5,8 @@
 (in-package :woo-test)
 
 (deftest woo-server-tests
-  (clack.test.suite:run-server-tests :woo))
+  (ok (clack.test.suite:run-server-tests :woo)
+      "upstream Clack suite failures fail the Woo gate"))
 
 (deftest http2-preface-detection
   (testing "complete PRI preface is HTTP/2"

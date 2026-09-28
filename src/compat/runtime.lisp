@@ -179,6 +179,13 @@ Do not wait for an application worker from inside THUNK."
                                         :runner (connection-runner parent))))
     (nconc env (list :woo.request-cancelled-p nil :woo.request nil))
     (setf (getf env :url-scheme) (if (woo.ev.socket:socket-ssl-handle socket) "https" "http"))
+    (unless h2
+      (multiple-value-bind (name explicit-port)
+          (let ((host (gethash "host" (getf env :headers))))
+            (if (stringp host) (woo::parse-host-header host) (values nil nil)))
+        (declare (ignore name))
+        (unless explicit-port
+          (setf (getf env :server-port) (if (woo.ev.socket:socket-ssl-handle socket) 443 80)))))
     (setf (getf env :headers) (alexandria:copy-hash-table (getf env :headers)))
     (setf (getf env :clack.io) connection
           (getf env :woo.request-cancelled-p) (lambda () (cancelled-p request))

@@ -746,14 +746,14 @@ SERVER may be the listener or the thread running WOO:RUN."
         (list :request-method (http-method http)
               :script-name ""
               :server-name server-name
-              :server-port (or server-port (if (woo.ev.socket:socket-ssl-handle socket) 443 80))
+              :server-port (or server-port 80)
               :server-protocol (http-version-keyword (http-major-version http) (http-minor-version http))
               :path-info (if (and (stringp path)
                                   (string/= path ""))
                              (quri:url-decode path :lenient t)
                              "/")
               :query-string query
-              :url-scheme (if (woo.ev.socket:socket-ssl-handle socket) "https" "http")
+              :url-scheme "http"
               :remote-addr (socket-remote-addr socket)
               :remote-port (socket-remote-port socket)
               :request-uri uri

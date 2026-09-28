@@ -113,7 +113,11 @@ func managedRequest(t *testing.T, c *http.Client, method, location string, body 
 		t.Fatal(e)
 	}
 	for k, v := range headers {
-		r.Header.Set(k, v)
+		if strings.EqualFold(k, "Host") {
+			r.Host = v
+		} else {
+			r.Header.Set(k, v)
+		}
 	}
 	response, e := c.Do(r)
 	if e != nil {
@@ -179,6 +183,14 @@ func TestManagedTransportMatrix(t *testing.T) {
 			_, b = managedRequest(t, lane.client, "GET", lane.base+"/env?token=fixture", nil, nil)
 			if !strings.HasPrefix(string(b), scheme+"|127.0.0.1|/env|token=fixture") {
 				t.Fatalf("env: %q", b)
+			}
+			_, portBody := managedRequest(t, lane.client, "GET", lane.base+"/env-port", nil, map[string]string{"Host": "localhost"})
+			wantPort := "80"
+			if scheme == "https" {
+				wantPort = "443"
+			}
+			if string(portBody) != wantPort {
+				t.Fatalf("default server-port: %q", portBody)
 			}
 			r, b = managedRequest(t, lane.client, "GET", lane.base+"/stream", nil, map[string]string{"Accept-Encoding": "gzip;q=1, zstd;q=0"})
 			if r.Header.Get("Content-Encoding") != "gzip" {

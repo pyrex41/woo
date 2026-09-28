@@ -47,6 +47,8 @@
                   (list 200 '(:content-type "text/plain")
                         (list (format nil "~A|~A|~A|~A" (getf env :url-scheme) (getf env :server-name)
                                       (getf env :path-info) (getf env :query-string)))))
+                 ((equal path "/env-port")
+                  (list 200 '(:content-type "text/plain") (list (write-to-string (getf env :server-port)))))
                  ((equal path "/session") (funcall session env))
                  ((equal path "/sqlite") (funcall sqlite env))
                  ((equal path "/redis") (funcall redis env))

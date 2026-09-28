@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def source_digest():
     paths = [*ROOT.glob('*.asd'), *(p for p in ROOT.joinpath('src').rglob('*') if p.is_file()),
-             *ROOT.joinpath('t/compat').glob('*'), ROOT/'t/hegel/managed_test.go',
+             *ROOT.joinpath('t/compat').glob('*'), *ROOT.joinpath('t').rglob('*.lisp'),
              *ROOT.joinpath('t/hegel').glob('*.go'), ROOT/'t/hegel/go.mod', ROOT/'t/hegel/go.sum',
              ROOT/'t/generate-certificates.sh', ROOT/'flake.nix', ROOT/'flake.lock',
              ROOT/'.github/workflows/ci.yml', ROOT/'.github/workflows/lack-compatibility.yml']
