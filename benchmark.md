@@ -1,6 +1,8 @@
-# Benchmarks
+# Historical upstream benchmarks
 
-Comparison of the server performance to return "Hello, World" for every requests. Here's the results of requests/sec scores.
+These are the original upstream HTTP/1.1 "Hello, World" measurements using the
+environment listed below. They do not measure this fork's current
+HTTP/2, TLS, WebSocket or managed Lack profile. Results are requests per second.
 
 ![Benchmark Results](images/benchmark.png)
 
