@@ -217,8 +217,12 @@
             (let ((size (response-body-length body)))
               (when (and expected (/= size expected)) (error "Response length mismatch"))
               (setf expected size (getf headers :content-length) (write-to-string size))))
-          (when (member status '(204 205))
+          (when (= status 204)
             (remf headers :content-length) (setf expected nil))
+          ;; 205 permits a zero length; unlike 204 the HTTP/1 client needs
+          ;; framing to distinguish an empty response on a persistent socket.
+          (when (= status 205)
+            (setf (getf headers :content-length) "0" expected 0))
           (bt2:with-lock-held ((mr-lock request))
             (when (or (mr-headers-sent request) (cancelled-p request))
               (return-from managed-responder nil))

@@ -902,6 +902,10 @@ SERVER may be the listener or the thread running WOO:RUN."
                    (string-equal (gethash "connection" (http-headers http)) "close"))))
     (destructuring-bind (status headers &optional (body no-body))
         clack-res
+      (when (member status '(204 205 304))
+        (setf body nil)
+        (remf headers :transfer-encoding)
+        (when (= status 204) (remf headers :content-length)))
       (when (eq body no-body)
         (setf (getf headers :transfer-encoding) "chunked")
         (setf (getf headers :content-length) nil)
@@ -915,7 +919,7 @@ SERVER may be the listener or the thread running WOO:RUN."
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
                                                           (wev:close-socket socket))))
-           (unless (= status 304)
+           (unless (member status '(204 304))
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
         (pathname

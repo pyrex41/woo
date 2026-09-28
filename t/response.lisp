@@ -188,3 +188,15 @@ header") nil)
     (ok (not (eq a b))) (ok (not (eq a *random-state*)))
     (let ((*random-state* a)) (dotimes (i 100) (random 1000000)))
     (ok (= (random 1000000 caller) (random 1000000 (make-random-state *random-state*))))))
+
+(deftest empty-status-framing
+  (let ((clack.test:*clack-test-handler* :woo) (clack.test:*enable-debug* nil))
+    (dolist (code '(204 205 304))
+      (clack.test:testing-app "Bodyless statuses ignore application payload"
+          (lambda (env) (declare (ignore env)) (list code nil '("must-not-send")))
+        (let ((response (woo-test::raw-exchange clack.test:*clack-test-port*
+                         (woo-test::crlf-lines "GET / HTTP/1.1" "Host: localhost"
+                                                "Connection: close" ""))))
+          (ok (not (search "must-not-send" response)))
+          (when (= code 204) (ok (not (search "Content-Length:" response))))
+          (when (= code 205) (ok (search "Content-Length: 0" response))))))))

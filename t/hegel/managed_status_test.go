@@ -2,6 +2,7 @@ package hegeltest
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
 )
@@ -15,8 +16,15 @@ func TestManagedFinalStatusRange(t *testing.T) {
 				return http.ErrUseLastResponse
 			}
 			for code := 200; code <= 599; code++ {
-				response, body := managedRequest(t, lane.client, "GET",
-					fmt.Sprintf("%s/status/%d", lane.base, code), nil, nil)
+				response, err := lane.client.Get(fmt.Sprintf("%s/status/%d", lane.base, code))
+				if err != nil {
+					t.Fatalf("status %d: %v", code, err)
+				}
+				body, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+				response.Body.Close()
+				if err != nil {
+					t.Fatalf("status %d body: %v", code, err)
+				}
 				if response.StatusCode != code || len(body) != 0 {
 					t.Fatalf("status %d: received %d with %d body bytes", code,
 						response.StatusCode, len(body))
