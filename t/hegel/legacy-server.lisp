@@ -37,6 +37,9 @@
        (cert-root (uiop:ensure-directory-pathname
                    (or (uiop:getenv "WOO_COMPAT_CERT_ROOT") "t/certs/")))
        (stop-result (uiop:getenv "WOO_LEGACY_STOP_RESULT"))
+       (spool-root (uiop:ensure-directory-pathname
+                    (or (uiop:getenv "WOO_LEGACY_SPOOL_ROOT")
+                        (error "WOO_LEGACY_SPOOL_ROOT is required"))))
        (plain nil) (tls nil)
        (limit-body (lambda (socket)
                      (setf (woo.ev.socket::socket-body-memory-limit socket) 65536)))
@@ -77,6 +80,8 @@
                                       (write-line "FAIL" out)))))))
                    '(202 (:content-length 0) nil))
                   (t '(404 (:content-type "text/plain") ("not found"))))))))
+  (ensure-directories-exist spool-root)
+  (setf smart-buffer::*temporary-directory* spool-root)
   (unwind-protect
        (progn
          (setf tls (clack:clackup app :server :woo :use-thread t

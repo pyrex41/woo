@@ -175,10 +175,13 @@ def main():
     if result.exists(): result.unlink()
     stop_result = args.artifacts/'stop.result'
     if stop_result.exists(): stop_result.unlink()
+    spool_root = args.artifacts/'smart-buffer-spool'
+    spool_root.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.update(WOO_COMPAT_DEPENDENCY_ROOT=str(dependencies), WOO_COMPAT_CERT_ROOT=str(cert_root),
                WOO_LEGACY_STATIC_FILE=str(fixture), WOO_LEGACY_SOAK_SECONDS=str(args.soak_seconds),
                WOO_LEGACY_RESULT=str(result), WOO_LEGACY_STOP_RESULT=str(stop_result),
+               WOO_LEGACY_SPOOL_ROOT=str(spool_root),
                WOO_RUN_LEGACY_QUALIFICATION='1', WOO_HEGEL_LISP=shutil.which(args.lisp) or args.lisp,
                WOO_COMPAT_FIXTURE_GROUP='owned-stage')
     started = time.monotonic(); receipt = {'status':'UNKNOWN', 'head': subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT, text=True).strip(),
@@ -196,7 +199,7 @@ def main():
             receipt[key] = result_data[key]
         if not stop_result.exists() or stop_result.read_text().strip() != 'PASS':
             raise RuntimeError('legacy fixture stop did not report PASS')
-        if list(args.artifacts.glob('*.tmp')):
+        if list(spool_root.iterdir()):
             raise RuntimeError('temporary spool artifacts remain')
         receipt['process_group_cleanup'] = 'PASS'
         receipt['socket_cleanup'] = 'PASS'

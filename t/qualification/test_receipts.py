@@ -14,7 +14,12 @@ class ReceiptTests(unittest.TestCase):
                        'dependencies':json.loads((check.ROOT / 't/compat/dependencies.json').read_text()),
                        'clack_patch_sha256':hashlib.sha256(check.PATCH.read_bytes()).hexdigest(),
                        'peak_rss_bytes':1024,'resource_samples':[{'rss_bytes':1024,'fd_count':3}]*10,
-                       'gates':{'legacy_http_https_static_upload_disconnect':'PASS'}}
+                       'gates':{'legacy_http_https_static_upload_disconnect':'PASS'},
+                       'process_group_cleanup':'PASS','socket_cleanup':'PASS','spool_cleanup':'PASS'}
+            path.write_text(json.dumps(receipt))
+            with patch.object(check, 'source_digest', return_value='current'), \
+                 patch.object(check.subprocess, 'check_output', return_value='current\n'):
+                check.verify_receipt(path)
             for change in ({'head':'old'}, {'source_digest':'old'}, {'elapsed_seconds':20},
                            {'soak_elapsed_seconds':20}, {'cleanup':'UNKNOWN'}, {'status':'DIAGNOSTIC_PASS'},
                            {'lifecycle_cycles':0}, {'resource_samples':[]}, {'dependencies':{}},

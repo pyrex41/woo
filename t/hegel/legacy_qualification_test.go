@@ -13,9 +13,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
+
+var legacyPIDs sync.Map
 
 func startLegacy(t *testing.T) (string, string) {
 	t.Helper()
@@ -27,6 +31,7 @@ func startLegacy(t *testing.T) (string, string) {
 	if lisp == "ros" {
 		command = []string{"ros", "-e", `(load "t/hegel/legacy-server.lisp")`}
 	}
+	legacyPID := 0
 	requested := os.Getenv("WOO_HEGEL_PORT")
 	if requested == "" {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -43,12 +48,14 @@ func startLegacy(t *testing.T) (string, string) {
 	}
 	plain, err := startFixture(t, fixtureSpec{
 		name: "Woo legacy", command: command, readyPath: "/.woo-test-ready", startupTTL: 120 * time.Second,
+		started: func(pid int) { legacyPID = pid },
 	}, requested)
 	if err != nil {
 		t.Fatal(err)
 	}
 	host, portText, _ := net.SplitHostPort(plain)
 	port, _ := strconv.Atoi(portText)
+	legacyPIDs.Store(plain, legacyPID)
 	return plain, net.JoinHostPort(host, strconv.Itoa(port+1))
 }
 
@@ -92,6 +99,11 @@ func stopLegacy(t *testing.T, plain string) {
 	if path == "" {
 		t.Fatal("WOO_LEGACY_STOP_RESULT is required")
 	}
+	pidValue, ok := legacyPIDs.Load(plain)
+	if !ok {
+		t.Fatalf("missing legacy fixture PID for %s", plain)
+	}
+	pid := pidValue.(int)
 	_ = os.Remove(path)
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get("http://" + plain + "/stop")
@@ -105,11 +117,49 @@ func stopLegacy(t *testing.T, plain string) {
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
 		if data, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(data)) == "PASS" {
-			return
+			for _, address := range []string{plain, secureAddress(plain)} {
+				for time.Now().Before(deadline) {
+					conn, err := net.DialTimeout("tcp", address, 200*time.Millisecond)
+					if err != nil {
+						break
+					}
+					conn.Close()
+					time.Sleep(50 * time.Millisecond)
+				}
+				if conn, err := net.DialTimeout("tcp", address, 200*time.Millisecond); err == nil {
+					conn.Close()
+					t.Fatalf("listener %s still accepts connections after stop", address)
+				}
+			}
+			for time.Now().Before(deadline) {
+				if err := syscall.Kill(pid, 0); err != nil {
+					legacyPIDs.Delete(plain)
+					return
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			t.Fatalf("legacy fixture process %d remains alive after stop", pid)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("legacy stop did not report PASS")
+}
+
+func secureAddress(plain string) string {
+	host, portText, _ := net.SplitHostPort(plain)
+	port, _ := strconv.Atoi(portText)
+	return net.JoinHostPort(host, strconv.Itoa(port+1))
+}
+
+func assertSpoolEmpty(t *testing.T) {
+	t.Helper()
+	entries, err := os.ReadDir(os.Getenv("WOO_LEGACY_SPOOL_ROOT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("smart-buffer spool files remain: %v", entries)
+	}
 }
 
 type delayedReader struct{ reader io.Reader }
@@ -157,6 +207,7 @@ func TestLegacyQualification(t *testing.T) {
 			if resp.StatusCode != http.StatusOK || !bytes.Equal(body, payload) {
 				t.Fatal("upload response mismatch")
 			}
+			assertSpoolEmpty(t)
 		})
 	}
 
@@ -218,6 +269,8 @@ func TestLegacyQualification(t *testing.T) {
 			headers := make([]byte, 4096)
 			n, _ := conn.Read(headers)
 			_ = conn.Close()
+			time.Sleep(250 * time.Millisecond)
+			assertSpoolEmpty(t)
 			if n < 12 || !bytes.Contains(headers[:n], []byte(" 413 ")) {
 				t.Fatalf("oversize response was not 413: %q", headers[:n])
 			}
@@ -285,6 +338,7 @@ func TestLegacyQualification(t *testing.T) {
 		cycles++
 	}
 	soakElapsed := time.Since(started).Seconds()
+	assertSpoolEmpty(t)
 	stopLegacy(t, plain)
 	for i := 0; i < 30; i++ {
 		cyclePlain, _ := startLegacy(t)
@@ -298,7 +352,7 @@ func TestLegacyQualification(t *testing.T) {
 	}
 	resultPath := os.Getenv("WOO_LEGACY_RESULT")
 	if resultPath != "" {
-		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": 30, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": soakElapsed})
+		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": 30, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": soakElapsed, "spool_cleanup": "PASS"})
 		if err := os.WriteFile(resultPath, append(data, '\n'), 0600); err != nil {
 			t.Fatal(err)
 		}
