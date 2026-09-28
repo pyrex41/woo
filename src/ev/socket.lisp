@@ -57,6 +57,7 @@
            :write-socket-stream
            :flush-buffer
            :with-async-writing
+           :start-static-stream
            :send-static-file
            :close-socket))
 (in-package :woo.ev.socket)
@@ -88,11 +89,19 @@
   body-memory-limit
   input-holder
   (input-paused-p nil)
+  ;; Incremented when a response starts writing headers. This lets error
+  ;; handlers distinguish a pre-commit failure from a committed stream.
+  (response-generation 0 :type fixnum)
 
   (buffer (make-output-buffer #+lispworks :output #+lispworks :static))
   (sendfile-fd nil :type (or null fixnum))
   (sendfile-size nil :type (or null integer))
-  (sendfile-offset 0 :type (or null integer)))
+  (sendfile-offset 0 :type (or null integer))
+  ;; TLS cannot use sendfile. Keep the stream alive and pump bounded chunks
+  ;; from the owner event loop instead of loading the whole pathname.
+  (send-stream nil :type (or null stream))
+  (send-stream-size nil :type (or null integer))
+  (send-stream-offset 0 :type (or null integer)))
 
 (defun buffer-empty-p (socket)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -141,6 +150,18 @@
       (handler-case (funcall hook)
         (error () (vom:error "Socket cleanup hook failed"))))
     (free-watchers socket)
+    (let ((stream (socket-send-stream socket)))
+      (when stream
+        (ignore-errors (close stream :abort t))
+        (setf (socket-send-stream socket) nil)))
+    (let ((ssl-handle (socket-ssl-handle socket)))
+      (when ssl-handle
+        ;; A nonblocking SSL_shutdown may return 0 when the peer has not
+        ;; answered yet. Send the close_notify once, then bound connection
+        ;; teardown rather than blocking the event loop.
+        (ignore-errors (cl+ssl::ssl-shutdown ssl-handle))
+        (ignore-errors (cl+ssl::ssl-free ssl-handle))
+        (setf (socket-ssl-handle socket) nil)))
     (let ((fd (socket-fd socket)))
       (wsys:close fd)
       (remove-pointer-from-registry fd))
@@ -224,7 +245,38 @@
              (and (flush-buffer socket)
                   (reset-buffer socket)))
             (t
-             (fast-io::extend buffer))))))))
+            (fast-io::extend buffer))))))))
+
+(defun start-static-stream (socket stream size)
+  "Transfer ownership of STREAM to SOCKET and send it in bounded chunks.
+   The stream is closed by the socket on completion, cancellation, or error."
+  (check-socket-open socket)
+  (when (socket-send-stream socket)
+    (ignore-errors (close (socket-send-stream socket) :abort t)))
+  (setf (socket-send-stream socket) stream
+        (socket-send-stream-size socket) size
+        (socket-send-stream-offset socket) (file-position stream))
+  socket)
+
+(defun pump-static-stream (socket)
+  (let ((stream (socket-send-stream socket)))
+    (when stream
+      (let* ((remaining (- (or (socket-send-stream-size socket) 0)
+                           (socket-send-stream-offset socket)))
+             (count (min 65536 (max 0 remaining)))
+             (chunk (make-array count :element-type '(unsigned-byte 8))))
+        (if (zerop count)
+            (progn
+              (ignore-errors (close stream))
+              (setf (socket-send-stream socket) nil))
+            (let ((n (read-sequence chunk stream :end count)))
+              (if (zerop n)
+                  (progn
+                    (ignore-errors (close stream))
+                    (setf (socket-send-stream socket) nil))
+                  (progn
+                    (incf (socket-send-stream-offset socket) n)
+                    (write-socket-data socket chunk :end n)))))))))
 
 (declaim (inline reset-buffer))
 (defun reset-buffer (socket)
@@ -268,7 +320,14 @@
                    ((or (= errno cl+ssl::+ssl-error-zero-return+)
                         (= errno cl+ssl::+ssl-error-ssl+))
                     (close-socket socket))
-                   ((= errno cl+ssl::+ssl-error-want-write+))
+                   ((or (= errno cl+ssl::+ssl-error-want-write+)
+                        (= errno cl+ssl::+ssl-error-want-read+))
+                    ;; Keep the exact remainder in the output buffer. OpenSSL
+                    ;; may request either readiness direction for one write;
+                    ;; ACCEPT_MOVING_WRITE_BUFFER permits the next flush to
+                    ;; repin the same bytes at a new address.
+                    (when (= errno cl+ssl::+ssl-error-want-read+)
+                      (lev:ev-io-start *evloop* (socket-read-watcher socket))))
                    (t
                     (vom:error "Unexpected error (Code: ~D)" errno)
                     (close-socket socket))))
@@ -350,6 +409,21 @@
       (return-from async-write nil))
     (reset-buffer socket)
     (release-buffer-charge socket))
+  ;; TLS pathname responses use a stream rather than sendfile. Pump one
+  ;; bounded chunk per readiness callback to preserve backpressure.
+  (when (and (socket-open-p socket)
+             (null (socket-sendfile-fd socket))
+             (socket-send-stream socket))
+    (pump-static-stream socket)
+    (unless (buffer-empty-p socket)
+      (unless (flush-buffer socket)
+        (return-from async-write nil))
+      (reset-buffer socket)
+      (release-buffer-charge socket)
+      ;; Leave the write watcher armed for the next bounded chunk. The
+      ;; response callback belongs only to the final chunk.
+      (when (socket-send-stream socket)
+        (return-from async-write nil))))
   ;; Send a static file?
   (when (socket-sendfile-fd socket)
     (unless (send-file socket)
@@ -363,7 +437,9 @@
     (dolist (hook hooks) (funcall hook)))
   ;; Completion callbacks can enqueue another write. Keep its watcher alive.
   (when (and (socket-open-p socket) (buffer-empty-p socket)
-             (null (socket-sendfile-fd socket)) (null (socket-flush-hooks socket)))
+             (null (socket-sendfile-fd socket))
+             (null (socket-send-stream socket))
+             (null (socket-flush-hooks socket)))
     (lev:ev-io-stop *evloop* (socket-write-watcher socket)))
   t)
 

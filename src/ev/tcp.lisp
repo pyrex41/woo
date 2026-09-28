@@ -12,6 +12,7 @@
                 :close-socket
                 :socket-ssl-handle
                 :socket-fd
+                :socket-write-watcher
                 :socket-read-cb
                 :socket-read-watcher
                 :socket-timeout-timer
@@ -65,6 +66,7 @@
                 :ev-timer-init
                 :ev-timer-again
                 :+EV-READ+
+                :+EV-WRITE+
                 :+EV-TIMER+)
   (:import-from :swap-bytes
                 :htonl
@@ -119,6 +121,10 @@
                         (= errno cl+ssl::+ssl-error-ssl+))
                     (close-socket socket))
                    ((= errno cl+ssl::+ssl-error-want-read+))
+                   ((= errno cl+ssl::+ssl-error-want-write+)
+                    ;; A nonblocking TLS read may need to emit handshake or
+                    ;; alert bytes. Let the owner loop service the write side.
+                    (lev:ev-io-start *evloop* (socket-write-watcher socket)))
                    (t
                     (vom:error "Unexpected error (Code: ~D)" errno)
                     (close-socket socket))))

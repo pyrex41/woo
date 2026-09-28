@@ -215,7 +215,8 @@ SERVER may be the listener or the thread running WOO:RUN."
         (*debug* debug)
         (*listener* nil)
         (ssl (or ssl-key-file ssl-cert-file))
-        (http2-handler nil))
+        (http2-handler nil)
+        (ssl-context nil))
     (labels ((ensure-http2-handler ()
                (unless http2-handler
                  (setf http2-handler (make-http2-app-handler *app*)))
@@ -238,6 +239,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
+                                          ssl-context
                                           ssl-cert-file
                                           ssl-key-file
                                           ssl-key-password))
@@ -338,7 +340,6 @@ SERVER may be the listener or the thread running WOO:RUN."
         (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
         #-woo-no-ssl
         (progn
-          (cl+ssl::ensure-initialized)
           (when ssl-key-file
             (setf ssl-key-file
                   (uiop:native-namestring
@@ -348,10 +349,19 @@ SERVER may be the listener or the thread running WOO:RUN."
             (setf ssl-cert-file
                   (uiop:native-namestring
                    (or (probe-file ssl-cert-file)
-                       (error "SSL certificate '~A' does not exist." ssl-cert-file)))))))
+                       (error "SSL certificate '~A' does not exist." ssl-cert-file)))))
+          (setf ssl-context
+                (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
+          ;; Install ALPN once per listener context. The callback storage is
+          ;; owned by this context and is retained until the server stops.
+          (woo.ssl:configure-alpn ssl-context woo.ssl:*alpn-protocols*)))
       (if worker-num
-          (start-multithread-server)
-          (start-singlethread-server)))))
+          (unwind-protect
+               (start-multithread-server)
+            (when ssl-context (woo.ssl:free-context ssl-context)))
+          (unwind-protect
+               (start-singlethread-server)
+            (when ssl-context (woo.ssl:free-context ssl-context)))))))
 
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
@@ -868,7 +878,7 @@ SERVER may be the listener or the thread running WOO:RUN."
         (pathname
          (cond
            ((woo.ev.socket:socket-ssl-handle socket)
-            (with-open-file (in body :element-type '(unsigned-byte 8))
+            (let ((in (open body :element-type '(unsigned-byte 8))))
               (let ((size (file-length in)))
                 (unless (getf headers :content-length)
                   (setf (getf headers :content-length) size))
@@ -878,8 +888,9 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                                (lambda (socket)
                                                                  (wev:close-socket socket))))
                   (write-response-headers socket status headers (not close))
-                  ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
-                  (wev:write-socket-stream socket in)))))
+                  ;; TLS has no portable sendfile path. Transfer stream
+                  ;; ownership to the event loop and pump bounded chunks.
+                  (wev:start-static-stream socket in size)))))
            (t
             (let* ((fd (wsys:open body))
                    (size #+lispworks (sys:file-size body)

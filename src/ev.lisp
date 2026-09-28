@@ -17,6 +17,7 @@
                 :write-socket-data
                 :write-socket-byte
                 :write-socket-stream
+                :start-static-stream
                 :flush-buffer
                 :with-async-writing)
   (:import-from :woo.ev.event-loop
@@ -37,6 +38,7 @@
            :write-socket-data
            :write-socket-byte
            :write-socket-stream
+           :start-static-stream
            :with-async-writing
            :socket-data
            :close-socket
