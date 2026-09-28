@@ -19,4 +19,4 @@
                :transfer-encoding))
       "application transfer encoding is removed")
   (ok (woo::validate-response '(200 (:content-length 99) nil) t)
-      "HEAD responses do not compare body length"))
+      "HEAD responses do not compare body length")))
