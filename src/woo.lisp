@@ -325,7 +325,7 @@
           (unless (= expected actual) (error "Response content length mismatch"))))
       (remf normalized :transfer-encoding)
       (if (= (length response) 2) (list status normalized)
-          (list status normalized (if (stringp body) (list body) body)))))
+          (list status normalized (if (stringp body) (list body) body))))))
 
 (defun handle-response (http socket clack-res)
   (handler-case
