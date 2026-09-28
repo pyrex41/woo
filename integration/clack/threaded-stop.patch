@@ -1,0 +1,42 @@
+--- a/src/handler.lisp
++++ b/src/handler.lisp
+@@ -7,6 +7,7 @@
+                 :threadp
+                 :make-thread
+                 :thread-alive-p
++                :join-thread
+                 :destroy-thread)
+   (:import-from :usocket)
+   (:export :run
+@@ -52,11 +53,30 @@
+                                          ,@bt2:*default-special-bindings*))
+                       (run-server))))))
+ 
++(defun stop-thread-gracefully (handler acceptor)
++  (let* ((package (find-handler (handler-server handler)))
++         (stop-symbol (find-symbol "STOP-GRACEFULLY" package)))
++    (when (and stop-symbol (fboundp stop-symbol))
++      ;; The handler thread can still be starting when STOP is called.
++      (let ((requested
++              (loop repeat 100
++                    while (bt2:thread-alive-p acceptor)
++                    when (funcall stop-symbol acceptor) return t
++                    do (sleep 0.01))))
++        (when requested
++          ;; Woo can spend ten seconds stopping its worker cluster. Leave
++          ;; time for event-loop and socket cleanup before the fallback.
++          (loop repeat 1500 while (bt2:thread-alive-p acceptor)
++                do (sleep 0.01))
++          (unless (bt2:thread-alive-p acceptor)
++            (bt2:join-thread acceptor)
++            t))))))
++
+ (defun stop (handler)
+   (let ((acceptor (handler-acceptor handler))
+         (swank-port (handler-swank-port handler)))
+     (if (bt2:threadp acceptor)
+-        (progn
++        (unless (stop-thread-gracefully handler acceptor)
+           (when (bt2:thread-alive-p acceptor)
+             (bt2:destroy-thread acceptor))
+           (sleep 0.5))
