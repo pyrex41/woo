@@ -210,4 +210,4 @@
                (ok (= 4 (length (remove-duplicates states :test #'eq))))
                (ok (not (member *random-state* states :test #'eq))))
           (dotimes (i 4) (bt2:signal-semaphore release))
-          (dolist (client clients) (sb-thread:join-thread client :timeout 10)))))))
+          (dolist (client clients) (sb-thread:join-thread (bt2:thread-native-thread client) :timeout 10)))))))

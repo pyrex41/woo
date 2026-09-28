@@ -76,7 +76,7 @@
                           (threads 8)
                           (iterations 10000))
                       (mapc
-                       (lambda (thread) (sb-thread:join-thread thread :timeout 20))
+                       (lambda (thread) (sb-thread:join-thread (bt2:thread-native-thread thread) :timeout 20))
                        (loop for i from 0 below threads
                              collect
                              (let* ((use-large (evenp i))

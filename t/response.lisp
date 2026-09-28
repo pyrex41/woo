@@ -167,7 +167,9 @@ Must track the loop in src/response.lisp.")
     (dolist (response '((99 nil nil) (600 nil nil) (200 (:bad) nil)
                         (200 (:content-type "bad
 header") nil)
-                        (200 nil ("ok" 42)) (200 nil #("bad"))))
+                        (200 nil ("ok" 42)) (200 nil #("bad")) (200 (:content-length "oops") nil)
+                        (200 (:content-length 0 :content-length 1) nil)
+                        (200 (:content-length 0 :transfer-encoding "chunked") nil)))
       (clack.test:testing-app "Malformed response receives one 500"
           (lambda (env) (declare (ignore env)) response)
         (let ((result (woo-test::raw-exchange clack.test:*clack-test-port*
@@ -185,4 +187,4 @@ header") nil)
     (ok (typep a 'random-state)) (ok (typep b 'random-state))
     (ok (not (eq a b))) (ok (not (eq a *random-state*)))
     (let ((*random-state* a)) (dotimes (i 100) (random 1000000)))
-    (ok (= (random 1000000 caller) (random 1000000 (make-random-state *random-state*)))))))
+    (ok (= (random 1000000 caller) (random 1000000 (make-random-state *random-state*))))))

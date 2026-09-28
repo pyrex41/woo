@@ -796,11 +796,27 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                      (/= (char-code c) 127)))
                                      (princ-to-string value))))
                (error "Invalid Clack response header")))
+    (let ((lengths (loop for (key value) on headers by #'cddr
+                         when (and value (string-equal (string key) "content-length")) collect value))
+          (encodings (loop for (key value) on headers by #'cddr
+                           when (and value (string-equal (string key) "transfer-encoding")) collect value)))
+      (when (or (> (length lengths) 1) (and lengths encodings))
+        (error "Ambiguous response framing"))
+      (when lengths
+        (let ((text (princ-to-string (first lengths))))
+          (unless (and (plusp (length text)) (every #'digit-char-p text))
+            (error "Invalid response content length"))))
+      (when (and encodings (or (> (length encodings) 1)
+                               (not (string-equal (princ-to-string (first encodings)) "chunked"))))
+        (error "Unsupported response transfer encoding")))
     (unless (or (null body) (pathnamep body) (stringp body)
                 (typep body '(vector (unsigned-byte 8)))
                 (and (listp body) (list-length body) (every #'stringp body)))
       (error "Invalid Clack response body"))
-    (if (stringp body) (list status headers (list body)) response)))
+    (let ((normalized (loop for (key value) on headers by #'cddr
+                            append (list (intern (string-upcase (string key)) :keyword) value))))
+      (if (= (length response) 2) (list status normalized)
+          (list status normalized (if (stringp body) (list body) body))))))
 
 (defun legacy-response-failed (http socket generation)
   (when (wev:socket-open-p socket)
