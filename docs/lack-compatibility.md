@@ -168,6 +168,7 @@ shell:
 
 ```sh
 nix develop
+set -eu
 woo_ql_dir=$(mktemp -d "${TMPDIR:-/tmp}/woo-quicklisp.XXXXXXXX")
 curl --fail --max-time 60 --location https://beta.quicklisp.org/quicklisp.lisp \
   -o "$woo_ql_dir/bootstrap.lisp"
