@@ -115,7 +115,8 @@
             :ssl-key-file #P"t/certs/localhost.key"))
         (dex:*not-verify-ssl* t)
         (clack.test:*use-https* t))
-    (clack.test.suite:run-server-tests :woo)))
+    (ok (clack.test.suite:run-server-tests :woo)
+        "upstream Clack TLS suite failures fail the Woo gate")))
 
 ;;; The HTTP/1 reader splits heads and fixed-length body boundaries, but
 ;;; never scans inside a body for apparent CR LF CR LFs. Each body stays in

@@ -67,7 +67,11 @@ func managedClients(t *testing.T, addr string) map[string]struct {
 	base   string
 } {
 	t.Helper()
-	cert, err := os.ReadFile(filepath.Join("..", "certs", "localCA.crt"))
+	certRoot := os.Getenv("WOO_COMPAT_CERT_ROOT")
+	if certRoot == "" {
+		certRoot = filepath.Join("..", "certs")
+	}
+	cert, err := os.ReadFile(filepath.Join(certRoot, "localCA.crt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,6 +317,21 @@ func TestManagedWebsocketDriver(t *testing.T) {
 		t.Fatalf("websocket: %q %v", message, e)
 	}
 }
+func awaitManagedBaseline(t *testing.T, client *http.Client, base string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, metrics := managedRequest(t, client, "GET", base+"/metrics", nil, nil)
+		if string(metrics) == "0|0|1" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("resources did not converge to baseline: %q", metrics)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestManagedSoak(t *testing.T) {
 	seconds := 1800
 	if value := os.Getenv("WOO_COMPAT_SOAK_SECONDS"); value != "" {
@@ -357,10 +376,7 @@ func TestManagedSoak(t *testing.T) {
 			}
 			count++
 			if count%100 == 0 {
-				_, metrics := managedRequest(t, lane.client, "GET", lane.base+"/metrics", nil, nil)
-				if string(metrics) != "0|0|1" {
-					t.Fatalf("resources did not return to baseline: %q", metrics)
-				}
+				awaitManagedBaseline(t, lane.client, lane.base)
 			}
 		}
 		if time.Now().After(nextSample) {
@@ -426,17 +442,7 @@ func TestManagedBudgetAndCancellation(t *testing.T) {
 				t.Fatal("HTTP/1 body limit did not return 413:", err)
 			}
 			// A cancelled H2 stream must not poison another stream or retain its budget.
-			deadline := time.Now().Add(5 * time.Second)
-			for {
-				_, metrics := managedRequest(t, lane.client, "GET", lane.base+"/metrics", nil, nil)
-				if string(metrics) == "0|0|1" {
-					break
-				}
-				if time.Now().After(deadline) {
-					t.Fatalf("cancelled resources: %q", metrics)
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			awaitManagedBaseline(t, lane.client, lane.base)
 			_, body := managedRequest(t, lane.client, "GET", lane.base+"/", nil, nil)
 			if string(body) != "こんにちは λ" {
 				t.Fatal("request after cancellation failed")

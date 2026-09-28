@@ -70,3 +70,42 @@
         (ok (null (funcall writer nil :close t)))
         (ok (= calls before)))
       (ok (zerop closed)))))
+
+(deftest cancelled-session-does-not-mutate-nested-store-values
+  (let* ((store (lack.session.store.memory:make-memory-store))
+         (sid (make-string 40 :initial-element #\b))
+         (initial (make-hash-table :test 'equal))
+         (nested (make-hash-table :test 'equal))
+         (e (env (format nil "lack.session=~A" sid))))
+    (setf (gethash :nested initial) nested (gethash :items nested) (list "unchanged"))
+    (lack.session.store:store-session store sid initial)
+    (setf (getf e :woo.request-cancelled-p) (constantly t))
+    (let ((app (woo.compat::wrap-session
+                (lambda (env)
+                  (setf (char (first (gethash :items (gethash :nested (getf env :lack.session)))) 0) #\X)
+                  '(200 nil nil)) :store store)))
+      (funcall app e))
+    (ok (equal (gethash :items (gethash :nested (lack.session.store:fetch-session store sid)))
+               '("unchanged")))))
+
+(deftest session-snapshot-preserves-cycles-and-array-shape
+  (let* ((table (make-hash-table)) (cycle (list 1))
+         (array (make-array 4 :adjustable t :fill-pointer 2 :initial-contents '(1 2 3 4))))
+    (setf (cdr cycle) cycle (gethash :cycle table) cycle (gethash :array table) array)
+    (let ((copy (woo.compat::copy-session-values table)))
+      (ok (not (eq cycle (gethash :cycle copy))))
+      (ok (eq (gethash :cycle copy) (cdr (gethash :cycle copy))))
+      (ok (= (fill-pointer (gethash :array copy)) 2))
+      (ok (= (array-total-size (gethash :array copy)) 4)))))
+
+(deftest compression-drops-representation-metadata
+  (let* ((e (env)) (headers nil)
+         (app (woo.compat::wrap-deflater
+               (lambda (env) (declare (ignore env))
+                 '(200 (:etag "strong" :content-md5 "old" :digest "old" :accept-ranges "bytes") ("fixture"))))))
+    (setf (gethash "accept-encoding" (getf e :headers)) "gzip")
+    (funcall (funcall app e) (lambda (r)
+                             (setf headers (second r))
+                             (lambda (data &key start end close) (declare (ignore data start end close)) t)))
+    (ok (every (lambda (key) (null (getf headers key))) '(:etag :content-md5 :digest :accept-ranges)))
+    (ok (equal (getf headers :vary) "Accept-Encoding"))))

@@ -1,8 +1,9 @@
 #!/bin/sh
 set -eu
 
-mkdir -p t/certs
-cd t/certs
+certificate_dir=${1:-t/certs}
+mkdir -p "$certificate_dir"
+cd "$certificate_dir"
 
 openssl genrsa -out localCA.key 2048
 openssl req -batch -new -key localCA.key -out localCA.csr \

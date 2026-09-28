@@ -112,7 +112,10 @@ callbacks already run on the owner loop. Keep those callbacks short.
 | `:woo-backtrace` | Catches synchronous and delayed producer errors; reports error types without printing conditions or request secrets |
 
 Session locks are process-local and shared across helper instances using the
-same store or Redis connection. Separate application processes need a store or
+same store or Redis connection. Session values in lists, hashes and arrays are
+copied recursively; hash key identity is preserved. Other application objects
+retain their identity, so their side effects remain application-owned.
+Separate application processes need a store or
 application protocol that provides atomic updates. Missing delayed responders
 release their session lease on cancellation. The fixed stripe table may
 serialize unrelated SIDs. Malformed serialized sessions are read with reader
@@ -127,8 +130,8 @@ must be handled by that application.
 
 Use ordinary upstream `:auth-basic`, `:csrf`, `:static`, and `:dbpool` explicitly.
 For CSRF, obtain the token inside the wrapped application's dynamic scope.
-Compression helpers require Salza2 and cl-zstd; review their licenses when
-packaging an application.
+Compression drops ETag, digest and byte-range metadata for the original bytes.
+Compression helpers require Salza2 and cl-zstd.
 
 ## Required validation
 

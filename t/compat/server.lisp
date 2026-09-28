@@ -2,6 +2,7 @@
 (let* ((port (parse-integer (uiop:getenv "WOO_HEGEL_PORT")))
        (nonce (uiop:getenv "WOO_HEGEL_READY_NONCE"))
        (tls-port (+ port 1))
+       (cert-root (uiop:ensure-directory-pathname (or (uiop:getenv "WOO_COMPAT_CERT_ROOT") "t/certs/")))
        (auth (lack:builder
                (:auth-basic :authenticator (lambda (u p) (and (equal u "test") (equal p "test"))))
                (lambda (env) (declare (ignore env)) '(200 (:content-type "text/plain") ("authorized")))))
@@ -95,7 +96,8 @@
        (progn
          (setf tls (woo.compat:clackup app :address "127.0.0.1" :port tls-port
                                      :max-response-queue-bytes 65536 :max-request-body-bytes 131072
-                                     :ssl-key-file "t/certs/localhost.key" :ssl-cert-file "t/certs/localhost.crt"))
+                                     :ssl-key-file (merge-pathnames "localhost.key" cert-root)
+                                     :ssl-cert-file (merge-pathnames "localhost.crt" cert-root)))
          (setf plain (woo.compat:clackup app :address "127.0.0.1" :port port
                                        :max-response-queue-bytes 65536 :max-request-body-bytes 131072))
          (setf shutdown (lambda ()

@@ -158,7 +158,8 @@
                  (if (not (eligible r)) (funcall respond r)
                      (destructuring-bind (status headers &optional (body nil body-p)) r
                        (let ((headers (copy-list headers)))
-                         (remf headers :content-length)
+                         (dolist (field '(:content-length :etag :content-md5 :digest :content-digest :repr-digest :accept-ranges))
+                           (remf headers field))
                          (setf (getf headers :content-encoding) algorithm
                                (getf headers :vary) (if (getf headers :vary)
                                                        (format nil "~A, Accept-Encoding" (getf headers :vary)) "Accept-Encoding"))
@@ -189,6 +190,36 @@
     (bt2:with-lock-held (*session-coordinators-lock*)
       (or (gethash key *session-coordinators*)
           (setf (gethash key *session-coordinators*) (make-session-coordinator))))))
+(defun copy-session-values (session)
+  "Detach mutable data values, preserving sharing/cycles and hash key identity."
+  (let ((seen (make-hash-table :test 'eq)))
+    (labels ((copy-value (value)
+               (or (gethash value seen)
+                   (typecase value
+                     (cons
+                      (let ((copy (cons nil nil)))
+                        (setf (gethash value seen) copy
+                              (car copy) (copy-value (car value))
+                              (cdr copy) (copy-value (cdr value)))
+                        copy))
+                     (hash-table
+                      (let ((copy (make-hash-table :test (hash-table-test value))))
+                        (setf (gethash value seen) copy)
+                        (maphash (lambda (key item) (setf (gethash key copy) (copy-value item))) value)
+                        copy))
+                     (array
+                      (let ((copy (apply #'make-array (array-dimensions value)
+                                         :element-type (array-element-type value)
+                                         :adjustable (adjustable-array-p value)
+                                         (when (and (vectorp value) (array-has-fill-pointer-p value))
+                                           (list :fill-pointer (fill-pointer value))))))
+                        (setf (gethash value seen) copy)
+                        (dotimes (i (array-total-size value))
+                          (setf (row-major-aref copy i) (copy-value (row-major-aref value i))))
+                        copy))
+                     (t value)))))
+      (copy-value session))))
+
 (defun wrap-session (app &key
                            (store (lack.middleware.session.store.memory:make-memory-store))
                            (state (lack.middleware.session.state.cookie:make-cookie-state))
@@ -232,7 +263,7 @@
                                 (let ((*read-eval* nil))
                                 (handler-bind ((warning #'muffle-warning)) (lack.session.store:fetch-session store sid)))))
                      (new (null session)))
-                (setf (getf env :lack.session) (if session (alexandria:copy-hash-table session) (make-hash-table :test 'equal))
+                (setf (getf env :lack.session) (if session (copy-session-values session) (make-hash-table :test 'equal))
                       (getf env :lack.session.options) (list :id sid :new-session new :change-id nil :expire nil))
                 (when (getf env :woo.request)
                   (let ((request (getf env :woo.request)))

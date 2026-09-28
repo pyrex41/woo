@@ -149,7 +149,9 @@ def main():
                 env['WOO_COMPAT_REDIS_PORT']=str(port)
                 run(['python3','t/compat/test_receipts.py'],env,args.artifacts/'receipts.log',30)
                 receipt['gates']['receipt_validator']='PASS'
-                run(['sh','t/generate-certificates.sh'],env,args.artifacts/'certificates.log',30)
+                env['WOO_COMPAT_CERT_ROOT']=str(Path(work)/'certs')
+                run(['sh','t/generate-certificates.sh',env['WOO_COMPAT_CERT_ROOT']],
+                    env,args.artifacts/'certificates.log',30)
                 run([env['WOO_HEGEL_LISP'],'--script','t/compat/run.lisp'],env,args.artifacts/'lisp.log',600)
                 receipt['gates']['lisp_contract_lifecycle_middleware_services']='PASS'
                 run(['go','-C','t/hegel','test','-v','-count=1','-run','^TestManaged',
