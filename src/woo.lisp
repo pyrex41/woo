@@ -775,6 +775,41 @@ SERVER may be the listener or the thread running WOO:RUN."
 ;;
 ;; Handling responses
 
+(defun validate-response (response)
+  "Validate a legacy response before any bytes are committed."
+  (unless (and (listp response) (member (list-length response) '(2 3)))
+    (error "Invalid Clack response shape"))
+  (destructuring-bind (status headers &optional body) response
+    (check-type status (integer 200 599))
+    (unless (and (listp headers) (let ((n (list-length headers))) (and n (evenp n))))
+      (error "Invalid Clack response headers"))
+    (loop for (key value) on headers by #'cddr
+          do (unless (and (typep key '(or string symbol))
+                          (plusp (length (string key)))
+                          (every (lambda (c) (and (< (char-code c) 128)
+                                                 (or (alphanumericp c)
+                                                     (find c "!#$%&'*+-.^_`|~"))))
+                                 (string key))
+                          (or (null value)
+                              (every (lambda (c) (and (<= (char-code c) 255)
+                                                     (or (char= c #\Tab) (>= (char-code c) 32))
+                                                     (/= (char-code c) 127)))
+                                     (princ-to-string value))))
+               (error "Invalid Clack response header")))
+    (unless (or (null body) (pathnamep body) (stringp body)
+                (typep body '(vector (unsigned-byte 8)))
+                (and (listp body) (list-length body) (every #'stringp body)))
+      (error "Invalid Clack response body"))
+    (if (stringp body) (list status headers (list body)) response)))
+
+(defun legacy-response-failed (http socket generation)
+  (when (wev:socket-open-p socket)
+    (if (/= generation (woo.ev.socket::socket-response-generation socket))
+        (wev:close-socket socket)
+        (progn
+          (handle-normal-response http socket '(500 (:connection "close") nil))
+          (setf (woo.ev.socket::socket-write-cb socket) #'wev:close-socket)))))
+
 (defun handle-response (http socket clack-res &optional env)
   (when (getf env :woo.response-handler)
     (return-from handle-response
@@ -784,16 +819,18 @@ SERVER may be the listener or the thread running WOO:RUN."
   ;; 200), writing it would corrupt the stream.
   (when (socket-upgraded-p socket)
     (return-from handle-response nil))
-  (handler-case
-      (etypecase clack-res
-        (list (handle-normal-response http socket clack-res))
-        (function (funcall clack-res (lambda (clack-res)
-                                       (unless (socket-upgraded-p socket)
-                                         (handler-case
-                                             (handle-normal-response http socket clack-res)
-                                           (wev:socket-closed ())))))))
-    (wev:tcp-error (e)
-      (vom:error (princ-to-string e)))))
+  (let ((generation (woo.ev.socket::socket-response-generation socket)))
+    (handler-case
+        (etypecase clack-res
+          (list (handle-normal-response http socket (validate-response clack-res)))
+          (function
+           (funcall clack-res
+                    (lambda (response)
+                      (unless (socket-upgraded-p socket)
+                        (handler-case
+                            (handle-normal-response http socket (validate-response response))
+                          (error () (legacy-response-failed http socket generation))))))))
+      (error () (legacy-response-failed http socket generation)))))
 
 #+sbcl
 (defun fd-file-size (fd)

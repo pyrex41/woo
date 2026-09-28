@@ -76,7 +76,8 @@ Do not wait for an application worker from inside THUNK."
   (wire-completed request t))
 
 (defun pool-worker (server)
-  (loop
+  (let ((*random-state* (make-random-state t)))
+   (loop
     (let ((job
             (bt2:with-lock-held ((ms-lock server))
               (loop while (and (null (ms-jobs server))
@@ -88,7 +89,7 @@ Do not wait for an application worker from inside THUNK."
       (unwind-protect (funcall job)
         (bt2:with-lock-held ((ms-lock server))
           (decf (ms-running server))
-          (bt2:condition-notify (ms-wake server)))))))
+          (bt2:condition-notify (ms-wake server))))))))
 
 (defun submit-request (request thunk)
   (let ((server (mr-server request)))

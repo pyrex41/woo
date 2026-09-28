@@ -192,3 +192,22 @@
       (ok (zerop (getf state :output-bytes))))
     (ok (signals (get-body port)))
     (ok (eq (getf (woo.compat:server-state handler) :state) :running))))
+
+(deftest application-worker-random-states-are-private
+  (let ((lock (bt2:make-lock)) (states nil)
+        (entered (bt2:make-semaphore :count 0)) (release (bt2:make-semaphore :count 0)))
+    (with-managed (handler port
+                   (lambda (env)
+                     (declare (ignore env))
+                     (bt2:with-lock-held (lock) (push *random-state* states))
+                     (bt2:signal-semaphore entered)
+                     (bt2:wait-on-semaphore release :timeout 5)
+                     '(200 nil ("ok"))) :application-workers 4)
+      (let ((clients (loop repeat 4 collect (bt2:make-thread (lambda () (get-body port))))))
+        (unwind-protect
+             (progn
+               (dotimes (i 4) (ok (bt2:wait-on-semaphore entered :timeout 5)))
+               (ok (= 4 (length (remove-duplicates states :test #'eq))))
+               (ok (not (member *random-state* states :test #'eq))))
+          (dotimes (i 4) (bt2:signal-semaphore release))
+          (dolist (client clients) (sb-thread:join-thread client :timeout 10)))))))
