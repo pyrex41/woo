@@ -354,7 +354,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                 (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
           ;; Install ALPN once per listener context. The callback storage is
           ;; owned by this context and is retained until the server stops.
-          (woo.ssl:configure-alpn ssl-context woo.ssl:*alpn-protocols*)))
+          (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*)))
       (if worker-num
           (unwind-protect
                (start-multithread-server)
