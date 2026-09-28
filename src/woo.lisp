@@ -105,7 +105,7 @@
 ;; only the listener and destroying that thread can bypass WITH-EVENT-LOOP's
 ;; socket cleanup.
 (defstruct (stop-control (:constructor make-stop-control))
-  listener thread evloop async cluster)
+  listener thread evloop async cluster (command :stop))
 (defvar *stop-controls* (make-hash-table :test #'eql))
 (defvar *stop-controls-by-async* (make-hash-table :test #'eql))
 (defvar *stop-controls-lock* (bt2:make-lock :name "woo-stop-controls"))
@@ -117,7 +117,9 @@
                    (gethash (cffi:pointer-address async)
                             *stop-controls-by-async*))))
     (when control
-      (lev:ev-break evloop lev:+EVBREAK-ALL+))))
+      (if (eq (stop-control-command control) :drain)
+          (lev:ev-io-stop evloop (stop-control-listener control))
+          (lev:ev-break evloop lev:+EVBREAK-ALL+)))))
 
 (defun register-stop-control (listener cluster)
   (let* ((async (cffi:foreign-alloc '(:struct lev:ev-async)))
@@ -153,8 +155,18 @@ SERVER may be the listener or the thread running WOO:RUN."
                        (gethash server *stop-controls*)
                        (gethash (cffi:pointer-address server) *stop-controls*))))
       (when control
+        (setf (stop-control-command control) :stop)
         (lev:ev-async-send (stop-control-evloop control)
                            (stop-control-async control))
+        t))))
+
+(defun quiesce (thread)
+  "Stop accepting connections without tearing down active responses."
+  (bt2:with-lock-held (*stop-controls-lock*)
+    (let ((control (gethash thread *stop-controls*)))
+      (when control
+        (setf (stop-control-command control) :drain)
+        (lev:ev-async-send (stop-control-evloop control) (stop-control-async control))
         t))))
 
 (defun http2-connection-preface-match (data start end)
@@ -187,7 +199,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                      (worker-num *default-worker-num*)
                      ssl-key-file
                      ssl-cert-file
-                     ssl-key-password)
+                     ssl-key-password on-ready on-connection (handle-signals t))
   (declare (ignorable ssl-key-password))
   (assert (and (integerp backlog)
                (plusp backlog)
@@ -229,6 +241,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                                           ssl-cert-file
                                           ssl-key-file
                                           ssl-key-password))
+               (when on-connection (funcall on-connection socket))
                (let ((pending (make-array 0 :element-type '(unsigned-byte 8)
                                           :adjustable t :fill-pointer 0))
                      (detected nil))
@@ -270,7 +283,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                (unless (getf vom::*config* :woo.signal)
                  (vom:config :woo.signal :info))
                (let ((*cluster* (woo.worker:make-cluster worker-num #'start-socket))
-                     (signal-watchers (make-signal-watchers))
+                     (signal-watchers (and handle-signals (make-signal-watchers)))
                      (stop-control nil))
                  (wev:with-sockaddr
                    (unwind-protect
@@ -281,7 +294,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                   (unwind-protect
                                                        (stop-signal-watchers *evloop* signal-watchers)
                                                     (unregister-stop-control stop-control)))))
-                          (start-signal-watchers *evloop* signal-watchers)
+                          (when handle-signals (start-signal-watchers *evloop* signal-watchers))
                           (setq *listener*
                                 (wev:tcp-server (or listen
                                                     (cons address port))
@@ -292,11 +305,12 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                 :backlog backlog
                                                 :fd fd
                                                 :sockopt wsock:+SO-REUSEADDR+))
-                          (setf stop-control (register-stop-control *listener* *cluster*)))
+                          (setf stop-control (register-stop-control *listener* *cluster*))
+                          (when on-ready (funcall on-ready stop-control)))
                      (close-listener)
                      (woo.worker:stop-cluster *cluster*)))))
              (start-singlethread-server ()
-               (let ((signal-watchers (make-signal-watchers))
+               (let ((signal-watchers (and handle-signals (make-signal-watchers)))
                      (stop-control nil))
                  (wev:with-sockaddr
                    (unwind-protect
@@ -307,7 +321,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                   (unwind-protect
                                                        (stop-signal-watchers *evloop* signal-watchers)
                                                     (unregister-stop-control stop-control)))))
-                          (start-signal-watchers *evloop* signal-watchers)
+                          (when handle-signals (start-signal-watchers *evloop* signal-watchers))
                           (setq *listener*
                                 (wev:tcp-server (or listen
                                                     (cons address port))
@@ -316,7 +330,8 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                 :backlog backlog
                                                 :fd fd
                                                 :sockopt wsock:+SO-REUSEADDR+))
-                          (setf stop-control (register-stop-control *listener* nil)))
+                          (setf stop-control (register-stop-control *listener* nil))
+                          (when on-ready (funcall on-ready stop-control)))
                      (close-listener))))))
       (when ssl
         #+woo-no-ssl
@@ -341,6 +356,9 @@ SERVER may be the listener or the thread running WOO:RUN."
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
     (handler-case (funcall parser data :start start :end end)
+      (request-body-limit-exceeded ()
+        (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+          (write-response-headers socket 413 '(:content-length 0 :connection "close"))))
       (fast-http:parsing-error (e)
         (vom:error "HTTP parse error: ~A" e)
         (let ((body #.(map '(simple-array (unsigned-byte 8) (*))
@@ -352,6 +370,9 @@ SERVER may be the listener or the thread running WOO:RUN."
                                           :content-length (length body)))
             (wev:write-socket-data socket body)))))))
 
+(define-condition request-body-limit-exceeded (fast-http:fast-http-error) ()
+  (:report (lambda (condition stream) (declare (ignore condition))
+             (write-string "Request body admission limit exceeded" stream))))
 (define-condition woo-error (simple-error) ())
 (define-condition invalid-http-version (woo-error) ())
 
@@ -470,6 +491,11 @@ SERVER may be the listener or the thread running WOO:RUN."
           do (setq m (crlf-match-step (if (= m 4) 2 m) (aref data i))))
     (if (= m 4) 2 m)))
 
+(defun make-request-body-buffer (socket)
+  (let ((limit (woo.ev.socket::socket-body-memory-limit socket)))
+    (if limit (make-smart-buffer :memory-limit limit :disk-limit limit)
+        (make-smart-buffer))))
+
 (defun setup-parser (socket)
   ;; A request with an Upgrade header may be followed, in the same read, by
   ;; octets of the new protocol: a WebSocket client need not wait for the
@@ -485,7 +511,7 @@ SERVER may be the listener or the thread running WOO:RUN."
   ;; socket, or is still deciding (a delayed response), the rest of the read
   ;; and every later one go to FEED-WEBSOCKET-DATA, never to fast-http.
   (let ((http (make-http-request))
-        (body-buffer (make-smart-buffer))
+        (body-buffer (make-request-body-buffer socket))
         ;; The request being parsed carries an Upgrade header.
         (upgrade-request nil)
         ;; The piece being parsed ends at the end of an Upgrade request's
@@ -542,10 +568,10 @@ SERVER may be the listener or the thread running WOO:RUN."
                              (setq head-fields 0
                                    aligned t)
                              (return split))
-                            ((= split end)
+                            ((or (= split end) (woo.ev.socket::socket-body-admitter socket))
                              (setq head-fields 0
                                    aligned nil)
-                             (return end))
+                             (return split))
                             (t
                              (setq head-fields 0
                                    pos split)))))))
@@ -559,7 +585,8 @@ SERVER may be the listener or the thread running WOO:RUN."
                                            (typep n 'fixnum)
                                            (plusp n))
                                       (min end (+ start n))
-                                      end)))
+                                      (if (woo.ev.socket::socket-body-admitter socket)
+                                          (min end (1+ start)) end))))
                       (declare (type fixnum split))
                       (setq crlf-match (crlf-match-after data start split crlf-match))
                       (values split (and (= split end)
@@ -613,6 +640,9 @@ SERVER may be the listener or the thread running WOO:RUN."
                          :body-callback
                          (lambda (data start end)
                            (declare (type (simple-array (unsigned-byte 8) (*)) data))
+                           (when (and (woo.ev.socket::socket-body-admitter socket)
+                                      (not (funcall (woo.ev.socket::socket-body-admitter socket) (- end start))))
+                             (error 'request-body-limit-exceeded))
                            (if (smart-buffer::buffer-on-memory-p body-buffer)
                                (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
                                (write-to-buffer body-buffer data start end)))
@@ -635,17 +665,17 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                                              (vom:error (princ-to-string error))
                                                                              nil)))
                                                                     res
-                                                                    '(500 nil nil)))))))
+                                                                    '(500 nil nil)))) env)))
                                (block result
                                  (let ((raw-body (finalize-buffer body-buffer)))
-                                   (setq body-buffer (make-smart-buffer))
+                                   (setq body-buffer (make-request-body-buffer socket))
                                    (handler-bind
                                        ((error ;; handle errors inside woo
                                           (lambda (e)
                                             (unless *debug*
                                               (vom:crit (princ-to-string e))
                                               (return-from result (handle-response http socket '(500 nil nil)))))))
-                                     (let ((env (nconc (list :raw-body raw-body)
+                                     (let ((env (nconc (list :raw-body raw-body :woo.response-handler nil)
                                                        (handle-request http socket))))
                                        (main env))))))))))
       (setq reader
@@ -654,6 +684,10 @@ SERVER may be the listener or the thread running WOO:RUN."
                        (type fixnum start end))
               (loop
                 (when (>= start end)
+                  (return))
+                (when (woo.ev.socket::socket-input-paused-p socket)
+                  (when (woo.ev.socket::socket-input-holder socket)
+                    (funcall (woo.ev.socket::socket-input-holder socket) data start end))
                   (return))
                 ;; No HTTP parsing once the socket belongs to WebSocket.
                 ;; Only an upgrade request's response can upgrade it
@@ -684,27 +718,7 @@ SERVER may be the listener or the thread running WOO:RUN."
 ;; Handling requests
 
 (defun parse-host-header (host)
-  (declare (type simple-string host)
-           (optimize (speed 3) (safety 0)))
-  (let ((pos (position #\: host :from-end t)))
-    (unless pos
-      (return-from parse-host-header
-        (values host nil)))
-
-    (locally (declare (type fixnum pos))
-      (let ((port (loop with port of-type fixnum = 0
-                        for i from (1+ pos) to (1- (length host))
-                        for char = (aref host i)
-                        do (if (digit-char-p char)
-                               (setq port (+ (* 10 port)
-                                             (- (char-code char) (char-code #\0))))
-                               (return nil))
-                        finally
-                           (return port))))
-        (if port
-            (values (subseq host 0 pos)
-                    port)
-            (values host nil))))))
+  (woo.http2.clack::split-authority host))
 
 (defun handle-request (http socket)
   (let ((host (gethash "host" (http-headers http)))
@@ -722,14 +736,14 @@ SERVER may be the listener or the thread running WOO:RUN."
         (list :request-method (http-method http)
               :script-name ""
               :server-name server-name
-              :server-port (or server-port 80)
+              :server-port (or server-port (if (woo.ev.socket:socket-ssl-handle socket) 443 80))
               :server-protocol (http-version-keyword (http-major-version http) (http-minor-version http))
               :path-info (if (and (stringp path)
                                   (string/= path ""))
                              (quri:url-decode path :lenient t)
                              "/")
               :query-string query
-              :url-scheme "http"
+              :url-scheme (if (woo.ev.socket:socket-ssl-handle socket) "https" "http")
               :remote-addr (socket-remote-addr socket)
               :remote-port (socket-remote-port socket)
               :request-uri uri
@@ -750,7 +764,10 @@ SERVER may be the listener or the thread running WOO:RUN."
 ;;
 ;; Handling responses
 
-(defun handle-response (http socket clack-res)
+(defun handle-response (http socket clack-res &optional env)
+  (when (getf env :woo.response-handler)
+    (return-from handle-response
+      (funcall (getf env :woo.response-handler) http socket clack-res)))
   ;; After a WebSocket upgrade the socket carries frames, not HTTP. Whatever
   ;; the app returned (NIL, which becomes a 500, or a framework's finalized
   ;; 200), writing it would corrupt the stream.

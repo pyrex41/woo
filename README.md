@@ -41,6 +41,27 @@ Clack can start Woo with `:server :woo`:
   :use-default-middlewares nil)
 ~~~
 
+### Managed Lack profile
+
+Load the optional adapter for a bounded application pool and draining shutdown:
+
+~~~common-lisp
+(ql:quickload :woo-lack-compat)
+(defparameter *server*
+  (woo.compat:clackup
+    (lack:builder :woo-backtrace :woo-accesslog :woo-deflater :woo-session app)
+    :port 5000))
+(clack:stop *server*)
+~~~
+
+This returns an ordinary Clack handle, owns its threads, and supports HTTP/1,
+HTTPS, h2c and HTTP/2 TLS. Applications run outside the network loop. Explicit
+middleware helpers cover delayed/streaming compression, session serialization,
+mount paths and redacted completion logging. The profile is experimental;
+qualification remains **UNKNOWN** until its required Linux/macOS gates pass.
+See [Lack compatibility](docs/lack-compatibility.md) for limits, cancellation,
+websocket-driver use and the test runner.
+
 ### TLS and workers
 
 ~~~common-lisp
@@ -51,13 +72,13 @@ Clack can start Woo with `:server :woo`:
          :debug nil)
 ~~~
 
-Woo negotiates HTTP/2 or HTTP/1.1 through ALPN after the TLS handshake. Cleartext HTTP/2 prior knowledge is also supported. The `:worker-num` option runs worker threads.
+Legacy Woo advertises HTTP/1.1 over TLS by default. Set `woo.ssl:*alpn-protocols*` to `'("h2" "http/1.1")` before starting it to enable HTTP/2 ALPN. Cleartext HTTP/2 prior knowledge is also supported. The `:worker-num` option runs network worker threads.
 
 ### Shutdown
 
 For a server started on its own thread, call `(woo:stop-gracefully thread)` and then join the thread. This requests shutdown on the owning event loop and closes accepted sockets. **It does not drain active requests.** `SIGQUIT` requests orderly loop and worker shutdown; `SIGINT` and `SIGTERM` stop workers immediately. Active connections may be interrupted.
 
-The installed Clack threaded stop path destroys the server thread. Before relying on `clack:clackdown` for cleanup, apply and verify the [Clack integration patch](integration/clack/README.md) in the Clack version actually used by the application.
+For legacy `:server :woo`, the installed Clack threaded stop path destroys the server thread. Apply and verify the [Clack integration patch](integration/clack/README.md) before relying on that path for cleanup. The managed adapter owns its threads and uses `clack:stop` without patching Clack.
 
 ## Protocol extensions
 
@@ -123,7 +144,7 @@ A green Lisp summary can include skips. Inspect its test output before treating 
 The separate Hegel suite requires Go 1.26+ and Rust 1.97+. It drives live HTTP/1.1, h2c, and WebSocket cases and compares valid responses with the lockfile-pinned [axum oracle](t/hegel/oracle/README.md):
 
 ~~~sh
-go -C t/hegel test -count=1 -timeout 10m ./...
+go -C t/hegel test -count=1 -skip '^TestManaged' -timeout 10m ./...
 ~~~
 
 It is required in CI. Each generated HTTP history uses a fresh connection, and HTTP/2 histories cannot silently redial. Both fixtures require a per-run readiness nonce. Hegel shrinks counterexamples; consecutive TCP writes do not guarantee distinct server reads.

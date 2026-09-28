@@ -78,6 +78,16 @@
   (write-cb nil :type (or null function))
   (ssl-handle nil :type (or null cffi:foreign-pointer))
   (open-p t :type boolean)
+  close-hooks
+  flush-hooks
+  output-admitter
+  output-releaser
+  (charged-output 0)
+  http2-initializer
+  body-admitter
+  body-memory-limit
+  input-holder
+  (input-paused-p nil)
 
   (buffer (make-output-buffer #+lispworks :output #+lispworks :static))
   (sendfile-fd nil :type (or null fixnum))
@@ -125,6 +135,11 @@
 (defun close-socket (socket)
   (when (socket-open-p socket)
     (setf (socket-open-p socket) nil)
+    (release-buffer-charge socket)
+    (dolist (hook (prog1 (socket-close-hooks socket)
+                    (setf (socket-close-hooks socket) nil)))
+      (handler-case (funcall hook)
+        (error () (vom:error "Socket cleanup hook failed"))))
     (free-watchers socket)
     (let ((fd (socket-fd socket)))
       (wsys:close fd)
@@ -143,12 +158,26 @@
   (unless (socket-open-p socket)
     (error 'socket-closed)))
 
+(defun charge-output (socket count)
+  (when (socket-output-admitter socket)
+    (unless (funcall (socket-output-admitter socket) count)
+      (error "Socket output budget exceeded"))
+    (incf (socket-charged-output socket) count)))
+
+(defun release-buffer-charge (socket)
+  (when (plusp (socket-charged-output socket))
+    (let ((count (socket-charged-output socket)))
+      (setf (socket-charged-output socket) 0)
+      (when (socket-output-releaser socket)
+        (funcall (socket-output-releaser socket) count)))))
+
 (defun write-socket-data (socket data &key (start 0) (end (length data))
                                         (write-cb nil write-cb-specified-p))
   (declare (optimize speed)
            (type vector data)
            (type fixnum start end))
   (when (socket-open-p socket)
+    (charge-output socket (- end start))
     (when write-cb-specified-p
       (setf (socket-write-cb socket) write-cb))
     (if (typep data '(simple-array (unsigned-byte 8) (*)))
@@ -163,6 +192,7 @@
   (declare (optimize speed)
            (type (unsigned-byte 8) byte))
   (when (socket-open-p socket)
+    (charge-output socket 1)
     (when write-cb-specified-p
       (setf (socket-write-cb socket) write-cb))
     (fast-write-byte byte (socket-buffer socket))))
@@ -318,18 +348,22 @@
   (unless (buffer-empty-p socket)
     (unless (flush-buffer socket)
       (return-from async-write nil))
-    (reset-buffer socket))
+    (reset-buffer socket)
+    (release-buffer-charge socket))
   ;; Send a static file?
   (when (socket-sendfile-fd socket)
     (unless (send-file socket)
       (return-from async-write nil)))
 
   ;; Transfer has been completed.
-  (when (socket-write-cb socket)
-    (funcall (the function (socket-write-cb socket)) socket))
-  ;; Need to check if 'socket' is still open because it may be closed in write-cb.
-  (when (socket-open-p socket)
+  (let ((callback (socket-write-cb socket))
+        (hooks (prog1 (socket-flush-hooks socket) (setf (socket-flush-hooks socket) nil))))
     (setf (socket-write-cb socket) nil)
+    (when callback (funcall callback socket))
+    (dolist (hook hooks) (funcall hook)))
+  ;; Completion callbacks can enqueue another write. Keep its watcher alive.
+  (when (and (socket-open-p socket) (buffer-empty-p socket)
+             (null (socket-sendfile-fd socket)) (null (socket-flush-hooks socket)))
     (lev:ev-io-stop *evloop* (socket-write-watcher socket)))
   t)
 

@@ -23,6 +23,7 @@ type fixtureSpec struct {
 	command    []string
 	readyPath  string
 	startupTTL time.Duration
+	started    func(int)
 }
 
 type boundedLog struct {
@@ -106,6 +107,9 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start %s: %w", spec.name, err)
+	}
+	if spec.started != nil {
+		spec.started(cmd.Process.Pid)
 	}
 	exited := make(chan struct{})
 	var exitErr error

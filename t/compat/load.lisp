@@ -1,0 +1,26 @@
+(require :asdf)
+(unless (find-package :ql)
+  (load (or (uiop:getenv "WOO_QUICKLISP_SETUP")
+            (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))))
+(let ((dependencies (uiop:getenv "WOO_COMPAT_DEPENDENCY_ROOT")))
+  (unless dependencies (error "WOO_COMPAT_DEPENDENCY_ROOT is required"))
+  (dolist (entry '("clack-9435762a8fc139edde8c682502a037332b0655f8/"
+                   "lack-35d8b0ab38a5f3a8ce885f9b135152ce932a45e2/"
+                   "websocket-driver-137e3132075996b4b21874dad50a02e28aacc64c/"
+                   "hunchentoot-65a3a3cca7e6e91fb068efc2ef8069b5c78ee91f/"))
+    (let ((path (merge-pathnames entry (uiop:ensure-directory-pathname dependencies))))
+      (unless (probe-file path) (error "Missing pinned source ~A" entry))
+      (push path asdf:*central-registry*))))
+(push (truename #p"./") asdf:*central-registry*)
+(ql:quickload :cffi :silent t)
+(dolist (directory (uiop:split-string (or (uiop:getenv "WOO_HEGEL_FOREIGN_LIB_DIRS") "") :separator '(#\:)))
+  (when (plusp (length directory))
+    (push (uiop:ensure-directory-pathname directory) cffi:*foreign-library-directories*)))
+(ql:quickload :woo-lack-compat/tests :silent t)
+
+(unless (string= (ql-dist:version (ql-dist:find-dist "quicklisp")) "2026-01-01")
+  (error "The required Quicklisp distribution is 2026-01-01"))
+(let ((root (truename (uiop:ensure-directory-pathname (uiop:getenv "WOO_COMPAT_DEPENDENCY_ROOT")))))
+  (dolist (system '("clack" "lack" "websocket-driver-server" "hunchentoot"))
+    (unless (uiop:subpathp (asdf:system-source-file (asdf:find-system system)) root)
+      (error "System ~A did not load from the verified dependency root" system))))

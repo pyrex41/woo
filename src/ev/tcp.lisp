@@ -148,7 +148,9 @@
            (setf (socket-last-activity socket) (lev:ev-now *evloop*))
            (when read-cb
              (funcall (the function read-cb) socket *input-buffer* :start 0 :end n))
-           (unless (= n buffer-len)
+           (unless (and (= n buffer-len)
+                        (woo.ev.socket:socket-open-p socket)
+                        (not (woo.ev.socket::socket-input-paused-p socket)))
              (return))))))))
 
 (define-c-callback timeout-cb :void ((evloop :pointer) (timer :pointer) (events :int))

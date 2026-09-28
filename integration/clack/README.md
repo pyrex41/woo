@@ -13,3 +13,7 @@ patch -p1 < /path/to/woo/integration/clack/threaded-stop.patch
 ~~~
 
 Verify that the application loaded the patched source and repeat the bounded start/stop descriptor test in that installation. A local smoke of a patched Clack copy completed 12 cycles with stable descriptors; the patch is **not installed upstream or in the default Quicklisp Clack**. Until it is installed and verified, use `woo:stop-gracefully` and join the `woo:run` thread directly for managed shutdown.
+
+The optional [managed Lack adapter](../../docs/lack-compatibility.md) owns its
+threads and does not require this patch. Its qualification gates are separate
+from the legacy threaded adapter.

@@ -125,6 +125,11 @@
   ;; Adapter-owned accounting and cancellation for responses awaiting dispatch.
   (response-budget nil)
   (cancel-responses nil)
+  body-admitter
+  body-releaser
+  stream-closed-hook
+  budget-adjuster
+  (draining nil)
   ;; Callbacks
   on-stream       ; (lambda (stream)) - called for new stream
   on-headers      ; (lambda (stream headers end-stream))
@@ -188,10 +193,14 @@
    Keeps only the id, so later frames are not idle errors."
   (when (and stream (stream-closed-p stream))
     (let ((id (http2-stream-id stream)))
+      (when (http2-connection-stream-closed-hook conn)
+        (funcall (http2-connection-stream-closed-hook conn) stream))
       ;; Release the body's share of the connection budget once. The
       ;; application keeps its own reference to the old buffer.
       (let ((buffered (length (http2-stream-body-buffer stream))))
         (when (plusp buffered)
+          (when (http2-connection-body-releaser conn)
+            (funcall (http2-connection-body-releaser conn) stream buffered))
           (decf (http2-connection-buffered-body-octets conn) buffered)
           (setf (http2-stream-body-buffer stream)
                 (make-array 0 :element-type '(unsigned-byte 8)
@@ -652,7 +661,9 @@
         (return-from finish-header-block nil)))
     ;; Refused streams stay out of the state machine. :recv-headers on a
     ;; stream we then RST would be a connection error from closed.
-    (when (http2-stream-refused stream)
+    (when (or (http2-stream-refused stream)
+              (and (http2-connection-draining conn)
+                   (= (http2-stream-state stream) +state-idle+)))
       (connection-stream-error conn stream +refused-stream+)
       (return-from finish-header-block nil))
     (let* ((state (http2-stream-state stream))
@@ -814,6 +825,9 @@
                         *max-connection-body-buffer*)))
         (return-from handle-data-frame
           (connection-stream-error conn stream +cancel+)))
+      (when (and (http2-connection-body-admitter conn)
+                 (not (funcall (http2-connection-body-admitter conn) stream (length data))))
+        (return-from handle-data-frame (connection-stream-error conn stream +cancel+)))
       (stream-append-body stream data *max-request-body-size*)
       (incf (http2-connection-buffered-body-octets conn) (length data))
       (incf (http2-stream-bytes-received stream) (length data))
@@ -1062,6 +1076,8 @@
                :on-goaway on-goaway
                :on-error on-error
                :on-close on-close)))
+    (when (woo.ev.socket::socket-http2-initializer socket)
+      (funcall (woo.ev.socket::socket-http2-initializer socket) conn))
     ;; Send server SETTINGS
     (connection-send-frame conn
       (make-settings-frame (http2-connection-local-settings conn)))

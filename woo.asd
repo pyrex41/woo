@@ -28,7 +28,7 @@
   :components ((:module "src"
                 :components
                 ((:file "woo" :depends-on ("ev" "response" "worker" "ssl" "signal" "specials" "util"
-                                           "websocket" "http2"))
+                                           "websocket" "http2" "dispatch"))
                  (:file "response" :depends-on ("ev"))
                  (:file "ev" :depends-on ("ev-packages"))
                  (:file "worker" :depends-on ("ev" "queue" "specials"))
@@ -51,10 +51,11 @@
                   :if-feature (:not :woo-no-ssl))
                  ;; WebSocket support
                  (:file "websocket" :depends-on ("ev-packages" "response"))
+                 (:file "dispatch" :depends-on ("ev-packages"))
                  ;; HTTP/2 support
                  (:module "http2"
                   :pathname "http2"
-                  :depends-on ("ev-packages")
+                  :depends-on ("ev-packages" "dispatch")
                   :components
                   ((:file "constants")
                    (:file "hpack" :depends-on ("constants"))

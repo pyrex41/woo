@@ -31,3 +31,7 @@ t/prop/.qc-failures
 # Working notes
 thoughts/
 dump.md
+
+# Managed compatibility receipts and Python bytecode
+/.artifacts/
+/t/compat/__pycache__/

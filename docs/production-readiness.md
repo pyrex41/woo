@@ -36,9 +36,10 @@ Parity alone cannot establish RFC compliance.
    or compare two permitted but different behaviors.
 2. Map RFC 9113 and RFC 6455 requirements to executable tests and an explicit
    unsupported-feature policy; run a current-RFC-aware malformed-input suite.
-3. Apply and verify the [Clack integration patch](../integration/clack/README.md)
-   in the active dependency, or land its upstream equivalent. Repeat the
-   bounded descriptor probe in that installed configuration.
+3. For legacy threaded `:server :woo`, apply and verify the
+   [Clack integration patch](../integration/clack/README.md) in the active
+   dependency, or land its upstream equivalent. The managed profile owns its
+   threads without patching Clack; qualify its separate lifecycle matrix.
 4. Add bounded adversarial and long-running tests. Record time, memory, open
    descriptors, connection count, and error outcomes as artifacts.
 5. Run the complete gates in CI and a staged deployment before changing this
@@ -102,3 +103,13 @@ Clack's installed threaded `stop` still destroys the Woo server thread. A
 source patch in `integration/clack/` passed 12 local start/stop cycles with
 stable descriptors, but has not been applied to the installed Clack or upstream.
 These local checks do not establish sustained production resource safety.
+
+## Managed Lack profile
+
+The optional `woo-lack-compat` profile has a separate
+[compatibility contract and required matrix](lack-compatibility.md). It owns
+Clack lifecycle, application workers and draining shutdown. Both hosted
+Linux/macOS managed gates and existing protocol gates are required on the
+release source snapshot. Diagnostic soaks and partial receipts do not close
+those gates. Qualification and deployment readiness remain UNKNOWN until
+validated evidence is attached.
