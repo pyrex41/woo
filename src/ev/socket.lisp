@@ -51,6 +51,8 @@
            :socket-read-cb
            :socket-open-p
            :socket-ssl-handle
+           :*ssl-write-function*
+           :*ssl-error-function*
            :check-socket-open
 
            :write-socket-data
@@ -61,6 +63,11 @@
            :send-static-file
            :close-socket))
 (in-package :woo.ev.socket)
+
+#-woo-no-ssl
+(defvar *ssl-write-function* #'cl+ssl::ssl-write)
+#-woo-no-ssl
+(defvar *ssl-error-function* #'cl+ssl::ssl-get-error)
 
 (defstruct (socket (:constructor %make-socket))
   (watchers (make-array 3
@@ -227,7 +234,7 @@
                (wsys:write fd data-sap len)
                #-woo-no-ssl
                (if ssl-handle
-                   (cl+ssl::ssl-write ssl-handle
+                   (funcall *ssl-write-function* ssl-handle
                                       data-sap
                                       len)
                    (wsys:write fd data-sap len))))
@@ -238,7 +245,7 @@
            (if ssl-handle
                #+woo-no-ssl (close-socket socket)
                #-woo-no-ssl
-               (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
+               (let ((errno (funcall *ssl-error-function* ssl-handle n)))
                  (declare (type fixnum errno))
                  (cond
                    ((or (= errno cl+ssl::+ssl-error-zero-return+)
