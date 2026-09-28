@@ -67,43 +67,46 @@
            (progn
              (write-file-of-size small *small-size*)
              (write-file-of-size large *large-size*)
-             (let ((small-fd (sb-posix:open (namestring small) sb-posix:o-rdonly))
-                   (large-fd (sb-posix:open (namestring large) sb-posix:o-rdonly)))
-               (unwind-protect
-                    (let ((mismatches 0)
-                          (sample nil)
-                          (lock (bt2:make-lock))
-                          (threads 8)
-                          (iterations 10000))
+             (let ((mismatches 0)
+                   (sample nil)
+                   (lock (bt2:make-lock))
+                   (threads 8)
+                   (iterations 10000))
                       (mapc
                        ;; Wait for every worker before closing the descriptors.  A
                        ;; fixed timeout can close them while a busy CI host is
                        ;; still executing the loop, turning a race test into an
                        ;; unrelated EBADF failure.
-                       (lambda (thread) (sb-thread:join-thread thread))
+                       (lambda (thread) (bt2:join-thread thread))
                        (loop for i from 0 below threads
                              collect
                              (let* ((use-large (evenp i))
-                                    (fd (if use-large large-fd small-fd))
+                                    (path (if use-large large small))
                                     (expected (if use-large *large-size* *small-size*)))
                                (bt2:make-thread
                                 (lambda ()
-                                  (dotimes (k iterations)
-                                    (let ((got (woo::fd-file-size fd)))
-                                      (unless (= got expected)
-                                        (bt2:with-lock-held (lock)
-                                          (incf mismatches)
-                                          (unless sample
-                                            (setf sample
-                                                  (list :expected expected
-                                                        :got got))))))))
+                                  ;; Keep descriptors private to each worker. The
+                                  ;; race under test is the shared stat object,
+                                  ;; so sharing descriptors only adds unrelated
+                                  ;; EBADF failures on some SBCL/libc builds.
+                                  (let ((fd (sb-posix:open (namestring path)
+                                                           sb-posix:o-rdonly)))
+                                    (unwind-protect
+                                         (dotimes (k iterations)
+                                           (let ((got (woo::fd-file-size fd)))
+                                             (unless (= got expected)
+                                               (bt2:with-lock-held (lock)
+                                                 (incf mismatches)
+                                                 (unless sample
+                                                   (setf sample
+                                                         (list :expected expected
+                                                               :got got)))))))
+                                      (sb-posix:close fd))))
                                 :name (format nil "woo-fd-size-racer-~D" i)))))
                       (ok (zerop mismatches)
                           (format nil "~D/~D concurrent fd-file-size calls returned another file's size~@[ (e.g. expected ~D, got ~D)~]"
                                   mismatches (* threads iterations)
                                   (getf sample :expected)
-                                  (getf sample :got))))
-                 (sb-posix:close small-fd)
-                 (sb-posix:close large-fd))))
+                                  (getf sample :got)))))
         (ignore-errors (delete-file small))
         (ignore-errors (delete-file large))))))
