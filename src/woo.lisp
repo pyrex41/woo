@@ -305,11 +305,11 @@
       (vom:error (princ-to-string e)))))
 
 #+sbcl
-(defvar *stat* (make-instance 'sb-posix:stat))
-#+sbcl
 (defun fd-file-size (fd)
-  (sb-posix:fstat fd *stat*)
-  (sb-posix:stat-size *stat*))
+  ;; FSTAT mutates its destination; workers must never share that object.
+  (let ((stat (make-instance 'sb-posix:stat)))
+    (sb-posix:fstat fd stat)
+    (sb-posix:stat-size stat)))
 #+ccl
 (defun fd-file-size (fd)
   (multiple-value-bind (successp mode size)
