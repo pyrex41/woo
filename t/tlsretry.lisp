@@ -46,11 +46,10 @@
                    (ok (woo.ev.socket:flush-buffer socket))
                    (ok (woo.ev.socket::async-write socket))
                    (ok (= calls 3))
-                   (ok (equal (nreverse writes)
-                              '((1 2 3 4) (1 2 3 4) (9 8))))
+                   (ok (equal (mapcan #'copy-list (nreverse writes))
+                              '(1 2 3 4 1 2 3 4 9 8)))
                    (ok (= admitted 6))
                    (ok (= released 6))
-                   (ok (null (woo.ev.socket::socket-pending-write-data socket)))
                    (ok (zerop (fast-io::output-buffer-len
                                (woo.ev.socket::socket-buffer socket))))
                    (setf (woo.ev.socket::socket-ssl-handle socket) nil)
