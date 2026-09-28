@@ -1,7 +1,9 @@
 package hegeltest
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -84,7 +86,46 @@ func legacyRequest(t *testing.T, client *http.Client, base, method, path string,
 	return resp, data
 }
 
+func stopLegacy(t *testing.T, plain string) {
+	t.Helper()
+	path := os.Getenv("WOO_LEGACY_STOP_RESULT")
+	if path == "" {
+		t.Fatal("WOO_LEGACY_STOP_RESULT is required")
+	}
+	_ = os.Remove(path)
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://" + plain + "/stop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("stop status %d", resp.StatusCode)
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(data)) == "PASS" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("legacy stop did not report PASS")
+}
+
+type delayedReader struct{ reader io.Reader }
+
+func (r delayedReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		time.Sleep(4 * time.Millisecond)
+	}
+	return n, err
+}
+
 func TestLegacyQualification(t *testing.T) {
+	if os.Getenv("WOO_RUN_LEGACY_QUALIFICATION") != "1" {
+		t.Skip("legacy qualification is opt-in; run t/qualification/check.py")
+	}
 	plain, secure := startLegacy(t)
 	clients, closeClients := legacyClients(t, plain, secure)
 	defer closeClients()
@@ -125,53 +166,62 @@ func TestLegacyQualification(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer conn.Close()
-		_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
-		if _, err := io.WriteString(conn, "GET /slow HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
+		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+		if tcp, ok := conn.(*net.TCPConn); ok {
+			_ = tcp.SetReadBuffer(1024)
+		}
+		if _, err := io.WriteString(conn, "GET /stream HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
 			t.Fatal(err)
 		}
-		buf := make([]byte, 1)
-		seen := 0
-		for {
-			n, err := conn.Read(buf)
-			seen += n
-			if err != nil {
-				if err != io.EOF {
-					t.Fatal(err)
-				}
-				break
-			}
-			time.Sleep(2 * time.Millisecond)
+		reader := bufio.NewReader(conn)
+		response, err := http.ReadResponse(reader, nil)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if seen == 0 {
-			t.Fatal("slow reader received no response")
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("stream status %d", response.StatusCode)
+		}
+		hash := sha256.New()
+		seen, err := io.CopyBuffer(hash, delayedReader{response.Body}, make([]byte, 1024))
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		want := sha256.Sum256(bytes.Repeat([]byte{'A'}, 128*1024))
+		if seen != 128*1024 || !bytes.Equal(hash.Sum(nil), want[:]) {
+			t.Fatalf("slow stream mismatch: bytes=%d", seen)
 		}
 	})
 
 	t.Run("oversized-and-disconnect", func(t *testing.T) {
-		for _, target := range []string{"http://" + plain, "https://" + secure} {
-			client := clients["http"]
-			if strings.HasPrefix(target, "https") {
-				client = clients["https"]
-			}
-			payload := bytes.Repeat([]byte("x"), 65537)
-			req, err := http.NewRequest("POST", target+"/upload", bytes.NewReader(payload))
+		for _, target := range []struct {
+			base, address string
+			tls           bool
+		}{{"http://" + plain, plain, false}, {"https://" + secure, secure, true}} {
+			conn, err := net.DialTimeout("tcp", target.address, 2*time.Second)
 			if err != nil {
 				t.Fatal(err)
 			}
-			resp, err := client.Do(req)
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode != http.StatusRequestEntityTooLarge {
-					t.Fatalf("oversize status %d", resp.StatusCode)
-				}
+			if target.tls {
+				conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
+			}
+			_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
+			_, _ = io.WriteString(conn, "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 65537\r\nConnection: close\r\n\r\n")
+			headers := make([]byte, 4096)
+			n, _ := conn.Read(headers)
+			_ = conn.Close()
+			if n < 12 || !bytes.Contains(headers[:n], []byte(" 413 ")) {
+				t.Fatalf("oversize response was not 413: %q", headers[:n])
 			}
 		}
-		conn, err := net.DialTimeout("tcp", plain, 2*time.Second)
-		if err != nil {
-			t.Fatal(err)
+		{
+			conn, err := net.DialTimeout("tcp", plain, 2*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.WriteString(conn, "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 65536\r\nConnection: close\r\n\r\npartial")
+			_ = conn.Close()
 		}
-		_, _ = io.WriteString(conn, "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 65536\r\n\r\npartial")
-		_ = conn.Close()
 	})
 
 	duration := 1800 * time.Second
@@ -184,22 +234,62 @@ func TestLegacyQualification(t *testing.T) {
 	}
 	deadline := time.Now().Add(duration)
 	cycles := 0
+	started := time.Now()
 	for time.Now().Before(deadline) {
 		for name, client := range clients {
 			base := "http://" + plain
 			if name == "https" {
 				base = "https://" + secure
 			}
-			resp, body := legacyRequest(t, client, base, "GET", "/slow", nil)
-			if resp.StatusCode != 200 || string(body) != "slow" {
-				t.Fatal("cycle response mismatch")
+			path := "/slow"
+			if cycles%4 == 1 {
+				path = "/static/fixture.txt"
+			}
+			if cycles%4 == 2 {
+				path = "/status/429"
+			}
+			if cycles%4 == 3 {
+				path = "/upload"
+			}
+			payload := []byte(nil)
+			if path == "/upload" {
+				payload = bytes.Repeat([]byte("cycle"), 64)
+			}
+			method := "GET"
+			if path == "/upload" {
+				method = "POST"
+			}
+			resp, body := legacyRequest(t, client, base, method, path, payload)
+			wantStatus, wantBody := 200, "slow"
+			if path == "/static/fixture.txt" {
+				wantBody = "woo legacy qualification fixture\n"
+			}
+			if path == "/status/429" {
+				wantStatus, wantBody = 429, "429"
+			}
+			if path == "/upload" {
+				wantBody = string(payload)
+			}
+			if resp.StatusCode != wantStatus || string(body) != wantBody {
+				t.Fatalf("cycle %s response mismatch", path)
 			}
 		}
 		cycles++
 	}
+	stopLegacy(t, plain)
+	for i := 0; i < 30; i++ {
+		cyclePlain, _ := startLegacy(t)
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get("http://" + cyclePlain + "/.woo-test-ready")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		stopLegacy(t, cyclePlain)
+	}
 	resultPath := os.Getenv("WOO_LEGACY_RESULT")
 	if resultPath != "" {
-		data, _ := json.Marshal(map[string]any{"cycles": cycles, "duration_seconds": duration.Seconds()})
+		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": 30, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": time.Since(started).Seconds()})
 		if err := os.WriteFile(resultPath, append(data, '\n'), 0600); err != nil {
 			t.Fatal(err)
 		}

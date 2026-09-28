@@ -36,6 +36,10 @@
                         (error "WOO_LEGACY_STATIC_FILE is required")))
        (cert-root (uiop:ensure-directory-pathname
                    (or (uiop:getenv "WOO_COMPAT_CERT_ROOT") "t/certs/")))
+       (stop-result (uiop:getenv "WOO_LEGACY_STOP_RESULT"))
+       (plain nil) (tls nil)
+       (limit-body (lambda (socket)
+                     (setf (woo.ev.socket::socket-body-memory-limit socket) 65536)))
        (app (lambda (env)
               (let ((path (getf env :path-info)))
                 (cond
@@ -43,7 +47,9 @@
                    (list 200 '(:content-type "text/plain") (list nonce)))
                   ((and (stringp path) (uiop:string-prefix-p "/status/" path))
                    (let ((code (parse-integer path :start 8 :junk-allowed nil)))
-                     (list code '(:content-type "text/plain") (list (write-to-string code)))))
+                     (if (= code 204)
+                         (list code nil nil)
+                         (list code '(:content-type "text/plain") (list (write-to-string code))))))
                   ((string= path "/static/fixture.txt")
                    (list 200 '(:content-type "text/plain") (pathname static-file)))
                   ((string= path "/upload")
@@ -51,19 +57,37 @@
                          (list (lack.request:request-content
                                 (lack.request:make-request env)))))
                   ((string= path "/slow") (sleep 0.1) '(200 nil ("slow")))
-                  (t '(404 (:content-type "text/plain") ("not found")))))))
-       (plain nil) (tls nil))
+                  ((string= path "/stream")
+                   (list 200 '(:content-type "application/octet-stream")
+                         (list (make-string (* 128 1024) :initial-element #\A))))
+                  ((string= path "/stop")
+                   (bt2:make-thread
+                    (lambda ()
+                      (sleep 0.05)
+                      (handler-case
+                          (progn (clack:stop plain) (clack:stop tls)
+                                 (when stop-result
+                                   (with-open-file (out stop-result :direction :output
+                                                         :if-exists :supersede)
+                                     (write-line "PASS" out)))
+                                 (sb-ext:exit :code 0))
+                        (error () (when stop-result
+                                    (with-open-file (out stop-result :direction :output
+                                                          :if-exists :supersede)
+                                      (write-line "FAIL" out)))))))
+                   '(202 (:content-length 0) nil))
+                  (t '(404 (:content-type "text/plain") ("not found"))))))))
   (unwind-protect
        (progn
          (setf tls (clack:clackup app :server :woo :use-thread t
                                   :address "127.0.0.1" :port tls-port
-                                  :max-request-body-bytes 65536
+                                  :on-connection limit-body
                                   :handle-signals nil
                                   :ssl-key-file (merge-pathnames "localhost.key" cert-root)
                                   :ssl-cert-file (merge-pathnames "localhost.crt" cert-root)))
          (setf plain (clack:clackup app :server :woo :use-thread t
                                     :address "127.0.0.1" :port port
-                                    :max-request-body-bytes 65536
+                                    :on-connection limit-body
                                     :handle-signals nil))
          (loop (sleep 1)))
     (when plain (ignore-errors (clack:stop plain)))
