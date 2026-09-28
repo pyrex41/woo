@@ -33,7 +33,8 @@
    (:file "t/mutate/mutate" :depends-on ("t-prop"))
    ;; SSL/ALPN tests
    (:file "t/alpn" :if-feature (:not :woo-no-ssl))
-   (:file "t/tls-stream" :if-feature (:not :woo-no-ssl)))
+   (:file "t/tls-stream" :if-feature (:not :woo-no-ssl))
+   (:file "t/tlsretry" :if-feature (:not :woo-no-ssl)))
   :perform (test-op (op c)
              (unless (symbol-call '#:rove '#:run c)
                (error "Woo test gate failed"))))
