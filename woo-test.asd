@@ -3,7 +3,8 @@
                "clack-test"
                "rove")
   :components
-  ((:file "t/file-size")
+  ((:file "t/test-support")
    (:file "t/woo")
-   (:file "t/ipv6"))
+   (:file "t/ipv6")
+   (:file "t/response"))
   :perform (test-op (op c) (symbol-call '#:rove '#:run c)))
