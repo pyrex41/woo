@@ -78,6 +78,7 @@
   (write-cb nil :type (or null function))
   (ssl-handle nil :type (or null cffi:foreign-pointer))
   (open-p t :type boolean)
+  (response-generation 0)
   close-hooks
   flush-hooks
   output-admitter
