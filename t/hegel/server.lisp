@@ -53,6 +53,11 @@
                   `(200 (:content-type "application/octet-stream")
                         ,(lack.request:request-content
                           (lack.request:make-request env))))
+                 ((and (stringp path) (uiop:string-prefix-p "/status/" path))
+                  (let ((code (parse-integer path :start 8 :junk-allowed nil)))
+                    (list code '(:content-type "text/plain") (list (write-to-string code)))))
+                 ((string= path "/static/fixture.txt")
+                  '(200 (:content-type "text/plain") ("woo reference fixture\n")))
                  ((and (stringp path) (search "/echo/" path :end2 (min 6 (length path))))
                   `(200 (:content-type "text/plain") (,path)))
                  (t '(404 (:content-type "text/plain") ("not found"))))))

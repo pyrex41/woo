@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -78,6 +79,36 @@ func TestReferenceParityHTTP(t *testing.T) {
 				checkParityRequest(ht, wooClient, refClient, woo, reference,
 					http.MethodPost, "/body", body, protocol.h2, body)
 			}, hegel.WithTestCases(35))
+		})
+	}
+}
+
+func TestReferenceParityValidRoutes(t *testing.T) {
+	woo := startWoo(t)
+	reference := startOracle(t)
+	for _, h2 := range []bool{false, true} {
+		t.Run(map[bool]string{false: "http1", true: "h2c"}[h2], func(t *testing.T) {
+			wooClient, closeWoo, err := parityClient(woo, h2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeWoo()
+			refClient, closeRef, err := parityClient(reference, h2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeRef()
+			hegel.Test(t, func(ht *hegel.T) {
+				for _, code := range []int{200, 425, 428, 429, 431, 500, 511} {
+					checkParityRequest(ht, wooClient, refClient, woo, reference, http.MethodGet,
+						fmt.Sprintf("/status/%d", code), nil, h2, []byte(strconv.Itoa(code)))
+				}
+				checkParityRequest(ht, wooClient, refClient, woo, reference, http.MethodGet,
+					"/static/fixture.txt", nil, h2, []byte("woo reference fixture\n"))
+				payload := bytes.Repeat([]byte("upload"), 512)
+				checkParityRequest(ht, wooClient, refClient, woo, reference, http.MethodPost,
+					"/upload", payload, h2, payload)
+			}, hegel.WithTestCases(1))
 		})
 	}
 }

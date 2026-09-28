@@ -2,7 +2,7 @@ use axum::{
     body::Bytes,
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Request,
+        Path, Request,
     },
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -24,6 +24,15 @@ async fn body(bytes: Bytes) -> Response {
         bytes,
     )
         .into_response()
+}
+
+async fn status(Path(code): Path<u16>) -> Response {
+    let status = StatusCode::from_u16(code).unwrap_or(StatusCode::BAD_REQUEST);
+    (status, [("content-type", "text/plain")], code.to_string()).into_response()
+}
+
+async fn static_fixture() -> Response {
+    (StatusCode::OK, [("content-type", "text/plain")], "woo reference fixture\n").into_response()
 }
 
 async fn websocket(ws: WebSocketUpgrade) -> impl IntoResponse {
@@ -52,6 +61,9 @@ fn app() -> Router {
     Router::new()
         .route("/.woo-test-ready", any(ready))
         .route("/body", any(body))
+        .route("/upload", any(body))
+        .route("/status/{code}", any(status))
+        .route("/static/fixture.txt", any(static_fixture))
         .route("/ws", any(websocket))
         .route("/echo/{*path}", any(echo))
         .fallback(|| async {
