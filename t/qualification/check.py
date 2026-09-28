@@ -60,8 +60,8 @@ def process_group_stats(pgid):
                 fds += max(0, len(output.splitlines()) - 1)
             except (OSError, subprocess.SubprocessError):
                 raise RuntimeError('cannot collect FD samples on this host')
-    if fds <= 0:
-        raise RuntimeError('FD sampler produced no evidence')
+    if rss <= 0 or fds <= 0:
+        raise RuntimeError('resource sampler produced no positive evidence')
     return rss, fds
 
 def stop(process):
@@ -93,7 +93,12 @@ def run(command, env, log, timeout):
                 if time.monotonic() >= deadline: raise RuntimeError('qualification deadline exceeded')
                 if log.stat().st_size > MAX_LOG: raise RuntimeError('qualification log exceeds 8 MiB')
                 if time.monotonic() - last_sample >= 1.0:
-                    rss, fds = process_group_stats(process.pid)
+                    try:
+                        rss, fds = process_group_stats(process.pid)
+                    except RuntimeError:
+                        if process.poll() is not None:
+                            break
+                        raise
                     samples.append({'rss_bytes': rss, 'fd_count': fds})
                     peak_rss = max(peak_rss, rss)
                     last_sample = time.monotonic()
@@ -136,6 +141,10 @@ def verify_receipt(path):
             and receipt.get('socket_cleanup') == 'PASS'
             and receipt.get('spool_cleanup') == 'PASS'
             and len(receipt.get('resource_samples', [])) >= 10
+            and all(isinstance(sample.get('rss_bytes'), int) and not isinstance(sample.get('rss_bytes'), bool)
+                    and sample['rss_bytes'] > 0
+                    and isinstance(sample.get('fd_count'), int) and not isinstance(sample.get('fd_count'), bool)
+                    and sample['fd_count'] > 0 for sample in receipt['resource_samples'])
             and receipt['resource_samples'][-1].get('fd_count', 0) <= receipt['resource_samples'][0].get('fd_count', 0) + 64
             and receipt['resource_samples'][-1].get('rss_bytes', 0) <= receipt['resource_samples'][0].get('rss_bytes', 0) + 64 * 1024 * 1024
             and max((sample.get('rss_bytes', 0) for sample in receipt['resource_samples']), default=0) <= 1024 * 1024 * 1024
@@ -158,6 +167,11 @@ def main():
     args.artifacts.mkdir(parents=True, exist_ok=True)
     dependency_parent = args.dependencies.resolve(); dependency_parent.mkdir(parents=True, exist_ok=True)
     dependencies = Path(tempfile.mkdtemp(prefix='woo-legacy-deps-', dir=dependency_parent))
+    setup_receipt = args.artifacts/'receipt.json'
+    setup_data = {'status': 'UNKNOWN',
+                  'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+                  'source_digest': source_digest(), 'cleanup': 'UNKNOWN',
+                  'failure': 'qualification setup incomplete'}
     # bootstrap.py writes only immutable archives/extractions; this patch is applied
     # to this private lane directory and never to a shared dependency cache.
     sys.path.insert(0, str(ROOT / 't/compat'))
@@ -165,8 +179,15 @@ def main():
     try:
         pins = bootstrap(dependencies)
         apply_private_clack_patch(dependencies)
-    except Exception:
-        shutil.rmtree(dependencies, ignore_errors=False)
+    except Exception as error:
+        setup_data['failure'] = 'qualification setup failed: ' + str(error)
+        try:
+            shutil.rmtree(dependencies, ignore_errors=False)
+            setup_data['dependency_cleanup'] = 'PASS'
+        except Exception as cleanup_error:
+            setup_data['failure'] += '; dependency cleanup failed: ' + str(cleanup_error)
+            setup_data['dependency_cleanup'] = 'UNKNOWN'
+        setup_receipt.write_text(json.dumps(setup_data, indent=2) + '\n')
         raise
     cert_root = args.artifacts/'certs'; cert_root.mkdir(parents=True, exist_ok=True)
     run(['sh', 't/generate-certificates.sh', str(cert_root)], os.environ.copy(), args.artifacts/'certificates.log', 30)
@@ -213,8 +234,13 @@ def main():
         receipt['peak_child_rss'] = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
         receipt['cleanup'] = 'PASS' if succeeded else 'UNKNOWN'
         if receipt['source_digest'] != source_digest(): receipt['source_changed'] = True; receipt['status'] = 'UNKNOWN'
+        try:
+            shutil.rmtree(dependencies, ignore_errors=False)
+        except Exception as cleanup_error:
+            receipt['cleanup'] = 'UNKNOWN'
+            receipt['status'] = 'UNKNOWN'
+            receipt['failure'] = 'private dependency cleanup failed: ' + str(cleanup_error)
         (args.artifacts/'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
-        shutil.rmtree(dependencies, ignore_errors=False)
     if receipt['status'] not in ('PASS', 'DIAGNOSTIC_PASS'): raise RuntimeError('invalid qualification receipt')
 
 if __name__ == '__main__': main()

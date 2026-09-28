@@ -23,7 +23,11 @@ class ReceiptTests(unittest.TestCase):
             for change in ({'head':'old'}, {'source_digest':'old'}, {'elapsed_seconds':20},
                            {'soak_elapsed_seconds':20}, {'cleanup':'UNKNOWN'}, {'status':'DIAGNOSTIC_PASS'},
                            {'lifecycle_cycles':0}, {'resource_samples':[]}, {'dependencies':{}},
-                           {'gates':{}}, {'source_changed':True}):
+                           {'gates':{}}, {'source_changed':True},
+                           {'resource_samples':[{'rss_bytes':0,'fd_count':3}]*10},
+                           {'resource_samples':[{'rss_bytes':1024,'fd_count':0}]*10},
+                           {'resource_samples':[{'rss_bytes':1024,'fd_count':3},
+                                                {'rss_bytes':2 * 1024 * 1024 * 1024,'fd_count':3}]*5}):
                 candidate = copy.deepcopy(receipt); candidate.update(change); path.write_text(json.dumps(candidate))
                 with patch.object(check, 'source_digest', return_value='current'), \
                      patch.object(check.subprocess, 'check_output', return_value='current\n'):
