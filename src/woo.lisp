@@ -293,23 +293,57 @@
 ;;
 ;; Handling responses
 
+(defun validate-response (response &optional head-p)
+  (unless (and (listp response) (member (list-length response) '(2 3)))
+    (error "Invalid Clack response shape"))
+  (destructuring-bind (status headers &optional body) response
+    (check-type status (integer 200 599))
+    (unless (and (listp headers) (evenp (list-length headers)))
+      (error "Invalid Clack response headers"))
+    (loop for (key value) on headers by #'cddr
+          do (unless (and (typep key '(or string symbol)) (plusp (length (string key)))
+                          (every (lambda (c) (and (< (char-code c) 128)
+                                                 (or (alphanumericp c)
+                                                     (find c "!#$%&'*+-.^_`|~"))))
+                                 (string key)))
+               (error "Invalid Clack response header")))
+    (unless (or (null body) (pathnamep body) (stringp body)
+                (typep body '(vector (unsigned-byte 8)))
+                (and (listp body) (every #'stringp body)))
+      (error "Invalid Clack response body"))
+    (let ((normalized (loop for (key value) on headers by #'cddr
+                            append (list (woo.response::canonical-header-name key) value))))
+      (when (and (= (length response) 3) (not head-p)
+                 (not (member status '(204 205 304))) (not (pathnamep body))
+                 (getf normalized :content-length))
+        (let ((expected (parse-integer (princ-to-string (getf normalized :content-length)) :junk-allowed nil))
+              (actual (typecase body
+                        (null 0)
+                        (string (utf-8-byte-length body))
+                        (list (loop for chunk in body sum (utf-8-byte-length chunk)))
+                        (vector (length body)))))
+          (unless (= expected actual) (error "Response content length mismatch"))))
+      (remf normalized :transfer-encoding)
+      (if (= (length response) 2) (list status normalized)
+          (list status normalized (if (stringp body) (list body) body)))))
+
 (defun handle-response (http socket clack-res)
   (handler-case
       (etypecase clack-res
-        (list (handle-normal-response http socket clack-res))
+        (list (handle-normal-response http socket (validate-response clack-res (eq (http-method http) :head))))
         (function (funcall clack-res (lambda (clack-res)
                                        (handler-case
-                                           (handle-normal-response http socket clack-res)
+                                           (handle-normal-response http socket (validate-response clack-res (eq (http-method http) :head)))
                                          (wev:socket-closed ()))))))
     (wev:tcp-error (e)
       (vom:error (princ-to-string e)))))
 
 #+sbcl
+(defvar *stat* (make-instance 'sb-posix:stat))
+#+sbcl
 (defun fd-file-size (fd)
-  ;; FSTAT mutates its destination; workers must never share that object.
-  (let ((stat (make-instance 'sb-posix:stat)))
-    (sb-posix:fstat fd stat)
-    (sb-posix:stat-size stat)))
+  (sb-posix:fstat fd *stat*)
+  (sb-posix:stat-size *stat*))
 #+ccl
 (defun fd-file-size (fd)
   (multiple-value-bind (successp mode size)
