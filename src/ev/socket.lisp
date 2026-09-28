@@ -26,6 +26,8 @@
                 :ev-io-start
                 :ev-io-stop
                 :ev-timer
+                :ev-timer-init
+                :ev-timer-start
                 :ev-timer-stop
                 :+EV-READ+
                 :+EV-WRITE+)
@@ -43,6 +45,7 @@
            :socket-read-watcher
            :socket-write-watcher
            :socket-timeout-timer
+           :socket-shutdown-timer
            :socket-last-activity
            :socket-remote-addr
            :socket-remote-port
@@ -61,6 +64,7 @@
            :start-static-stream
            :send-static-file
            :graceful-close-socket
+           :tls-shutdown-step
            :close-socket))
 (in-package :woo.ev.socket)
 
@@ -71,6 +75,8 @@
                                                 (cffi:foreign-alloc '(:struct lev:ev-io))
                                                 (cffi:foreign-alloc '(:struct lev:ev-timer))))
    :type (simple-array cffi:foreign-pointer (3)))
+  (shutdown-watcher (cffi:foreign-alloc '(:struct lev:ev-timer))
+                    :type cffi:foreign-pointer)
   (last-activity (lev:ev-now *evloop*) :type double-float)
   (fd nil :type fixnum)
   remote-addr
@@ -111,7 +117,9 @@
   (pending-write-offset 0 :type fixnum)
   (pending-output-charge 0 :type integer)
   (write-wait-read-p nil :type boolean)
-  (send-stream-error-p nil :type boolean))
+  (send-stream-error-p nil :type boolean)
+  (tls-shutdown-p nil :type boolean)
+  (tls-shutdown-deadline nil :type (or null double-float)))
 
 (defun buffer-empty-p (socket)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -140,10 +148,16 @@
 (defun socket-timeout-timer (socket)
   (svref (socket-watchers socket) 2))
 
+(defun socket-shutdown-timer (socket)
+  (socket-shutdown-watcher socket))
+
 (defun free-watchers (socket)
   (let ((read-watcher (socket-read-watcher socket))
         (write-watcher (socket-write-watcher socket))
         (timeout-timer (socket-timeout-timer socket)))
+    (let ((shutdown-timer (socket-shutdown-timer socket)))
+      (lev:ev-timer-stop *evloop* shutdown-timer)
+      (cffi:foreign-free shutdown-timer))
     (lev:ev-io-stop *evloop* read-watcher)
     (lev:ev-io-stop *evloop* write-watcher)
     (lev:ev-timer-stop *evloop* timeout-timer)
@@ -173,9 +187,8 @@
     #-woo-no-ssl
     (let ((ssl-handle (socket-ssl-handle socket)))
       (when ssl-handle
-        ;; For a graceful close, emit close_notify while the fd is still
-        ;; alive. The handle is nonblocking, so WANT_READ/WANT_WRITE is
-        ;; treated as a bounded best effort; aborting paths skip the notify.
+        ;; Abort paths skip close_notify. Graceful paths perform it through
+        ;; TLS-SHUTDOWN-STEP before this final teardown.
         (unless abort
           (ignore-errors (cl+ssl::ssl-shutdown ssl-handle)))
         (ignore-errors (cl+ssl::ssl-free ssl-handle))
@@ -187,6 +200,7 @@
           (socket-write-cb socket) nil
           (socket-buffer socket) nil
           (socket-pending-write-data socket) nil
+          (socket-tls-shutdown-p socket) nil
           (socket-data socket) nil)
     (let ((sendfile-fd (socket-sendfile-fd socket)))
       (when sendfile-fd
@@ -194,10 +208,67 @@
         (setf (socket-sendfile-fd socket) nil))))
   t)
 
-(defun graceful-close-socket (socket)
-  "Close SOCKET after a best-effort nonblocking TLS close_notify.
-   Callers use this only after output has drained; abort paths use CLOSE-SOCKET."
-  (close-socket socket :abort nil))
+(defun tls-shutdown-step (socket)
+  "Advance a nonblocking TLS close_notify, or abort at its deadline."
+  (unless (socket-tls-shutdown-p socket)
+    (return-from tls-shutdown-step t))
+  (when (or (not (socket-open-p socket))
+            (and (socket-tls-shutdown-deadline socket)
+                 (>= (lev:ev-now *evloop*)
+                     (socket-tls-shutdown-deadline socket))))
+    (close-socket socket :abort t)
+    (return-from tls-shutdown-step t))
+  #+woo-no-ssl
+  (progn (close-socket socket :abort t) t)
+  #-woo-no-ssl
+  (let ((handle (socket-ssl-handle socket)))
+    (unless handle
+      (close-socket socket :abort t)
+      (return-from tls-shutdown-step t))
+    (let ((result (ignore-errors (cl+ssl::ssl-shutdown handle))))
+      (cond
+        ((eql result 1)
+         (close-socket socket :abort t)
+         t)
+        ((member (ignore-errors (cl+ssl::ssl-get-error handle (or result -1)))
+                 (list cl+ssl::+ssl-error-want-read+
+                       cl+ssl::+ssl-error-want-write+)
+                 :test #'=)
+         nil)
+        (t
+         (close-socket socket :abort t)
+         t)))))
+
+(define-c-callback tls-shutdown-cb :void
+    ((evloop :pointer) (timer :pointer) (events :int))
+  (declare (ignore evloop events))
+  (let* ((watcher (cffi:foreign-slot-value timer '(:struct lev:ev-timer) 'lev::data))
+         (socket (and watcher (deref-data-from-pointer (io-fd watcher)))))
+    (when socket
+      (tls-shutdown-step socket))))
+
+(defun graceful-close-socket (socket &key deadline)
+  "Drain TLS close_notify with a nonblocking one-second deadline.
+   DEADLINE is an absolute libev time and may clamp the one-second bound."
+  (when (socket-open-p socket)
+    #+woo-no-ssl
+    (return-from graceful-close-socket (close-socket socket :abort t))
+    #-woo-no-ssl
+    (if (null (socket-ssl-handle socket))
+        (close-socket socket :abort t)
+        (progn
+          (setf (socket-tls-shutdown-p socket) t
+                (socket-tls-shutdown-deadline socket)
+                (min (or deadline most-positive-double-float)
+                     (+ (lev:ev-now *evloop*) 1.0d0)))
+          (lev:ev-io-stop *evloop* (socket-read-watcher socket))
+          (lev:ev-io-stop *evloop* (socket-write-watcher socket))
+          (let ((timer (socket-shutdown-timer socket)))
+            (lev:ev-timer-init timer 'tls-shutdown-cb 0.0d0 0.05d0)
+            (setf (cffi:foreign-slot-value timer '(:struct lev:ev-timer) 'lev::data)
+                  (socket-read-watcher socket))
+            (lev:ev-timer-start *evloop* timer))
+          (tls-shutdown-step socket)))))
 
 (defun check-socket-open (socket)
   (unless (socket-open-p socket)
