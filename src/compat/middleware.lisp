@@ -164,7 +164,7 @@
                                (getf headers :vary) (if (getf headers :vary)
                                                        (format nil "~A, Accept-Encoding" (getf headers :vary)) "Accept-Encoding"))
                          (let ((writer (compression-writer (funcall respond (list status headers)) algorithm env)))
-                           (if body-p (progn (emit-body body writer) nil) writer)))))))
+                           (if body-p (progn (emit-body body writer (getf env :woo.request)) nil) writer)))))))
         (let ((r (funcall app env)))
           (if (functionp r)
               (lambda (respond) (funcall r (lambda (response) (respond-compressed response respond))))

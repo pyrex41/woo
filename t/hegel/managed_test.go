@@ -196,18 +196,20 @@ func TestManagedTransportMatrix(t *testing.T) {
 			if string(portBody) != wantPort {
 				t.Fatalf("default server-port: %q", portBody)
 			}
-			r, b = managedRequest(t, lane.client, "GET", lane.base+"/stream", nil, map[string]string{"Accept-Encoding": "gzip;q=1, zstd;q=0"})
-			if r.Header.Get("Content-Encoding") != "gzip" {
-				t.Fatalf("encoding %v", r.Header)
-			}
-			gz, e := gzip.NewReader(bytes.NewReader(b))
-			if e != nil {
-				t.Fatal(e)
-			}
-			plain, e := io.ReadAll(gz)
-			gz.Close()
-			if e != nil || string(plain) != "こんにちは λ" {
-				t.Fatal("gzip streaming mismatch", e)
+			for _, path := range []string{"/", "/stream"} {
+				r, b = managedRequest(t, lane.client, "GET", lane.base+path, nil, map[string]string{"Accept-Encoding": "gzip;q=1, zstd;q=0"})
+				if r.Header.Get("Content-Encoding") != "gzip" {
+					t.Fatalf("encoding %v", r.Header)
+				}
+				gz, e := gzip.NewReader(bytes.NewReader(b))
+				if e != nil {
+					t.Fatal(e)
+				}
+				plain, e := io.ReadAll(gz)
+				gz.Close()
+				if e != nil || string(plain) != "こんにちは λ" {
+					t.Fatal("gzip streaming mismatch", e)
+				}
 			}
 			r, encoded := managedRequest(t, lane.client, "GET", lane.base+"/stream", nil, map[string]string{"Accept-Encoding": "zstd;q=1, gzip;q=0"})
 			if r.Header.Get("Content-Encoding") != "zstd" {
