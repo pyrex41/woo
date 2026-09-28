@@ -4,7 +4,7 @@
 
 (deftest validates-response-shape-and-types
   (ok (not (handler-case (progn (woo::validate-response '(200 nil ("ok"))) nil)
-             (error () t))))
+             (error () t)))))
 
 (deftest normalizes-without-interning
   (let* ((name (format nil "x-woo-validation-~A" (gensym)))
@@ -19,4 +19,4 @@
                :transfer-encoding))
       "application transfer encoding is removed")
   (ok (woo::validate-response '(200 (:content-length 99) nil) t)
-      "HEAD responses do not compare body length")))
+      "HEAD responses do not compare body length"))
