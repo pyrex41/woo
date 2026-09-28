@@ -161,35 +161,43 @@ func TestLegacyQualification(t *testing.T) {
 	}
 
 	t.Run("slow-reader", func(t *testing.T) {
-		conn, err := net.DialTimeout("tcp", plain, 2*time.Second)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
-		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
-		if tcp, ok := conn.(*net.TCPConn); ok {
-			_ = tcp.SetReadBuffer(1024)
-		}
-		if _, err := io.WriteString(conn, "GET /stream HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
-			t.Fatal(err)
-		}
-		reader := bufio.NewReader(conn)
-		response, err := http.ReadResponse(reader, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if response.StatusCode != http.StatusOK {
-			t.Fatalf("stream status %d", response.StatusCode)
-		}
-		hash := sha256.New()
-		seen, err := io.CopyBuffer(hash, delayedReader{response.Body}, make([]byte, 1024))
-		if err != nil {
-			t.Fatal(err)
-		}
-		response.Body.Close()
-		want := sha256.Sum256(bytes.Repeat([]byte{'A'}, 128*1024))
-		if seen != 128*1024 || !bytes.Equal(hash.Sum(nil), want[:]) {
-			t.Fatalf("slow stream mismatch: bytes=%d", seen)
+		for _, target := range []struct {
+			address string
+			secure  bool
+		}{{plain, false}, {secure, true}} {
+			conn, err := net.DialTimeout("tcp", target.address, 2*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			if target.secure {
+				conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
+			}
+			_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+			if tcp, ok := conn.(*net.TCPConn); ok {
+				_ = tcp.SetReadBuffer(1024)
+			}
+			if _, err := io.WriteString(conn, "GET /stream HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
+				t.Fatal(err)
+			}
+			reader := bufio.NewReader(conn)
+			response, err := http.ReadResponse(reader, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("stream status %d", response.StatusCode)
+			}
+			hash := sha256.New()
+			seen, err := io.CopyBuffer(hash, delayedReader{response.Body}, make([]byte, 1024))
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			want := sha256.Sum256(bytes.Repeat([]byte{'A'}, 128*1024))
+			if seen != 128*1024 || !bytes.Equal(hash.Sum(nil), want[:]) {
+				t.Fatalf("slow stream mismatch: bytes=%d", seen)
+			}
 		}
 	})
 
@@ -276,6 +284,7 @@ func TestLegacyQualification(t *testing.T) {
 		}
 		cycles++
 	}
+	soakElapsed := time.Since(started).Seconds()
 	stopLegacy(t, plain)
 	for i := 0; i < 30; i++ {
 		cyclePlain, _ := startLegacy(t)
@@ -289,7 +298,7 @@ func TestLegacyQualification(t *testing.T) {
 	}
 	resultPath := os.Getenv("WOO_LEGACY_RESULT")
 	if resultPath != "" {
-		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": 30, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": time.Since(started).Seconds()})
+		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": 30, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": soakElapsed})
 		if err := os.WriteFile(resultPath, append(data, '\n'), 0600); err != nil {
 			t.Fatal(err)
 		}

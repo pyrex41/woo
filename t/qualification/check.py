@@ -46,8 +46,8 @@ def process_group_stats(pgid):
     rows = subprocess.check_output(['ps', '-A', '-o', 'pgid=,pid=,rss='], text=True, timeout=2)
     pids = [fields[1] for line in rows.splitlines()
             if len(fields := line.split()) == 3 and int(fields[0]) == pgid]
-    rss = max((int(line.split()[2]) for line in rows.splitlines()
-               if len(line.split()) == 3 and int(line.split()[0]) == pgid), default=0) * 1024
+    rss = sum((int(line.split()[2]) for line in rows.splitlines()
+               if len(line.split()) == 3 and int(line.split()[0]) == pgid), 0) * 1024
     fds = 0
     for pid in pids:
         proc_fds = Path('/proc') / pid / 'fd'
@@ -59,7 +59,9 @@ def process_group_stats(pgid):
                                                  stderr=subprocess.DEVNULL, timeout=2)
                 fds += max(0, len(output.splitlines()) - 1)
             except (OSError, subprocess.SubprocessError):
-                return rss, 0
+                raise RuntimeError('cannot collect FD samples on this host')
+    if fds <= 0:
+        raise RuntimeError('FD sampler produced no evidence')
     return rss, fds
 
 def stop(process):
@@ -130,7 +132,12 @@ def verify_receipt(path):
             and receipt.get('clack_patch_sha256') == hashlib.sha256(PATCH.read_bytes()).hexdigest()
             and receipt.get('peak_rss_bytes', 0) > 0
             and receipt.get('gates', {}).get('legacy_http_https_static_upload_disconnect') == 'PASS'
+            and receipt.get('process_group_cleanup') == 'PASS'
+            and receipt.get('socket_cleanup') == 'PASS'
+            and receipt.get('spool_cleanup') == 'PASS'
             and len(receipt.get('resource_samples', [])) >= 10
+            and receipt['resource_samples'][-1].get('fd_count', 0) <= receipt['resource_samples'][0].get('fd_count', 0) + 64
+            and receipt['resource_samples'][-1].get('rss_bytes', 0) <= receipt['resource_samples'][0].get('rss_bytes', 0) + 64 * 1024 * 1024
             and max((sample.get('rss_bytes', 0) for sample in receipt['resource_samples']), default=0) <= 1024 * 1024 * 1024
             and max((sample.get('fd_count', 0) for sample in receipt['resource_samples']), default=0) <= 4096):
         raise RuntimeError('receipt does not qualify the current exact source and full legacy gate')
@@ -149,13 +156,18 @@ def main():
     if args.dependencies is None: parser.error('--dependencies is required')
     if not 1 <= args.soak_seconds <= 1800: parser.error('--soak-seconds must be 1..1800')
     args.artifacts.mkdir(parents=True, exist_ok=True)
-    dependencies = args.dependencies.resolve(); dependencies.mkdir(parents=True, exist_ok=True)
+    dependency_parent = args.dependencies.resolve(); dependency_parent.mkdir(parents=True, exist_ok=True)
+    dependencies = Path(tempfile.mkdtemp(prefix='woo-legacy-deps-', dir=dependency_parent))
     # bootstrap.py writes only immutable archives/extractions; this patch is applied
     # to this private lane directory and never to a shared dependency cache.
     sys.path.insert(0, str(ROOT / 't/compat'))
     from bootstrap import bootstrap
-    pins = bootstrap(dependencies)
-    apply_private_clack_patch(dependencies)
+    try:
+        pins = bootstrap(dependencies)
+        apply_private_clack_patch(dependencies)
+    except Exception:
+        shutil.rmtree(dependencies, ignore_errors=False)
+        raise
     cert_root = args.artifacts/'certs'; cert_root.mkdir(parents=True, exist_ok=True)
     run(['sh', 't/generate-certificates.sh', str(cert_root)], os.environ.copy(), args.artifacts/'certificates.log', 30)
     fixture = args.artifacts/'fixture.txt'; fixture.write_bytes(b'woo legacy qualification fixture\n')
@@ -182,6 +194,13 @@ def main():
         for key in ('cycles', 'lifecycle_cycles', 'duration_seconds', 'soak_elapsed_seconds'):
             if key not in result_data: raise RuntimeError('qualification result is incomplete')
             receipt[key] = result_data[key]
+        if not stop_result.exists() or stop_result.read_text().strip() != 'PASS':
+            raise RuntimeError('legacy fixture stop did not report PASS')
+        if list(args.artifacts.glob('*.tmp')):
+            raise RuntimeError('temporary spool artifacts remain')
+        receipt['process_group_cleanup'] = 'PASS'
+        receipt['socket_cleanup'] = 'PASS'
+        receipt['spool_cleanup'] = 'PASS'
         receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
         succeeded = True
     except Exception as error:
@@ -192,6 +211,7 @@ def main():
         receipt['cleanup'] = 'PASS' if succeeded else 'UNKNOWN'
         if receipt['source_digest'] != source_digest(): receipt['source_changed'] = True; receipt['status'] = 'UNKNOWN'
         (args.artifacts/'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        shutil.rmtree(dependencies, ignore_errors=False)
     if receipt['status'] not in ('PASS', 'DIAGNOSTIC_PASS'): raise RuntimeError('invalid qualification receipt')
 
 if __name__ == '__main__': main()
