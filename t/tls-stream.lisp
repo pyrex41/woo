@@ -34,3 +34,20 @@
                                 :abort t)))
         (when (probe-file path)
           (delete-file path))))))
+
+(deftest tls-pending-write-isolated-from-new-output
+  (testing "application writes do not mutate bytes awaiting TLS retry"
+    (let* ((socket (woo.ev.socket::%make-socket
+                    :fd -1 :last-activity 0.0d0 :open-p t
+                    :watchers (make-array 3 :initial-element (cffi:null-pointer))))
+           (pending (make-array 4 :element-type '(unsigned-byte 8)
+                                :initial-contents '(1 2 3 4))))
+      (setf (woo.ev.socket::socket-pending-write-data socket) pending
+            (woo.ev.socket::socket-pending-write-offset socket) 1)
+      (woo.ev.socket:write-socket-data
+       socket (make-array 2 :element-type '(unsigned-byte 8)
+                          :initial-contents '(9 8)))
+      (ok (equalp pending #(1 2 3 4)))
+      (ok (= (woo.ev.socket::socket-pending-write-offset socket) 1))
+      (ok (= (fast-io::output-buffer-len
+              (woo.ev.socket::socket-buffer socket)) 2)))))

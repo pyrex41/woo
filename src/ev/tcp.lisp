@@ -13,6 +13,7 @@
                 :socket-ssl-handle
                 :socket-fd
                 :socket-write-watcher
+                :async-write
                 :socket-read-cb
                 :socket-read-watcher
                 :socket-timeout-timer
@@ -101,6 +102,14 @@
          (read-cb (socket-read-cb socket))
          (ssl-handle (socket-ssl-handle socket)))
     (loop
+      ;; SSL_write can return WANT_READ. Service that exact pending write
+      ;; before attempting another SSL_read; otherwise a readable event can
+      ;; repeatedly bypass the write retry and grow application input.
+      #-woo-no-ssl
+      (when (and ssl-handle (woo.ev.socket::socket-write-wait-read-p socket))
+        (async-write socket)
+        (when (woo.ev.socket::socket-write-wait-read-p socket)
+          (return)))
       (let ((n
               #+woo-no-ssl
               (wsys:read fd (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
@@ -108,7 +117,7 @@
               (if ssl-handle
                   (cl+ssl::ssl-read ssl-handle (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
                   (wsys:read fd (static-vectors:static-vector-pointer *input-buffer*) buffer-len))))
-        (declare (type fixnum n))
+         (declare (type fixnum n))
         (case n
           (-1
            (if ssl-handle

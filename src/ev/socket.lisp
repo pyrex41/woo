@@ -50,6 +50,7 @@
            :socket-read-cb
            :socket-open-p
            :socket-ssl-handle
+           :async-write
            :check-socket-open
 
            :write-socket-data
@@ -59,6 +60,7 @@
            :with-async-writing
            :start-static-stream
            :send-static-file
+           :graceful-close-socket
            :close-socket))
 (in-package :woo.ev.socket)
 
@@ -101,7 +103,15 @@
   ;; from the owner event loop instead of loading the whole pathname.
   (send-stream nil :type (or null stream))
   (send-stream-size nil :type (or null integer))
-  (send-stream-offset 0 :type (or null integer)))
+  (send-stream-offset 0 :type (or null integer))
+  ;; Once a TLS write has started, keep its bytes separate from later
+  ;; application writes. OpenSSL may retry the same call after WANT_READ or
+  ;; WANT_WRITE, so appending to the buffer being retried is unsafe.
+  (pending-write-data nil :type (or null (simple-array (unsigned-byte 8) (*))))
+  (pending-write-offset 0 :type fixnum)
+  (pending-output-charge 0 :type integer)
+  (write-wait-read-p nil :type boolean)
+  (send-stream-error-p nil :type boolean))
 
 (defun buffer-empty-p (socket)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -141,10 +151,16 @@
     (cffi:foreign-free write-watcher)
     (cffi:foreign-free timeout-timer)))
 
-(defun close-socket (socket)
+(defun close-socket (socket &key (abort t))
+  (declare (ignorable abort))
   (when (socket-open-p socket)
     (setf (socket-open-p socket) nil)
     (release-buffer-charge socket)
+    (when (plusp (socket-pending-output-charge socket))
+      (let ((count (socket-pending-output-charge socket)))
+        (setf (socket-pending-output-charge socket) 0)
+        (when (socket-output-releaser socket)
+          (funcall (socket-output-releaser socket) count))))
     (dolist (hook (prog1 (socket-close-hooks socket)
                     (setf (socket-close-hooks socket) nil)))
       (handler-case (funcall hook)
@@ -154,12 +170,14 @@
       (when stream
         (ignore-errors (close stream :abort t))
         (setf (socket-send-stream socket) nil)))
+    #-woo-no-ssl
     (let ((ssl-handle (socket-ssl-handle socket)))
       (when ssl-handle
-        ;; A nonblocking SSL_shutdown may return 0 when the peer has not
-        ;; answered yet. Send the close_notify once, then bound connection
-        ;; teardown rather than blocking the event loop.
-        (ignore-errors (cl+ssl::ssl-shutdown ssl-handle))
+        ;; For a graceful close, emit close_notify while the fd is still
+        ;; alive. The handle is nonblocking, so WANT_READ/WANT_WRITE is
+        ;; treated as a bounded best effort; aborting paths skip the notify.
+        (unless abort
+          (ignore-errors (cl+ssl::ssl-shutdown ssl-handle)))
         (ignore-errors (cl+ssl::ssl-free ssl-handle))
         (setf (socket-ssl-handle socket) nil)))
     (let ((fd (socket-fd socket)))
@@ -168,12 +186,18 @@
     (setf (socket-read-cb socket) nil
           (socket-write-cb socket) nil
           (socket-buffer socket) nil
+          (socket-pending-write-data socket) nil
           (socket-data socket) nil)
     (let ((sendfile-fd (socket-sendfile-fd socket)))
       (when sendfile-fd
         (wsys:close sendfile-fd)
         (setf (socket-sendfile-fd socket) nil))))
   t)
+
+(defun graceful-close-socket (socket)
+  "Close SOCKET after a best-effort nonblocking TLS close_notify.
+   Callers use this only after output has drained; abort paths use CLOSE-SOCKET."
+  (close-socket socket :abort nil))
 
 (defun check-socket-open (socket)
   (unless (socket-open-p socket)
@@ -273,7 +297,10 @@
               (if (zerop n)
                   (progn
                     (ignore-errors (close stream))
-                    (setf (socket-send-stream socket) nil))
+                    (setf (socket-send-stream socket) nil
+                          ;; A short read is valid, but EOF before the
+                          ;; declared Content-Length is a failed response.
+                          (socket-send-stream-error-p socket) t))
                   (progn
                     (incf (socket-send-stream-offset socket) n)
                     (write-socket-data socket chunk :end n)))))))))
@@ -288,77 +315,79 @@
             (fast-io::output-buffer-queue buffer) nil
             (fast-io::output-buffer-last buffer) nil))))
 
+(defun release-pending-charge (socket)
+  (let ((count (socket-pending-output-charge socket)))
+    (setf (socket-pending-output-charge socket) 0)
+    (when (and (plusp count) (socket-output-releaser socket))
+      (funcall (socket-output-releaser socket) count))))
+
 (defun flush-buffer (socket)
+  "Flush one immutable pending write, preserving it across TLS retries."
   (declare (optimize speed))
   (check-socket-open socket)
-  (let ((data (finish-output-buffer (socket-buffer socket)))
-        (fd (socket-fd socket)))
-    (declare (type (simple-array (unsigned-byte 8) (*)) data))
+  (unless (socket-pending-write-data socket)
+    (let ((data (finish-output-buffer (socket-buffer socket))))
+      (setf (socket-pending-write-data socket) data
+            (socket-pending-write-offset socket) 0
+            (socket-pending-output-charge socket)
+            (socket-charged-output socket)
+            (socket-charged-output socket) 0)
+      (reset-buffer socket)))
+  (let* ((data (socket-pending-write-data socket))
+         (offset (socket-pending-write-offset socket))
+         (len (- (length data) offset))
+         (fd (socket-fd socket)))
     (cffi:with-pointer-to-vector-data (data-sap data)
-      (let* ((len (length data))
-             (completedp nil)
-             (ssl-handle (socket-ssl-handle socket))
-             (n
-               #+woo-no-ssl
-               (wsys:write fd data-sap len)
-               #-woo-no-ssl
-               (if ssl-handle
-                   (cl+ssl::ssl-write ssl-handle
-                                      data-sap
-                                      len)
-                   (wsys:write fd data-sap len))))
-        (declare (type fixnum len)
-                 (type fixnum n))
-        (case n
-          (-1
-           (if ssl-handle
-               #+woo-no-ssl (close-socket socket)
-               #-woo-no-ssl
-               (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
-                 (declare (type fixnum errno))
-                 (cond
-                   ((or (= errno cl+ssl::+ssl-error-zero-return+)
-                        (= errno cl+ssl::+ssl-error-ssl+))
-                    (close-socket socket))
-                   ((or (= errno cl+ssl::+ssl-error-want-write+)
-                        (= errno cl+ssl::+ssl-error-want-read+))
-                    ;; Keep the exact remainder in the output buffer. OpenSSL
-                    ;; may request either readiness direction for one write;
-                    ;; ACCEPT_MOVING_WRITE_BUFFER permits the next flush to
-                    ;; repin the same bytes at a new address.
-                    (when (= errno cl+ssl::+ssl-error-want-read+)
-                      (lev:ev-io-start *evloop* (socket-read-watcher socket))))
-                   (t
-                    (vom:error "Unexpected error (Code: ~D)" errno)
-                    (close-socket socket))))
-               (let ((errno (wsys:errno)))
-                 (return-from flush-buffer
+      (let ((ptr (cffi:inc-pointer data-sap offset))
+            (ssl-handle (socket-ssl-handle socket)))
+        (let ((n
+                #+woo-no-ssl
+                (wsys:write fd ptr len)
+                #-woo-no-ssl
+                (if ssl-handle
+                    (cl+ssl::ssl-write ssl-handle ptr len)
+                    (wsys:write fd ptr len))))
+          (declare (type fixnum n))
+          (cond
+            ((plusp n)
+             (incf (socket-pending-write-offset socket) n)
+             (setf (socket-last-activity socket) (lev:ev-now *evloop*))
+             (when (= (socket-pending-write-offset socket) (length data))
+               (setf (socket-pending-write-data socket) nil
+                     (socket-pending-write-offset socket) 0
+                     (socket-write-wait-read-p socket) nil)
+               (release-pending-charge socket)
+               (lev:ev-io-start *evloop* (socket-write-watcher socket)))
+             (null (socket-pending-write-data socket)))
+            ((zerop n)
+             nil)
+            (t
+             #+woo-no-ssl
+             (let ((errno (wsys:errno)))
+               (cond
+                 ((or (= errno wsys:EWOULDBLOCK) (= errno wsys:EINTR)) nil)
+                 (t (close-socket socket) t)))
+             #-woo-no-ssl
+             (if ssl-handle
+                 (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
                    (cond
-                     ((or (= errno wsys:EWOULDBLOCK)
-                          (= errno wsys:EINTR))
+                     ((or (= errno cl+ssl::+ssl-error-want-write+))
+                      (setf (socket-write-wait-read-p socket) nil)
+                      (lev:ev-io-start *evloop* (socket-write-watcher socket))
                       nil)
-                     ((or (= errno wsys:ECONNABORTED)
-                          (= errno wsys:ECONNREFUSED)
-                          (= errno wsys:ECONNRESET)
-                          (= errno wsys:EPIPE)
-                          (= errno wsys:ENOTCONN))
-                      (vom:error "Connection is already closed (Code: ~D)" errno)
-                      (close-socket socket)
-                      t)
+                     ((= errno cl+ssl::+ssl-error-want-read+)
+                      (setf (socket-write-wait-read-p socket) t)
+                      (lev:ev-io-stop *evloop* (socket-write-watcher socket))
+                      (lev:ev-io-start *evloop* (socket-read-watcher socket))
+                      nil)
                      (t
-                      (vom:error "Unexpected error (Code: ~D)" errno)
+                      (vom:error "Unexpected TLS write error (Code: ~D)" errno)
                       (close-socket socket)
-                      t))))))
-          (otherwise
-           (setf (socket-last-activity socket) (lev:ev-now *evloop*))
-           (if (= n len)
-               (setq completedp t)
-               (progn
-                 (reset-buffer socket)
-                 (fast-write-sequence data
-                                      (socket-buffer socket)
-                                      n)))))
-        completedp))))
+                      t)))
+                 (let ((errno (wsys:errno)))
+                   (if (or (= errno wsys:EWOULDBLOCK) (= errno wsys:EINTR))
+                       nil
+                       (progn (close-socket socket) t)))))))))))
 
 (defun send-file (socket)
   (declare (optimize speed))
@@ -403,6 +432,11 @@
   (unless (socket-open-p socket)
     (return-from async-write t))
 
+  ;; Complete an in-flight TLS write before touching application bytes that
+  ;; arrived while it was waiting for readiness.
+  (when (socket-pending-write-data socket)
+    (unless (flush-buffer socket)
+      (return-from async-write nil)))
   ;; Send from buffer
   (unless (buffer-empty-p socket)
     (unless (flush-buffer socket)
@@ -415,6 +449,10 @@
              (null (socket-sendfile-fd socket))
              (socket-send-stream socket))
     (pump-static-stream socket)
+    (when (socket-send-stream-error-p socket)
+      (vom:error "TLS static response ended before its declared length")
+      (close-socket socket)
+      (return-from async-write t))
     (unless (buffer-empty-p socket)
       (unless (flush-buffer socket)
         (return-from async-write nil))

@@ -358,9 +358,11 @@ SERVER may be the listener or the thread running WOO:RUN."
       (if worker-num
           (unwind-protect
                (start-multithread-server)
+            #-woo-no-ssl
             (when ssl-context (woo.ssl:free-context ssl-context)))
           (unwind-protect
                (start-singlethread-server)
+            #-woo-no-ssl
             (when ssl-context (woo.ssl:free-context ssl-context)))))))
 
 (defun read-cb (socket data &key (start 0) (end (length data)))
@@ -871,7 +873,7 @@ SERVER may be the listener or the thread running WOO:RUN."
         (null
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
+                                                          (wev:graceful-close-socket socket))))
            (unless (= status 304)
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
@@ -886,7 +888,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                   (setf (getf headers :content-type) (mimes:mime body)))
                 (wev:with-async-writing (socket :write-cb (and close
                                                                (lambda (socket)
-                                                                 (wev:close-socket socket))))
+                                                                 (wev:graceful-close-socket socket))))
                   (write-response-headers socket status headers (not close))
                   ;; TLS has no portable sendfile path. Transfer stream
                   ;; ownership to the event loop and pump bounded chunks.
@@ -902,13 +904,13 @@ SERVER may be the listener or the thread running WOO:RUN."
                 (setf (getf headers :content-type) (mimes:mime body)))
               (wev:with-async-writing (socket :write-cb (and close
                                                              (lambda (socket)
-                                                               (wev:close-socket socket))))
+                                                               (wev:graceful-close-socket socket))))
                 (write-response-headers socket status headers (not close))
                 (woo.ev.socket:send-static-file socket fd size))))))
         (list
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
+                                                          (wev:graceful-close-socket socket))))
            (cond
              ((getf headers :content-length)
               (response-headers-bytes socket status headers (not close))
@@ -954,7 +956,7 @@ SERVER may be the listener or the thread running WOO:RUN."
         ((vector (unsigned-byte 8))
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
+                                                          (wev:graceful-close-socket socket))))
            (response-headers-bytes socket status headers (not close))
            (unless (getf headers :content-length)
              (wev:write-socket-data socket #.(string-to-utf-8-bytes "Content-Length: "))
