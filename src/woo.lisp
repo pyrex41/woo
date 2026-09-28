@@ -41,7 +41,9 @@
   (:import-from :smart-buffer
                 :make-smart-buffer
                 :write-to-buffer
-                :finalize-buffer)
+                :finalize-buffer
+                :buffer-limit-exceeded
+                :*default-disk-limit*)
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes
                 :utf-8-bytes-to-string
@@ -167,6 +169,13 @@
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
     (handler-case (funcall parser data :start start :end end)
+      (buffer-limit-exceeded ()
+        (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+          (let ((body (string-to-utf-8-bytes "413 Request Entity Too Large")))
+            (write-response-headers socket 413
+                                    (list :connection "close"
+                                          :content-length (length body)))
+            (wev:write-socket-data socket body))))
       (fast-http:parsing-error (e)
         (vom:error "HTTP parse error: ~A" e)
         (let ((body #.(map '(simple-array (unsigned-byte 8) (*))
@@ -199,6 +208,12 @@
         (body-buffer (make-smart-buffer)))
     (setf (wev:socket-data socket)
           (make-parser http
+                       :header-callback
+                       (lambda (headers)
+                         (let ((length (gethash "content-length" headers)))
+                           (when (and length (integer-string-p length)
+                                      (> (parse-integer length) *default-disk-limit*))
+                             (error 'buffer-limit-exceeded))))
                        :body-callback
                        (lambda (data start end)
                          (declare (type (simple-array (unsigned-byte 8) (*)) data))
