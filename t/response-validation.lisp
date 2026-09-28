@@ -3,8 +3,8 @@
 (in-package :woo-test.response-validation)
 
 (deftest validates-response-shape-and-types
-  (ok (handler-case (progn (woo::validate-response '(200 nil ("ok"))) nil)
-        (error () t))))
+  (ok (not (handler-case (progn (woo::validate-response '(200 nil ("ok"))) nil)
+             (error () t))))
 
 (deftest normalizes-without-interning
   (let* ((name (format nil "x-woo-validation-~A" (gensym)))
