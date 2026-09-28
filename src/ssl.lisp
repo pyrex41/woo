@@ -46,7 +46,6 @@
    The callback argument is owned by that SSL_CTX and remains live until the
    context is freed.  Context-local configuration prevents one listener from
    changing another listener's protocol selection."
-  (setf *alpn-protocols* protocols)
   (handler-case
       (when ssl-ctx
         (ssl-ctx-set-alpn-select-callback ssl-ctx protocols)

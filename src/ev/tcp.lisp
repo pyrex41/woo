@@ -17,7 +17,9 @@
                 :socket-read-cb
                 :socket-read-watcher
                 :socket-timeout-timer
-                :socket-last-activity)
+                :socket-last-activity
+                :*ssl-read-function*
+                :*ssl-error-function*)
   (:import-from :woo.ev.condition
                 :os-error)
   (:import-from :woo.syscall
@@ -115,7 +117,8 @@
               (wsys:read fd (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
               #-woo-no-ssl
               (if ssl-handle
-                  (cl+ssl::ssl-read ssl-handle (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
+                  (funcall *ssl-read-function* ssl-handle
+                           (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
                   (wsys:read fd (static-vectors:static-vector-pointer *input-buffer*) buffer-len))))
          (declare (type fixnum n))
         (case n
@@ -123,7 +126,7 @@
            (if ssl-handle
                #+woo-no-ssl (close-socket socket)
                #-woo-no-ssl
-               (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
+               (let ((errno (funcall *ssl-error-function* ssl-handle n)))
                  (declare (type fixnum errno))
                  (cond
                    ((or (= errno cl+ssl::+ssl-error-zero-return+)

@@ -51,3 +51,20 @@
       (ok (= (woo.ev.socket::socket-pending-write-offset socket) 1))
       (ok (= (fast-io::output-buffer-len
               (woo.ev.socket::socket-buffer socket)) 2)))))
+
+(deftest tls-ffi-retry-hooks-are-injectable
+  (testing "WANT results can be supplied without changing the OpenSSL ABI"
+    (let ((calls 0))
+      (let ((woo.ev.socket::*ssl-write-function*
+              (lambda (handle pointer length)
+                (declare (ignore handle pointer length))
+                (incf calls)
+                -1))
+            (woo.ev.socket::*ssl-error-function*
+              (lambda (handle result)
+                (declare (ignore handle result))
+                cl+ssl:+ssl-error-want-read+)))
+        (ok (= (funcall woo.ev.socket::*ssl-write-function* nil nil 8) -1))
+        (ok (= (funcall woo.ev.socket::*ssl-error-function* nil -1)
+               cl+ssl:+ssl-error-want-read+))
+        (ok (= calls 1))))))

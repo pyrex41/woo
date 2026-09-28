@@ -504,6 +504,98 @@
           do (unless (= b 13) (vector-push-extend (code-char b) line)))
     (coerce line 'simple-string)))
 
+(defun read-http1-body-slowly (stream)
+  "Read a close-delimited HTTP/1 response in small pieces.
+This intentionally yields between reads so a TLS writer must survive a slow peer."
+  (let ((line (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+        (headers nil))
+    (labels ((read-line-bytes ()
+               (setf (fill-pointer line) 0)
+               (loop for b = (read-byte stream nil nil)
+                     while (and b (/= b 10))
+                     do (unless (= b 13) (vector-push-extend (code-char b) line)))
+               (coerce line 'simple-string)))
+      (read-line-bytes)
+      (loop for h = (read-line-bytes)
+            until (zerop (length h))
+            do (let ((split (position #\: h)))
+                 (when split
+                   (push (cons (string-downcase (subseq h 0 split))
+                               (string-trim '(#\Space #\Tab) (subseq h (1+ split))))
+                         headers))))
+      (let* ((length (parse-integer (or (cdr (assoc "content-length" headers :test #'string=)) "0")))
+             (body (make-array length :element-type '(unsigned-byte 8))))
+        (loop with offset = 0
+              while (< offset length)
+              do (let ((n (read-sequence body stream :start offset :end (min length (+ offset 1024)))))
+                   (when (= n offset) (error "TLS peer closed at ~D/~D" offset length))
+                   (setf offset n)
+                   (sleep 0.001)))
+        body))))
+
+(deftest test-tls-slow-reader-preserves-exact-body
+  (testing "a slow TLS reader receives every response byte in order"
+    (let* ((body (make-string (* 256 1024) :initial-element #\x))
+           (clack.test:*clack-test-handler* :woo)
+           (clack.test:*clackup-additional-args*
+             (list :ssl-cert-file (cert-path "localhost.crt")
+                   :ssl-key-file (cert-path "localhost.key"))))
+      (clack.test:testing-app "TLS slow reader"
+          (lambda (env)
+            (declare (ignore env))
+            `(200 ((:content-type "text/plain")) (,body)))
+        (let ((result
+                (call-with-deadline
+                 15
+                 (lambda ()
+                   (call-with-tls clack.test:*clack-test-port* '("http/1.1")
+                                  (lambda (tls proto)
+                                    (declare (ignore proto))
+                                    (let ((received (read-http1-body-slowly tls)))
+                                      (values (length received)
+                                              (every (lambda (b) (= b (char-code #\x))) received)))))))))
+          (ok (= (first result) (length body)))
+          (ok (second result)))))))
+
+(deftest test-fullchain-context-loads
+  (testing "a listener context accepts a PEM leaf followed by its CA"
+    (let ((chain #p"/tmp/woo-test-fullchain.pem")
+          (ctx nil))
+      (unwind-protect
+           (progn
+             (with-open-file (out chain :direction :output :if-exists :supersede)
+               (dolist (name '("localhost.crt" "localCA.crt"))
+                 (with-open-file (in (cert-path name))
+                   (loop for line = (read-line in nil nil)
+                         while line do (write-line line out)))))
+             (setf ctx (woo.ssl:create-context chain (cert-path "localhost.key") nil))
+             (ok ctx))
+        (when ctx (woo.ssl:free-context ctx))
+        (when (probe-file chain) (delete-file chain))))))
+
+(deftest test-tls-listener-restarts-cleanly
+  (testing "the same TLS listener port can be started and stopped repeatedly"
+    (dotimes (iteration 2)
+      (declare (ignore iteration))
+      (let ((port (+ 55000 (random 500))) (thread nil))
+        (unwind-protect
+             (progn
+               (setf thread (bt2:make-thread
+                             (lambda ()
+                               (woo:run (lambda (env) (declare (ignore env))
+                                          '(200 () ("ok")))
+                                        :port port :debug nil
+                                        :ssl-cert-file (cert-path "localhost.crt")
+                                        :ssl-key-file (cert-path "localhost.key")))
+                             :name "woo-tls-restart-test"))
+               (loop repeat 500 until (gethash thread woo::*stop-controls*) do (sleep 0.01))
+               (ok (gethash thread woo::*stop-controls*))
+               (ok (woo:stop-gracefully thread))
+               (loop repeat 1500 while (bt2:thread-alive-p thread) do (sleep 0.01))
+               (ok (not (bt2:thread-alive-p thread))))
+          (when (and thread (bt2:thread-alive-p thread))
+            (bt2:destroy-thread thread)))))))
+
 (deftest test-alpn-negotiates-h2-over-tls
   (testing "a TLS client offering h2 gets h2 and an HTTP/2 response; http/1.1 gets HTTP/1"
     (let ((clack.test:*clack-test-handler* :woo)

@@ -53,6 +53,9 @@
            :socket-read-cb
            :socket-open-p
            :socket-ssl-handle
+           :*ssl-write-function*
+           :*ssl-read-function*
+           :*ssl-error-function*
            :async-write
            :check-socket-open
 
@@ -67,6 +70,16 @@
            :tls-shutdown-step
            :close-socket))
 (in-package :woo.ev.socket)
+
+#-woo-no-ssl
+(defvar *ssl-write-function* #'cl+ssl::ssl-write
+  "Indirection for the nonblocking SSL_write call; tests may inject WANT results.")
+#-woo-no-ssl
+(defvar *ssl-read-function* #'cl+ssl::ssl-read
+  "Indirection for the nonblocking SSL_read call; tests may inject WANT results.")
+#-woo-no-ssl
+(defvar *ssl-error-function* #'cl+ssl::ssl-get-error
+  "Indirection for SSL_get_error; tests may inject deterministic retry paths.")
 
 (defstruct (socket (:constructor %make-socket))
   (watchers (make-array 3
@@ -416,7 +429,7 @@
                 (wsys:write fd ptr len)
                 #-woo-no-ssl
                 (if ssl-handle
-                    (cl+ssl::ssl-write ssl-handle ptr len)
+                    (funcall *ssl-write-function* ssl-handle ptr len)
                     (wsys:write fd ptr len))))
           (declare (type fixnum n))
           (cond
@@ -440,7 +453,7 @@
                  (t (close-socket socket) t)))
              #-woo-no-ssl
              (if ssl-handle
-                 (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
+                 (let ((errno (funcall *ssl-error-function* ssl-handle n)))
                    (cond
                      ((or (= errno cl+ssl::+ssl-error-want-write+))
                       (setf (socket-write-wait-read-p socket) nil)
