@@ -153,6 +153,17 @@
           (start-multithread-server)
           (start-singlethread-server)))))
 
+(defun respond-and-close (socket status message)
+  (setf (wev:socket-data socket)
+        (lambda (data &key start end)
+          (declare (ignore data start end))))
+  (let ((body (string-to-utf-8-bytes message)))
+    (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+      (write-response-headers socket status
+                              (list :connection "close"
+                                    :content-length (length body)))
+      (wev:write-socket-data socket body))))
+
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
     (handler-case (funcall parser data :start start :end end)
@@ -424,19 +435,33 @@
                   ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
                   (wev:write-socket-stream socket in)))))
            (t
-            (let* ((fd (wsys:open body))
-                   (size #+lispworks (sys:file-size body)
-                         #+(or sbcl ccl) (fd-file-size fd)
-                         #-(or sbcl ccl lispworks) (file-size body)))
-              (unless (getf headers :content-length)
-                (setf (getf headers :content-length) size))
-              (unless (getf headers :content-type)
-                (setf (getf headers :content-type) (mimes:mime body)))
-              (wev:with-async-writing (socket :write-cb (and close
-                                                             (lambda (socket)
-                                                               (wev:close-socket socket))))
-                (write-response-headers socket status headers (not close))
-                (woo.ev.socket:send-static-file socket fd size))))))
+            ;; OPEN and fstat can fail after the application has returned a
+            ;; pathname. Classify that failure before committing headers and
+            ;; always close an fd that was not transferred to sendfile.
+            (let ((fd nil) (owned nil))
+              (unwind-protect
+                   (handler-case
+                       (progn
+                         (setf fd (wsys:open body))
+                         (if (< fd 0)
+                             (respond-and-close socket 404 "404 Not Found")
+                             (let ((size #+lispworks (sys:file-size body)
+                                         #+(or sbcl ccl) (fd-file-size fd)
+                                         #-(or sbcl ccl lispworks) (file-size body)))
+                               (unless (getf headers :content-length)
+                                 (setf (getf headers :content-length) size))
+                               (unless (getf headers :content-type)
+                                 (setf (getf headers :content-type) (mimes:mime body)))
+                               (wev:with-async-writing (socket :write-cb (and close
+                                                                              (lambda (socket)
+                                                                                (wev:close-socket socket))))
+                                 (write-response-headers socket status headers (not close))
+                                 (woo.ev.socket:send-static-file socket fd size)
+                                 (setf owned t)))))
+                     (file-error () (respond-and-close socket 404 "404 Not Found"))
+                     (error () (respond-and-close socket 500 "500 Internal Server Error")))
+                (when (and fd (not owned))
+                  (ignore-errors (wsys:close fd))))))))
         (list
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
