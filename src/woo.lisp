@@ -43,7 +43,8 @@
                 :write-to-buffer
                 :finalize-buffer
                 :buffer-limit-exceeded
-                :*default-disk-limit*)
+                :*default-disk-limit*
+                :delete-stream-file)
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes
                 :utf-8-bytes-to-string
@@ -155,17 +156,6 @@
           (start-multithread-server)
           (start-singlethread-server)))))
 
-(defun respond-and-close (socket status message)
-  (setf (wev:socket-data socket)
-        (lambda (data &key start end)
-          (declare (ignore data start end))))
-  (let ((body (string-to-utf-8-bytes message)))
-    (wev:with-async-writing (socket :write-cb #'wev:close-socket)
-      (write-response-headers socket status
-                              (list :connection "close"
-                                    :content-length (length body)))
-      (wev:write-socket-data socket body))))
-
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
     (handler-case (funcall parser data :start start :end end)
@@ -221,7 +211,7 @@
                              (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
                              (write-to-buffer body-buffer data start end)))
                        :finish-callback
-                       (flet ((main (env)
+                       (flet ((main (env cleanup)
                                 (handle-response http socket
                                                  (if *debug*
                                                      (funcall *app* env)
@@ -230,7 +220,8 @@
                                                                       (vom:error (princ-to-string error))
                                                                       nil)))
                                                              res
-                                                             '(500 nil nil))))))
+                                                             '(500 nil nil))
+                                                 cleanup)))
                          (lambda ()
                            (block result
                              (let ((raw-body (finalize-buffer body-buffer)))
@@ -243,7 +234,9 @@
                                           (return-from result (handle-response http socket '(500 nil nil)))))))
                                  (let ((env (nconc (list :raw-body raw-body)
                                                    (handle-request http socket))))
-                                   (main env)))))))))))
+                                   (main env (lambda ()
+                                               (ignore-errors (close raw-body))
+                                               (ignore-errors (delete-stream-file raw-body))))))))))))
 
 (defun stop (server)
   (wev:close-tcp-server server))
@@ -319,47 +312,13 @@
 ;;
 ;; Handling responses
 
-(defun validate-response (response &optional head-p)
-  (unless (and (listp response) (member (list-length response) '(2 3)))
-    (error "Invalid Clack response shape"))
-  (destructuring-bind (status headers &optional body) response
-    (check-type status (integer 200 599))
-    (unless (and (listp headers) (evenp (list-length headers)))
-      (error "Invalid Clack response headers"))
-    (loop for (key value) on headers by #'cddr
-          do (unless (and (typep key '(or string symbol)) (plusp (length (string key)))
-                          (every (lambda (c) (and (< (char-code c) 128)
-                                                 (or (alphanumericp c)
-                                                     (find c "!#$%&'*+-.^_`|~"))))
-                                 (string key)))
-               (error "Invalid Clack response header")))
-    (unless (or (null body) (pathnamep body) (stringp body)
-                (typep body '(vector (unsigned-byte 8)))
-                (and (listp body) (every #'stringp body)))
-      (error "Invalid Clack response body"))
-    (let ((normalized (loop for (key value) on headers by #'cddr
-                            append (list (woo.response::canonical-header-name key) value))))
-      (when (and (= (length response) 3) (not head-p)
-                 (not (member status '(204 205 304))) (not (pathnamep body))
-                 (getf normalized :content-length))
-        (let ((expected (parse-integer (princ-to-string (getf normalized :content-length)) :junk-allowed nil))
-              (actual (typecase body
-                        (null 0)
-                        (string (utf-8-byte-length body))
-                        (list (loop for chunk in body sum (utf-8-byte-length chunk)))
-                        (vector (length body)))))
-          (unless (= expected actual) (error "Response content length mismatch"))))
-      (remf normalized :transfer-encoding)
-      (if (= (length response) 2) (list status normalized)
-          (list status normalized (if (stringp body) (list body) body))))))
-
-(defun handle-response (http socket clack-res)
+(defun handle-response (http socket clack-res &optional body-cleanup)
   (handler-case
       (etypecase clack-res
-        (list (handle-normal-response http socket (validate-response clack-res (eq (http-method http) :head))))
+        (list (handle-normal-response http socket clack-res body-cleanup))
         (function (funcall clack-res (lambda (clack-res)
                                        (handler-case
-                                           (handle-normal-response http socket (validate-response clack-res (eq (http-method http) :head)))
+                                           (handle-normal-response http socket clack-res body-cleanup)
                                          (wev:socket-closed ()))))))
     (wev:tcp-error (e)
       (vom:error (princ-to-string e)))))
@@ -386,7 +345,7 @@
   (with-open-file (in path)
     (file-length in)))
 
-(defun make-streaming-writer (socket)
+(defun make-streaming-writer (socket &optional body-cleanup)
   (lambda (body &key (start 0 has-start) (end nil has-end) (close nil))
     (if body
         (wev:with-async-writing (socket :force-streaming t)
@@ -400,10 +359,12 @@
                                       :start start
                                       :end (or end (length body)))))
           (when close
-            (finish-response socket *empty-chunk*)))
+            (finish-response socket *empty-chunk*)
+            (when body-cleanup (funcall body-cleanup))))
         (when close
           (wev:with-async-writing (socket)
-            (finish-response socket *empty-chunk*))))))
+            (finish-response socket *empty-chunk*)
+            (when body-cleanup (funcall body-cleanup)))))))
 
 (defun list-body-chunk-to-octets (chunk)
   (typecase chunk
@@ -412,17 +373,7 @@
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
-(defun static-preparation-status (pathname &optional errno)
-  "Return the status for a pathname failure before response headers commit."
-  (cond ((and (integerp errno) (= errno wsys:EACCES)) 403)
-        ((and (integerp errno) (or (= errno wsys:EISDIR))) 403)
-        ((and (integerp errno) (or (= errno wsys:ENOENT)
-                                   (= errno wsys:ENOTDIR))) 404)
-        ((uiop:directory-exists-p pathname) 403)
-        ((probe-file pathname) 500)
-        (t 404)))
-
-(defun handle-normal-response (http socket clack-res)
+(defun handle-normal-response (http socket clack-res &optional body-cleanup)
   (let ((no-body '#:no-body)
         (close (or (= (http-minor-version http) 0)
                    (string-equal (gethash "connection" (http-headers http)) "close"))))
@@ -434,7 +385,7 @@
         (wev:with-async-writing (socket)
           (write-response-headers socket status headers))
         (return-from handle-normal-response
-          (make-streaming-writer socket)))
+          (make-streaming-writer socket body-cleanup)))
 
       (etypecase body
         (null
@@ -460,49 +411,19 @@
                   ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
                   (wev:write-socket-stream socket in)))))
            (t
-            ;; OPEN and fstat can fail after the application has returned a
-            ;; pathname. Classify that failure before committing headers and
-            ;; always close an fd that was not transferred to sendfile.
-            (if (uiop:directory-exists-p body)
-                (respond-and-close socket 403 "403 Forbidden")
-                (let ((fd nil) (owned nil) (committed nil))
-              (unwind-protect
-                   (handler-case
-                       (progn
-                         (setf fd (wsys:open body))
-                         (if (< fd 0)
-                             (let ((failure (static-preparation-status body (wsys:errno))))
-                               (respond-and-close socket failure
-                                                   (if (= failure 403)
-                                                       "403 Forbidden"
-                                                       "404 Not Found")))
-                             (let ((size #+lispworks (sys:file-size body)
-                                         #+(or sbcl ccl) (fd-file-size fd)
-                                         #-(or sbcl ccl lispworks) (file-size body)))
-                               (unless (getf headers :content-length)
-                                 (setf (getf headers :content-length) size))
-                               (unless (getf headers :content-type)
-                                 (setf (getf headers :content-type) (mimes:mime body)))
-                               (wev:with-async-writing (socket :write-cb (and close
-                                                                              (lambda (socket)
-                                                                                (wev:close-socket socket))))
-                                 (setf committed t)
-                                 (write-response-headers socket status headers (not close))
-                                 (woo.ev.socket:send-static-file socket fd size)
-                                 (setf owned t)))))
-                     (file-error (condition)
-                       (unless committed
-                         (let ((failure (static-preparation-status body (wsys:errno))) )
-                           (respond-and-close socket failure
-                                               (if (= failure 403)
-                                                   "403 Forbidden"
-                                                   "404 Not Found")))))
-                     (error ()
-                       (if committed
-                           (wev:close-socket socket)
-                           (respond-and-close socket 500 "500 Internal Server Error"))))
-                  (when (and fd (not owned))
-                    (ignore-errors (wsys:close fd)))))))))
+            (let* ((fd (wsys:open body))
+                   (size #+lispworks (sys:file-size body)
+                         #+(or sbcl ccl) (fd-file-size fd)
+                         #-(or sbcl ccl lispworks) (file-size body)))
+              (unless (getf headers :content-length)
+                (setf (getf headers :content-length) size))
+              (unless (getf headers :content-type)
+                (setf (getf headers :content-type) (mimes:mime body)))
+              (wev:with-async-writing (socket :write-cb (and close
+                                                             (lambda (socket)
+                                                               (wev:close-socket socket))))
+                (write-response-headers socket status headers (not close))
+                (woo.ev.socket:send-static-file socket fd size))))))
         (list
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
