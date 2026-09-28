@@ -46,6 +46,20 @@
   (merge-pathnames (format nil "~A-~A" (gensym "WOO-") name) (uiop:temporary-directory)))
 
 #+sbcl
+(defun join-worker-or-fail (thread)
+  (let* ((native (bt2:thread-native-thread thread))
+         (timeout-marker (gensym "JOIN-TIMEOUT-"))
+         (result (sb-thread:join-thread native
+                                         :default timeout-marker
+                                         :timeout 30)))
+    (when (eq result timeout-marker)
+      ;; The worker owns its descriptor and closes it in UNWIND-PROTECT.
+      ;; Terminate it before failing so the test cannot leak threads or fds.
+      (sb-thread:terminate-thread native)
+      (sb-thread:join-thread native :timeout 5)
+      (error "fd-file-size worker exceeded 30 second join deadline"))))
+
+#+sbcl
 (deftest fd-file-size-single-threaded-tests
   (let ((path (temp-path "woo-fd-file-size.dat")))
     (unwind-protect
@@ -73,11 +87,7 @@
                    (threads 8)
                    (iterations 10000))
                       (mapc
-                       ;; Wait for every worker before closing the descriptors.  A
-                       ;; fixed timeout can close them while a busy CI host is
-                       ;; still executing the loop, turning a race test into an
-                       ;; unrelated EBADF failure.
-                       (lambda (thread) (bt2:join-thread thread))
+                       #'join-worker-or-fail
                        (loop for i from 0 below threads
                              collect
                              (let* ((use-large (evenp i))
