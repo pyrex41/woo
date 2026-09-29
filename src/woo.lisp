@@ -156,26 +156,30 @@
           (start-multithread-server)
           (start-singlethread-server)))))
 
+(defun respond-and-close (socket status message)
+  (setf (wev:socket-data socket)
+        (lambda (data &key start end)
+          (declare (ignore data start end))))
+  (let ((body (string-to-utf-8-bytes message)))
+    (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+      (write-response-headers socket status
+                              (list :connection "close"
+                                    :content-length (length body)))
+      (wev:write-socket-data socket body))))
+
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
-    (handler-case (funcall parser data :start start :end end)
-      (buffer-limit-exceeded ()
-        (wev:with-async-writing (socket :write-cb #'wev:close-socket)
-          (let ((body (string-to-utf-8-bytes "413 Request Entity Too Large")))
-            (write-response-headers socket 413
-                                    (list :connection "close"
-                                          :content-length (length body)))
-            (wev:write-socket-data socket body))))
-      (fast-http:parsing-error (e)
-        (vom:error "HTTP parse error: ~A" e)
-        (let ((body #.(map '(simple-array (unsigned-byte 8) (*))
-                           #'char-code
-                           "400 Bad Request")))
-          (wev:with-async-writing (socket :write-cb #'wev:close-socket)
-            (write-response-headers socket 400
-                                    (list :connection "close"
-                                          :content-length (length body)))
-            (wev:write-socket-data socket body)))))))
+    (block read
+      (handler-bind (((or fast-http:cb-headers-complete fast-http:cb-body)
+                      (lambda (condition)
+                        (let ((cause (slot-value condition 'error)))
+                          (when (typep cause 'buffer-limit-exceeded)
+                            (respond-and-close socket 413 "413 Request Entity Too Large")
+                            (return-from read nil))))))
+        (handler-case (funcall parser data :start start :end end)
+          (fast-http:parsing-error (e)
+            (vom:error "HTTP parse error: ~A" e)
+            (respond-and-close socket 400 "400 Bad Request")))))))
 
 (define-condition woo-error (simple-error) ())
 (define-condition invalid-http-version (woo-error) ())
@@ -333,11 +337,10 @@
       (vom:error (princ-to-string e)))))
 
 #+sbcl
-(defvar *stat* (make-instance 'sb-posix:stat))
-#+sbcl
 (defun fd-file-size (fd)
-  (sb-posix:fstat fd *stat*)
-  (sb-posix:stat-size *stat*))
+  (let ((stat (make-instance 'sb-posix:stat)))
+    (sb-posix:fstat fd stat)
+    (sb-posix:stat-size stat)))
 #+ccl
 (defun fd-file-size (fd)
   (multiple-value-bind (successp mode size)
@@ -432,18 +435,22 @@
            (t
             (if (uiop:directory-exists-p body)
                 (respond-and-close socket 403 "403 Forbidden")
-                (let* ((fd (wsys:open body))
-                   (size #+lispworks (sys:file-size body)
-                         #+(or sbcl ccl) (fd-file-size fd)
-                         #-(or sbcl ccl lispworks) (file-size body)))
-              (unless (getf headers :content-length)
-                (setf (getf headers :content-length) size))
-              (unless (getf headers :content-type)
-                (setf (getf headers :content-type) (mimes:mime body)))
-              (wev:with-async-writing (socket :write-cb
-                                              (response-write-callback socket close body-cleanup))
-                (write-response-headers socket status headers (not close))
-                (woo.ev.socket:send-static-file socket fd size)))))))
+                (let ((fd (wsys:open body)))
+                  (if (< fd 0)
+                      (let ((failure (static-preparation-status body (wsys:errno))))
+                        (respond-and-close socket failure
+                                            (if (= failure 403) "403 Forbidden" "404 Not Found")))
+                      (let ((size #+lispworks (sys:file-size body)
+                                  #+(or sbcl ccl) (fd-file-size fd)
+                                  #-(or sbcl ccl lispworks) (file-size body)))
+                        (unless (getf headers :content-length)
+                          (setf (getf headers :content-length) size))
+                        (unless (getf headers :content-type)
+                          (setf (getf headers :content-type) (mimes:mime body)))
+                        (wev:with-async-writing (socket :write-cb
+                                                        (response-write-callback socket close body-cleanup))
+                          (write-response-headers socket status headers (not close))
+                          (woo.ev.socket:send-static-file socket fd size)))))))))
         (list
          (wev:with-async-writing (socket :write-cb
                                          (response-write-callback socket close body-cleanup))
