@@ -43,19 +43,26 @@ jobs:
             capture_start=$SECONDS
             {
               echo "native watchdog capture start=$(date -u +%s) root=$root_pid pgid=$group_id"
-              ps -eo pid=,ppid=,pgid=,stat=,wchan= | awk -v g="$group_id" '$3 == g {print}' | head -n 64
+              ps -eo pid=,ppid=,pgid=,stat=,wchan= | awk -v g="$group_id" '$3 == g && $4 !~ /^Z/ {print}' | head -n 64
             } >> "$report"
-            pids=$(ps -eo pid=,ppid=,pgid= | awk -v g="$group_id" '$3 == g {print $1}' | head -n 64)
+            pids=$(ps -eo pid=,ppid=,pgid=,stat= | awk -v g="$group_id" '$3 == g && $4 !~ /^Z/ {print $1}' | head -n 64)
             for pid in $pids; do
-              [ $((SECONDS - capture_start)) -lt 30 ] || break
+              remaining=$((30 - (SECONDS - capture_start)))
+              [ "$remaining" -gt 0 ] || break
+              gdb_budget=$remaining
+              [ "$gdb_budget" -gt 10 ] && gdb_budget=10
               {
                 echo "--- owned pid=$pid ---"
                 ps -o pid=,ppid=,pgid=,stat=,wchan= -p "$pid" || true
                 if [ -r "/proc/$pid/wchan" ]; then cat "/proc/$pid/wchan" || true; fi
-                timeout 10s gdb -batch -q -p "$pid" \
+                timeout "${gdb_budget}s" gdb -batch -q -p "$pid" \
                   -ex 'set print frame-arguments none' \
                   -ex 'thread apply all bt' -ex detach -ex quit 2>&1 | head -c 65536 || true
               } >> "$report"
+              if [ "$(wc -c < "$report")" -gt 4194304 ]; then
+                head -c 4194304 "$report" > "$report.truncated"
+                mv "$report.truncated" "$report"
+              fi
             done
             head -c 262144 "$report" > "$report.truncated"
             mv "$report.truncated" "$report"
@@ -70,11 +77,13 @@ jobs:
           native_pgid=$native_pid
           started=$SECONDS
           status=124
+          timed_out=0
           while kill -0 "$native_pid" 2>/dev/null || \
-                ps -eo pid=,pgid= | awk -v g="$native_pgid" '$2 == g {found=1} END {exit !found}'; do
+                ps -eo pid=,pgid=,stat= | awk -v g="$native_pgid" '$2 == g && $3 !~ /^Z/ {found=1} END {exit !found}'; do
             elapsed=$((SECONDS - started))
             if [ "$elapsed" -ge 540 ]; then
               echo "native watchdog deadline elapsed=$elapsed; capturing before termination"
+              timed_out=1
               capture_owned_state "$native_pid" "$native_pgid"
               kill -TERM -- "-$native_pgid" 2>/dev/null || true
               sleep 10
@@ -84,7 +93,7 @@ jobs:
             fi
             sleep 1
           done
-          if ! kill -0 "$native_pid" 2>/dev/null; then
+          if [ "$timed_out" -eq 0 ] && ! kill -0 "$native_pid" 2>/dev/null; then
             wait "$native_pid"
             status=$?
           fi
