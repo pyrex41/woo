@@ -313,12 +313,15 @@ def main():
     if stop_result.exists(): stop_result.unlink()
     spool_root = args.artifacts/'smart-buffer-spool'
     spool_root.mkdir(parents=True, exist_ok=True)
+    memory_log = args.artifacts/'memory.log'
+    if memory_log.exists():
+        memory_log.unlink()
     env = os.environ.copy()
     env.update(WOO_COMPAT_DEPENDENCY_ROOT=str(dependencies), WOO_COMPAT_CERT_ROOT=str(cert_root),
                WOO_LEGACY_STATIC_FILE=str(fixture), WOO_LEGACY_SOAK_SECONDS=str(args.soak_seconds),
                WOO_LEGACY_RESULT=str(result), WOO_LEGACY_STOP_RESULT=str(stop_result),
                WOO_LEGACY_SPOOL_ROOT=str(spool_root),
-               WOO_LEGACY_MEMORY_LOG=str(args.artifacts/'memory.log'),
+               WOO_LEGACY_MEMORY_LOG=str(memory_log),
                WOO_RUN_LEGACY_QUALIFICATION='1', WOO_HEGEL_LISP=shutil.which(args.lisp) or args.lisp,
                WOO_COMPAT_FIXTURE_GROUP='owned-stage')
     started = time.monotonic(); receipt = {'status':'UNKNOWN', 'head': subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT, text=True).strip(),
@@ -351,6 +354,7 @@ def main():
         receipt['process_group_cleanup'] = 'PASS'
         receipt['socket_cleanup'] = 'PASS'
         receipt['spool_cleanup'] = 'PASS'
+        receipt['cleanup_verified'] = 'PASS'
         if args.soak_seconds == 1800 and not resource_evidence_ok:
             raise RuntimeError(receipt['resource_failure'])
         receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
@@ -360,7 +364,7 @@ def main():
     finally:
         receipt['elapsed_seconds'] = time.monotonic() - started
         receipt['peak_child_rss'] = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-        receipt['cleanup'] = 'PASS' if succeeded else 'UNKNOWN'
+        receipt['cleanup'] = 'PASS' if receipt.get('cleanup_verified') == 'PASS' else 'UNKNOWN'
         if receipt['source_digest'] != source_digest(): receipt['source_changed'] = True; receipt['status'] = 'UNKNOWN'
         try:
             shutil.rmtree(dependencies, ignore_errors=False)

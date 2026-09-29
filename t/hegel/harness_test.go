@@ -31,6 +31,7 @@ type boundedLog struct {
 	b  bytes.Buffer
 	file *os.File
 	fileBytes int
+	writeErr error
 }
 
 func (l *boundedLog) Write(p []byte) (int, error) {
@@ -41,8 +42,11 @@ func (l *boundedLog) Write(p []byte) (int, error) {
 	}
 	if l.file != nil && l.fileBytes < 256*1024 {
 		remaining := min(len(p), 256*1024-l.fileBytes)
-		_, _ = l.file.Write(p[:remaining])
-		l.fileBytes += remaining
+		written, err := l.file.Write(p[:remaining])
+		l.fileBytes += written
+		if err != nil && l.writeErr == nil {
+			l.writeErr = err
+		}
 	}
 	return len(p), nil
 }
@@ -120,9 +124,18 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 			return "", fmt.Errorf("open bounded memory diagnostic log: %w", err)
 		}
 	}
-	log := &boundedLog{file: metricLog}
+	fileBytes := 0
+	if metricLog != nil {
+		if info, statErr := metricLog.Stat(); statErr == nil {
+			fileBytes = int(info.Size())
+		}
+	}
+	log := &boundedLog{file: metricLog, fileBytes: fileBytes}
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
+		if metricLog != nil {
+			_ = metricLog.Close()
+		}
 		return "", fmt.Errorf("start %s: %w", spec.name, err)
 	}
 	if spec.started != nil {
@@ -135,10 +148,6 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 		close(exited)
 	}()
 	cleanup := func() {
-		if metricLog != nil {
-			_ = metricLog.Close()
-			metricLog = nil
-		}
 		if cmd.Process != nil {
 			if ownGroup {
 				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
@@ -149,6 +158,13 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 		case <-exited:
 		case <-time.After(3 * time.Second):
 			t.Errorf("%s did not exit after kill; output: %s", spec.name, log.String())
+		}
+		if metricLog != nil {
+			_ = metricLog.Close()
+			metricLog = nil
+		}
+		if log.writeErr != nil {
+			t.Errorf("%s memory diagnostic log write failed: %v", spec.name, log.writeErr)
 		}
 	}
 	t.Cleanup(func() {
