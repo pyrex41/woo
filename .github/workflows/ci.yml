@@ -19,10 +19,23 @@ jobs:
         run: sh ./t/generate-certificates.sh
       - name: Install Roswell
         env:
-          LISP: ${{ matrix.lisp }}
+          LISP: sbcl-bin/2.6.9
           ROSWELL_INSTALL_DIR: /usr
         run: |
-          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+          installer="$RUNNER_TEMP/roswell-install-for-ci-v26.02.116.sh"
+          installer_url="https://raw.githubusercontent.com/roswell/roswell/v26.02.116/scripts/install-for-ci.sh"
+          curl --fail --location --retry 5 --connect-timeout 30 --max-time 300 \
+            "$installer_url" --output "$installer"
+          printf '%s  %s\n' \
+            'dc9cf97b20537f13b221a5a5a91761562bcc440f333566be1f455d36551fa693' \
+            "$installer" | sha256sum --check --strict
+          ROSWELL_BRANCH=v26.02.116 sh "$installer"
+          # The tagged installer downloads this archive during installation;
+          # verify the exact archive left after that build as provenance.
+          printf '%s  %s\n' \
+            'edece1aa4a807ee36f44061aa802354c722cb5bd80b5056b19aa982c14709a6c' \
+            "$HOME/roswell.tar.gz" | sha256sum --check --strict
+          ros version
       - name: Install frozen Quicklisp distribution
         run: ros -e '(ql-dist:install-dist "http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt" :prompt nil :replace t)'
       - name: Install Rove
