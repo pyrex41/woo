@@ -32,10 +32,12 @@
 (defun emit-legacy-memory-metric (label)
   (when (and (string= (or (uiop:getenv "WOO_LEGACY_MEMORY_DIAGNOSTIC") "") "1")
              (< *legacy-memory-metric-count* 64))
-    (format t "LEGACY_METRIC sbcl pid=~A label=~A gc_run_time=~A gc_real_time=~A bytes_consED=~A bytes_between_gcs=~A~{ gen~A_gcs=~A gen~A_bytes=~A~}~%"
+    (format t "LEGACY_METRIC sbcl pid=~A unix_time=~A label=~A gc_run_time=~A gc_real_time=~A bytes_consED=~A bytes_between_gcs=~A allocated_all_generations=~A~{ gen~A_gcs=~A gen~A_bytes=~A~}~%"
             (sb-unix:unix-getpid)
-            label sb-ext:*gc-run-time* sb-ext:*gc-real-time*
+            (get-universal-time) label sb-ext:*gc-run-time* sb-ext:*gc-real-time*
             (sb-ext:get-bytes-consed) (sb-ext:bytes-consed-between-gcs)
+            (loop for generation from 0 to 6
+                  sum (sb-ext:generation-bytes-allocated generation))
             (loop for generation from 0 to 6
                   append (list generation
                                (sb-ext:generation-number-of-gcs generation)
