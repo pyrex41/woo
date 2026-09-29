@@ -1,0 +1,68 @@
+name: Matched GC diagnostic
+
+on:
+  push:
+    branches:
+      - codex/debug-legacy-memory-gc
+
+permissions:
+  contents: read
+
+jobs:
+  matched-gc:
+    name: Matched GC diagnostic (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+      - name: Install frozen Quicklisp distribution
+        run: |
+          nix develop --command sh -c '
+            set -eu
+            curl --fail --max-time 60 --location https://beta.quicklisp.org/quicklisp.lisp -o /tmp/quicklisp.lisp
+            python3 -c "import hashlib; assert hashlib.sha256(open(\"/tmp/quicklisp.lisp\", \"rb\").read()).hexdigest() == \"4a7a5c2aebe0716417047854267397e24a44d0cce096127411e9ce9ccfeb2c17\""
+            sbcl --non-interactive --load /tmp/quicklisp.lisp --eval "(quicklisp-quickstart:install :path \"$HOME/quicklisp/\")"
+            sbcl --non-interactive --load "$HOME/quicklisp/setup.lisp" --eval "(ql-dist:install-dist \"http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt\" :prompt nil :replace t)"
+          '
+      - name: Run matched startup/end GC diagnostic
+        env:
+          WOO_LEGACY_MEMORY_DIAGNOSTIC: "1"
+          WOO_LEGACY_FULL_GC_START_DIAGNOSTIC: "1"
+          WOO_LEGACY_FULL_GC_DIAGNOSTIC: "1"
+          WOO_LEGACY_LIFECYCLE_CYCLES: "1"
+        run: |
+          mkdir -p .artifacts/matched-gc
+          timeout --signal=TERM --kill-after=30s 1100s nix develop --command \
+            python3 t/qualification/check.py --soak-seconds 600 \
+            --dependencies "$RUNNER_TEMP/woo-matched-gc-deps" \
+            --artifacts .artifacts/matched-gc
+      - name: Validate diagnostic receipt and matched snapshots
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          receipt = json.loads(Path('.artifacts/matched-gc/receipt.json').read_text())
+          if receipt.get('status') != 'DIAGNOSTIC_PASS':
+              raise SystemExit(f"unexpected diagnostic status: {receipt.get('status')}")
+          if receipt.get('forced_gc_diagnostic') is not True:
+              raise SystemExit('forced GC diagnostic marker missing')
+          if receipt.get('cleanup') != 'PASS' or receipt.get('process_group_cleanup') != 'PASS':
+              raise SystemExit('cleanup evidence is not PASS')
+          memory = Path('.artifacts/matched-gc/memory.log').read_text(errors='replace')
+          for marker in ('label=full-gc-before', 'label=full-gc-after'):
+              if memory.count(marker) < 2:
+                  raise SystemExit(f'missing matched startup/end marker: {marker}')
+          for generation in range(7):
+              if f'gen{generation}_bytes=' not in memory:
+                  raise SystemExit(f'missing generation {generation} metric')
+          print('PASS: diagnostic-only receipt, cleanup, and matched GC snapshots')
+          PY
+      - name: Preserve bounded diagnostic artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matched-gc-diagnostic-ubuntu
+          path: .artifacts/matched-gc/
+          if-no-files-found: error

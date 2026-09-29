@@ -1,6 +1,10 @@
 name: Legacy qualification
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - codex/debug-legacy-memory-gc
+  pull_request:
 
 jobs:
   legacy:
