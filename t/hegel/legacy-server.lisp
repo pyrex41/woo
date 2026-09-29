@@ -1,4 +1,7 @@
 ;;; Legacy :server :woo fixture for the bounded qualification lane.
+(format t "LEGACY_LISP implementation=~A version=~A machine=~A~%"
+        (lisp-implementation-type) (lisp-implementation-version) (machine-type))
+(finish-output)
 (require :asdf)
 (unless (find-package :ql)
   (let ((setup (or (uiop:getenv "WOO_QUICKLISP_SETUP")
