@@ -153,12 +153,16 @@ def stop(process):
             raise RuntimeError('legacy qualification process group did not stop')
         time.sleep(.05)
 
-def run(command, env, log, timeout, sample_resources=True):
+def run(command, env, log, timeout, sample_resources=True, observations=None):
     with log.open('wb') as output:
         process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=output,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         peak_rss = 0
         samples = []
+        if observations is not None:
+            observations['resource_samples'] = samples
+            observations['peak_rss_bytes'] = 0
+            observations['resource_samples_complete'] = False
         last_sample = 0.0
         started = time.monotonic()
         phase = 'bootstrap'
@@ -176,6 +180,8 @@ def run(command, env, log, timeout, sample_resources=True):
                         rss, fds, details = process_group_stats(process.pid)
                     except RuntimeError:
                         if process.poll() is not None:
+                            if observations is not None:
+                                observations['resource_samples_complete'] = False
                             break
                         raise
                     with log.open('rb') as stream:
@@ -199,11 +205,15 @@ def run(command, env, log, timeout, sample_resources=True):
                     samples.append({'phase': phase, 'elapsed_seconds': time.monotonic() - started,
                                     'rss_bytes': rss, 'fd_count': fds, 'processes': details})
                     peak_rss = max(peak_rss, rss)
+                    if observations is not None:
+                        observations['peak_rss_bytes'] = peak_rss
                     last_sample = time.monotonic()
                 time.sleep(.2)
         finally:
             stop(process)
     if process.returncode: raise RuntimeError(f'qualification failed: {process.returncode}')
+    if observations is not None:
+        observations['resource_samples_complete'] = True
     return peak_rss, samples
 
 def apply_private_clack_patch(dependencies):
@@ -364,9 +374,12 @@ def main():
         'source_digest': source_digest(), 'platform': platform.platform(), 'soak_seconds': args.soak_seconds,
         'dependencies': pins, 'clack_patch_sha256': hashlib.sha256(PATCH.read_bytes()).hexdigest(), 'gates': {}}
     succeeded = False
+    receipt['resource_samples'] = []
+    receipt['peak_rss_bytes'] = 0
+    receipt['resource_samples_complete'] = False
     try:
         receipt['peak_rss_bytes'], receipt['resource_samples'] = run(['go', '-C', 't/hegel', 'test', '-v', '-count=1', '-run', '^TestLegacyQualification$', '-timeout', f'{args.soak_seconds + 300}s'],
-            env, args.artifacts/'legacy.log', args.soak_seconds + 300)
+            env, args.artifacts/'legacy.log', args.soak_seconds + 300, observations=receipt)
         soak_samples = [sample for sample in receipt['resource_samples'] if sample.get('phase') == 'soak']
         receipt['resource_phases'] = {'soak': {'sample_count': len(soak_samples),
                                                'baseline': soak_samples[0] if soak_samples else {},

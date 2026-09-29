@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import copy, hashlib, json, tempfile, unittest
+import copy, hashlib, json, os, sys, tempfile, time, unittest
 from pathlib import Path
 from unittest.mock import patch
 import check
@@ -114,6 +114,31 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(lsof_timeouts[:3], [5, 5, 5])
         self.assertLessEqual(lsof_timeouts[3], 2.0)
         self.assertEqual(clock.now, 15.0)
+
+    def test_run_retains_samples_when_late_sampler_failure_stops_child(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            marker = directory / 'pid'
+            log = directory / 'legacy.log'
+            observations = {}
+            command = [sys.executable, '-c',
+                       'import os, pathlib, sys, time; '
+                       'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(10)',
+                       str(marker)]
+            first = (1024, 3, [{'pid': 1, 'rss_bytes': 1024, 'fd_count': 3}])
+            with patch.object(check, 'process_group_stats',
+                              side_effect=[first, RuntimeError('sampler unavailable')]):
+                with self.assertRaisesRegex(RuntimeError, 'sampler unavailable'):
+                    check.run(command, os.environ.copy(), log, 5, observations=observations)
+            self.assertEqual(len(observations['resource_samples']), 1)
+            self.assertEqual(observations['resource_samples'][0]['fd_count'], 3)
+            self.assertEqual(observations['peak_rss_bytes'], 1024)
+            self.assertFalse(observations['resource_samples_complete'])
+            deadline = time.monotonic() + 2
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertTrue(marker.exists())
+            self.assertFalse(check.process_group_alive(int(marker.read_text())))
 
     def test_stale_and_short_receipts_fail(self):
         with tempfile.TemporaryDirectory() as directory:
