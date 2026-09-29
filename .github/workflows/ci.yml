@@ -35,20 +35,60 @@ jobs:
           PATH="$HOME/.roswell/bin:$PATH"
           export PATH
           set +e
-          timeout --signal=TERM --kill-after=10s 540s ros dynamic-space-size=4096 \
+          report="$RUNNER_TEMP/native-stall-report.txt"
+          : > "$report"
+          capture_owned_state() {
+            root_pid="$1"
+            group_id="$2"
+            capture_start=$SECONDS
+            {
+              echo "native watchdog capture start=$(date -u +%s) root=$root_pid pgid=$group_id"
+              ps -eo pid=,ppid=,pgid=,stat=,wchan= | awk -v g="$group_id" '$3 == g {print}' | head -n 64
+            } >> "$report"
+            pids=$(ps -eo pid=,ppid=,pgid= | awk -v g="$group_id" '$3 == g {print $1}' | head -n 64)
+            for pid in $pids; do
+              [ $((SECONDS - capture_start)) -lt 30 ] || break
+              {
+                echo "--- owned pid=$pid ---"
+                ps -o pid=,ppid=,pgid=,stat=,wchan= -p "$pid" || true
+                if [ -r "/proc/$pid/wchan" ]; then cat "/proc/$pid/wchan" || true; fi
+                timeout 10s gdb -batch -q -p "$pid" \
+                  -ex 'set print frame-arguments none' \
+                  -ex 'thread apply all bt' -ex detach -ex quit 2>&1 | head -c 65536 || true
+              } >> "$report"
+            done
+            head -c 262144 "$report" > "$report.truncated"
+            mv "$report.truncated" "$report"
+            echo "bounded owned process report: $report"
+            cat "$report"
+          }
+          setsid ros dynamic-space-size=4096 \
             -e '(push (truename "./") asdf:*central-registry*)' \
             -s woo-test \
-            -e '(unless (rove:run :woo-test) (uiop:quit 1))'
-          status=$?
+            -e '(unless (rove:run :woo-test) (uiop:quit 1))' &
+          native_pid=$!
+          native_pgid=$native_pid
+          started=$SECONDS
+          status=124
+          while kill -0 "$native_pid" 2>/dev/null || \
+                ps -eo pid=,pgid= | awk -v g="$native_pgid" '$2 == g {found=1} END {exit !found}'; do
+            elapsed=$((SECONDS - started))
+            if [ "$elapsed" -ge 540 ]; then
+              echo "native watchdog deadline elapsed=$elapsed; capturing before termination"
+              capture_owned_state "$native_pid" "$native_pgid"
+              kill -TERM -- "-$native_pgid" 2>/dev/null || true
+              sleep 10
+              kill -KILL -- "-$native_pgid" 2>/dev/null || true
+              wait "$native_pid" 2>/dev/null || true
+              break
+            fi
+            sleep 1
+          done
+          if ! kill -0 "$native_pid" 2>/dev/null; then
+            wait "$native_pid"
+            status=$?
+          fi
           if [ "$status" -ne 0 ]; then
-            echo "native test command exited $status; collecting bounded process state"
-            date -u
-            ps -eo pid,ppid,stat,wchan:32,command || true
-            for pid in $(pgrep -f 'ros|sbcl' || true); do
-              echo "--- pid $pid ---"
-              ps -o pid,ppid,stat,wchan:32,command -p "$pid" || true
-              if [ -r "/proc/$pid/wchan" ]; then cat "/proc/$pid/wchan" || true; fi
-              gdb -batch -q -p "$pid" -ex 'thread apply all bt' -ex detach -ex quit 2>&1 || true
-            done
+            echo "native test command exited $status"
           fi
           exit "$status"
