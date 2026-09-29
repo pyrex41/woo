@@ -342,7 +342,25 @@
     (funcall queued)
     (ok (null called))))
 
-
+(deftest application-error-before-and-after-headers
+  (dolist (app (list (lambda (env) (declare (ignore env)) (error "fixture"))
+                    (lambda (env) (declare (ignore env))
+                      (lambda (respond) (declare (ignore respond)) (error "fixture")))))
+    (with-managed (handler port app)
+      (ok (signals (get-body port) 'dex:http-request-internal-server-error))))
+  (let ((observed nil))
+    (with-managed (handler port
+                   (woo.compat::wrap-backtrace
+                    (lambda (env)
+                      (setf observed env)
+                      (lambda (respond)
+                        (funcall (funcall respond '(200 nil)) "partial")
+                        (error "fixture"))) :logger (lambda (entry) (declare (ignore entry)))))
+      ;; Dexador may accept truncated chunking; cancellation is the server gate.
+      (ignore-errors (get-body port))
+      (await-state handler (lambda (s) (and (zerop (getf s :requests))
+                                          (zerop (getf s :output-bytes)))))
+      (ok (funcall (getf observed :woo.request-cancelled-p))))))
 
 (deftest socket-budget-refusal-keeps-server-alive
   (with-managed (handler port #'contract-app :max-server-queue-bytes 1)
