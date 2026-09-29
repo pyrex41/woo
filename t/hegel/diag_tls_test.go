@@ -1,6 +1,7 @@
 package hegeltest
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -19,11 +20,15 @@ import (
 )
 
 type diagReadResult struct {
-	bytes   int
-	dur     time.Duration
-	err     error
-	gotSHA  string
-	wantSHA string
+	bytes         int
+	dur           time.Duration
+	err           error
+	protocolErr   error
+	status        int
+	contentLength int64
+	bodyBytes     int
+	gotSHA        string
+	wantSHA       string
 }
 
 func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, readBuffer int) diagReadResult {
@@ -74,10 +79,18 @@ func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, 
 		readErr = context.DeadlineExceeded
 	}
 	var bodyGot []byte
-	if parts := bytes.SplitN(response.Bytes(), []byte("\r\n\r\n"), 2); len(parts) == 2 {
-		bodyGot = parts[1]
+	parsed, parseErr := http.ReadResponse(bufio.NewReader(bytes.NewReader(response.Bytes())), nil)
+	var protocolErr error = parseErr
+	status := 0
+	var contentLength int64
+	if parsed != nil {
+		status = parsed.StatusCode
+		contentLength = parsed.ContentLength
+		bodyGot, protocolErr = io.ReadAll(parsed.Body)
+		_ = parsed.Body.Close()
 	}
-	return diagReadResult{bytes: len(response.Bytes()), dur: time.Since(start), err: readErr,
+	return diagReadResult{bytes: len(response.Bytes()), dur: time.Since(start), err: readErr, protocolErr: protocolErr,
+		status: status, contentLength: contentLength, bodyBytes: len(bodyGot),
 		gotSHA: fmt.Sprintf("%x", sha256.Sum256(bodyGot)), wantSHA: fmt.Sprintf("%x", sha256.Sum256(body))}
 }
 
@@ -108,7 +121,7 @@ func TestDiagnosticTLSReferenceAndWoo(t *testing.T) {
 	ref := startDiagReference(t, certs, body)
 	for _, size := range []int{1024, 16 * 1024} {
 		refResult := diagSlowRead(t, strings.TrimPrefix(ref.URL, "https://"), roots, body, size)
-		t.Logf("reference read_buffer=%d bytes=%d duration=%s err=%v body_sha=%s want_sha=%s", size, refResult.bytes, refResult.dur, refResult.err, refResult.gotSHA, refResult.wantSHA)
+		t.Logf("reference read_buffer=%d bytes=%d duration=%s err=%v protocol_err=%v status=%d content_length=%d body_bytes=%d body_sha=%s want_sha=%s", size, refResult.bytes, refResult.dur, refResult.err, refResult.protocolErr, refResult.status, refResult.contentLength, refResult.bodyBytes, refResult.gotSHA, refResult.wantSHA)
 
 		port := tlsLivePort(t)
 		t.Setenv("WOO_HEGEL_PORT", port)
@@ -118,13 +131,13 @@ func TestDiagnosticTLSReferenceAndWoo(t *testing.T) {
 			t.Fatal(err)
 		}
 		result := diagSlowRead(t, net.JoinHostPort("127.0.0.1", strconv.Itoa(mustPort(t, port)+1)), roots, body, size)
-		t.Logf("woo read_buffer=%d bytes=%d duration=%s err=%v body_sha=%s want_sha=%s", size, result.bytes, result.dur, result.err, result.gotSHA, result.wantSHA)
+		t.Logf("woo read_buffer=%d bytes=%d duration=%s err=%v protocol_err=%v status=%d content_length=%d body_bytes=%d body_sha=%s want_sha=%s", size, result.bytes, result.dur, result.err, result.protocolErr, result.status, result.contentLength, result.bodyBytes, result.gotSHA, result.wantSHA)
 		if size == 16*1024 {
-			if refResult.err != nil || refResult.gotSHA != refResult.wantSHA {
-				t.Errorf("reference 16KiB control failed: err=%v sha=%s/%s", refResult.err, refResult.gotSHA, refResult.wantSHA)
+			if refResult.err != nil || refResult.protocolErr != nil || refResult.status != http.StatusOK || refResult.contentLength != int64(len(body)) || refResult.bodyBytes != len(body) || refResult.gotSHA != refResult.wantSHA {
+				t.Errorf("reference 16KiB control failed: err=%v protocol=%v status=%d content_length=%d body_bytes=%d sha=%s/%s", refResult.err, refResult.protocolErr, refResult.status, refResult.contentLength, refResult.bodyBytes, refResult.gotSHA, refResult.wantSHA)
 			}
-			if result.err != nil || result.gotSHA != result.wantSHA {
-				t.Errorf("Woo 16KiB control failed: err=%v sha=%s/%s", result.err, result.gotSHA, result.wantSHA)
+			if result.err != nil || result.protocolErr != nil || result.status != http.StatusOK || result.contentLength != int64(len(body)) || result.bodyBytes != len(body) || result.gotSHA != result.wantSHA {
+				t.Errorf("Woo 16KiB control failed: err=%v protocol=%v status=%d content_length=%d body_bytes=%d sha=%s/%s", result.err, result.protocolErr, result.status, result.contentLength, result.bodyBytes, result.gotSHA, result.wantSHA)
 			}
 		}
 		_ = addr
