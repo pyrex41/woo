@@ -43,6 +43,7 @@
                  (:file "ssl"
                   :depends-on ("ev-packages" "ssl-alpn")
                   :if-feature (:not :woo-no-ssl))
+                 (:file "dispatch" :depends-on ("ev-packages"))
                  (:module "llsocket"
                   :depends-on ("syscall")
                   :serial t

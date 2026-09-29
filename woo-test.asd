@@ -19,6 +19,7 @@
    (:file "t/static")
    (:file "t/tls-static" :if-feature (:not :woo-no-ssl))
    (:file "t/upload")
-   (:file "t/body-limit"))
+   (:file "t/body-limit")
+   (:file "t/lifecycle"))
   :perform (test-op (op c) (unless (symbol-call '#:rove '#:run c)
                (error "Woo test gate failed"))))

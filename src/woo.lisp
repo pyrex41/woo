@@ -54,6 +54,7 @@
                 :copy-stream
                 :if-let)
   (:export :run
+           :stop-gracefully
            :stop
            :*buffer-size*
            :*connection-timeout*
@@ -64,6 +65,74 @@
 (defvar *default-backlog-size* 128)
 (defvar *default-worker-num* nil)
 
+;; A threaded host must request shutdown on the event-loop thread.  Closing
+;; only the listener and destroying that thread can bypass WITH-EVENT-LOOP's
+;; socket cleanup.
+(defstruct (stop-control (:constructor make-stop-control))
+  listener thread evloop async cluster (command :stop))
+(defvar *stop-controls* (make-hash-table :test #'eql))
+(defvar *stop-controls-by-async* (make-hash-table :test #'eql))
+(defvar *stop-controls-lock* (bt2:make-lock :name "woo-stop-controls"))
+
+(cffi:defcallback stop-async-cb :void
+    ((evloop :pointer) (async :pointer) (events :int))
+  (declare (ignore events))
+  (let ((control (bt2:with-lock-held (*stop-controls-lock*)
+                   (gethash (cffi:pointer-address async)
+                            *stop-controls-by-async*))))
+    (when control
+      (if (eq (stop-control-command control) :drain)
+          (lev:ev-io-stop evloop (stop-control-listener control))
+          (lev:ev-break evloop lev:+EVBREAK-ALL+)))))
+
+(defun register-stop-control (listener cluster)
+  (let* ((async (cffi:foreign-alloc '(:struct lev:ev-async)))
+         (control (make-stop-control :listener listener
+                                     :thread (bt2:current-thread)
+                                     :evloop woo.ev:*evloop*
+                                     :async async
+                                     :cluster cluster)))
+    (lev:ev-async-init async 'stop-async-cb)
+    (lev:ev-async-start woo.ev:*evloop* async)
+    (bt2:with-lock-held (*stop-controls-lock*)
+      (setf (gethash (cffi:pointer-address listener) *stop-controls*) control
+            (gethash (bt2:current-thread) *stop-controls*) control
+            (gethash (cffi:pointer-address async) *stop-controls-by-async*) control))
+    control))
+
+(defun unregister-stop-control (control)
+  (when control
+    (bt2:with-lock-held (*stop-controls-lock*)
+      (remhash (cffi:pointer-address (stop-control-listener control)) *stop-controls*)
+      (remhash (stop-control-thread control) *stop-controls*)
+      (remhash (cffi:pointer-address (stop-control-async control))
+               *stop-controls-by-async*))
+    (lev:ev-async-stop (stop-control-evloop control)
+                       (stop-control-async control))
+    (cffi:foreign-free (stop-control-async control))))
+
+(defun stop-gracefully (server)
+  "Request that SERVER's owning event loop stop and clean up its sockets.
+SERVER may be the listener or the thread running WOO:RUN."
+  (bt2:with-lock-held (*stop-controls-lock*)
+    (let ((control (if (bt2:threadp server)
+                       (gethash server *stop-controls*)
+                       (gethash (cffi:pointer-address server) *stop-controls*))))
+      (when control
+        (setf (stop-control-command control) :stop)
+        (lev:ev-async-send (stop-control-evloop control)
+                           (stop-control-async control))
+        t))))
+
+(defun quiesce (thread)
+  "Stop accepting connections without tearing down active responses."
+  (bt2:with-lock-held (*stop-controls-lock*)
+    (let ((control (gethash thread *stop-controls*)))
+      (when control
+        (setf (stop-control-command control) :drain)
+        (lev:ev-async-send (stop-control-evloop control) (stop-control-async control))
+        t))))
+
 (defun run (app &key (debug t)
                      (port 5000) (address "127.0.0.1")
                      listen ;; UNIX domain socket
@@ -71,7 +140,7 @@
                      (worker-num *default-worker-num*)
                      ssl-key-file
                      ssl-cert-file
-                     ssl-key-password)
+                     ssl-key-password on-ready on-connection (handle-signals t))
   (declare (ignorable ssl-key-password))
   (assert (and (integerp backlog)
                (plusp backlog)
@@ -96,6 +165,7 @@
                                           ssl-cert-file
                                           ssl-key-file
                                           ssl-key-password))
+               (when on-connection (funcall on-connection socket))
                (setup-parser socket)
                (woo.ev.tcp:start-listening-socket socket))
              (start-multithread-server ()
@@ -108,7 +178,7 @@
                         (wev:with-event-loop (:cleanup-fn
                                               (lambda ()
                                                 (stop-signal-watchers *evloop* signal-watchers)))
-                          (start-signal-watchers *evloop* signal-watchers)
+                          (when handle-signals (start-signal-watchers *evloop* signal-watchers))
                           (setq *listener*
                                 (wev:tcp-server (or listen
                                                     (cons address port))
@@ -118,7 +188,11 @@
                                                   (woo.worker:add-job-to-cluster *cluster* socket))
                                                 :backlog backlog
                                                 :fd fd
-                                                :sockopt wsock:+SO-REUSEADDR+)))
+                                                :sockopt wsock:+SO-REUSEADDR+))
+                          (let ((control (register-stop-control *listener* *cluster*)))
+                            (push (lambda () (unregister-stop-control control))
+                                  woo.ev.event-loop:*evloop-exit-hooks*)
+                            (when on-ready (funcall on-ready control))))
                      (wev:close-tcp-server *listener*)
                      (woo.worker:stop-cluster *cluster*)))))
              (start-singlethread-server ()
@@ -128,7 +202,7 @@
                         (wev:with-event-loop (:cleanup-fn
                                               (lambda ()
                                                 (stop-signal-watchers *evloop* signal-watchers)))
-                          (start-signal-watchers *evloop* signal-watchers)
+                          (when handle-signals (start-signal-watchers *evloop* signal-watchers))
                           (setq *listener*
                                 (wev:tcp-server (or listen
                                                     (cons address port))
@@ -136,7 +210,11 @@
                                                 :connect-cb #'start-socket
                                                 :backlog backlog
                                                 :fd fd
-                                                :sockopt wsock:+SO-REUSEADDR+)))
+                                                :sockopt wsock:+SO-REUSEADDR+))
+                          (let ((control (register-stop-control *listener* nil)))
+                            (push (lambda () (unregister-stop-control control))
+                                  woo.ev.event-loop:*evloop-exit-hooks*)
+                            (when on-ready (funcall on-ready control))))
                      (wev:close-tcp-server *listener*))))))
       ;; Context ownership starts at allocation. Keep validation, ALPN setup,
       ;; and server startup in one cleanup scope so setup failures free it.

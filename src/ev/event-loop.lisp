@@ -12,6 +12,7 @@
            :check-event-loop-running
 
            :*evloop*
+           :*evloop-exit-hooks*
            :*buffer-size*
            :*input-buffer*
            :*data-registry*
@@ -25,6 +26,10 @@
 (defparameter *evloop* nil)
 (defvar *buffer-size* (* 1024 64))
 (defparameter *input-buffer* nil)
+
+(defparameter *evloop-exit-hooks* nil
+  "Functions of no arguments to call on the loop's thread once the loop has
+   stopped and before its foreign memory is freed. Bound per loop.")
 
 (defvar *callbacks* nil)
 (defvar *data-registry* nil)
@@ -61,12 +66,18 @@
                                         0)))
          (*callbacks* (make-hash-table :test 'eql))
          (*data-registry* (make-hash-table :test 'eql))
-         (*input-buffer* (make-static-vector *buffer-size*)))
+         (*input-buffer* (make-static-vector *buffer-size*))
+         (*evloop-exit-hooks* nil))
      (unwind-protect (progn
                        ,@body
                        (lev:ev-run *evloop* 0))
        (unwind-protect
             (progn
+              ;; First, so that nothing touches the loop from another thread
+              ;; while it is torn down. A failing hook must not skip sockets.
+              (dolist (hook *evloop-exit-hooks*)
+                (handler-case (funcall hook)
+                  (error (e) (vom:error "Error in event loop exit hook: ~A" e))))
               ;; CLOSE-SOCKET removes its descriptor from *DATA-REGISTRY*.
               ;; Snapshot the table before closing every accepted socket.
               (let ((close-socket-fn (intern #.(string :close-socket) (find-package #.(string :woo.ev.socket))))
