@@ -95,7 +95,7 @@
                                                      clack.test:*clack-test-port*
                                                      :element-type '(unsigned-byte 8))
                    (let ((tls (cl+ssl:make-ssl-client-stream
-                               stream :hostname "localhost" :verify :none)))
+                               stream :hostname "localhost" :verify nil)))
                      (unwind-protect
                           (progn
                             (write-sequence
