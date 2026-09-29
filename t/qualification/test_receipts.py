@@ -140,6 +140,34 @@ class ReceiptTests(unittest.TestCase):
             self.assertTrue(marker.exists())
             self.assertFalse(check.process_group_alive(int(marker.read_text())))
 
+    def test_run_marks_samples_incomplete_when_child_exits_during_sample(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            marker = directory / 'pid'
+            log = directory / 'legacy.log'
+            observations = {}
+            command = [sys.executable, '-c',
+                       'import os, pathlib, sys, time; '
+                       'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(10)',
+                       str(marker)]
+            first = (1024, 3, [{'pid': 1, 'rss_bytes': 1024, 'fd_count': 3}])
+            calls = 0
+
+            def sample(_):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return first
+                pid = int(marker.read_text())
+                os.kill(pid, 15)
+                os.waitpid(pid, 0)
+                raise RuntimeError('sampler observed an exited child')
+
+            with patch.object(check, 'process_group_stats', side_effect=sample):
+                check.run(command, os.environ.copy(), log, 5, observations=observations)
+            self.assertEqual(len(observations['resource_samples']), 1)
+            self.assertFalse(observations['resource_samples_complete'])
+
     def test_stale_and_short_receipts_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'receipt.json'
@@ -167,6 +195,7 @@ class ReceiptTests(unittest.TestCase):
                            {'soak_elapsed_seconds':20}, {'cleanup':'UNKNOWN'}, {'status':'DIAGNOSTIC_PASS'},
                            {'lifecycle_cycles':0}, {'resource_samples':[]}, {'dependencies':{}},
                            {'gates':{}}, {'source_changed':True},
+                           {'resource_samples_complete':False},
                            {'resource_phases':{}},
                            {'resource_phases':{'soak': []}},
                            {'resource_samples':[None]},

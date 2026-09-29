@@ -159,6 +159,7 @@ def run(command, env, log, timeout, sample_resources=True, observations=None):
                                    stderr=subprocess.STDOUT, start_new_session=True)
         peak_rss = 0
         samples = []
+        sampling_complete = True
         if observations is not None:
             observations['resource_samples'] = samples
             observations['peak_rss_bytes'] = 0
@@ -180,6 +181,7 @@ def run(command, env, log, timeout, sample_resources=True, observations=None):
                         rss, fds, details = process_group_stats(process.pid)
                     except RuntimeError:
                         if process.poll() is not None:
+                            sampling_complete = False
                             if observations is not None:
                                 observations['resource_samples_complete'] = False
                             break
@@ -213,7 +215,7 @@ def run(command, env, log, timeout, sample_resources=True, observations=None):
             stop(process)
     if process.returncode: raise RuntimeError(f'qualification failed: {process.returncode}')
     if observations is not None:
-        observations['resource_samples_complete'] = True
+        observations['resource_samples_complete'] = sampling_complete
     return peak_rss, samples
 
 def apply_private_clack_patch(dependencies):
@@ -275,6 +277,7 @@ def receipt_qualifies(receipt, current, expected):
             and receipt.get('dependencies') == expected
             and receipt.get('clack_patch_sha256') == hashlib.sha256(PATCH.read_bytes()).hexdigest()
             and receipt.get('peak_rss_bytes', 0) > 0
+            and receipt.get('resource_samples_complete', True) is not False
             and receipt.get('gates', {}).get('legacy_http_https_static_upload_disconnect') == 'PASS'
             and receipt.get('process_group_cleanup') == 'PASS'
             and receipt.get('socket_cleanup') == 'PASS'
