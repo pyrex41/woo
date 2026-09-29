@@ -74,14 +74,43 @@
                        (setf saw-spill (and (streamp stream)
                                             (probe-file (pathname stream))))
                        '(200 nil ("ok")))))
-             (woo-test::raw-exchange
-              clack.test:*clack-test-port*
-              (woo-test::crlf-lines "POST /spill HTTP/1.1" "Host: localhost"
-                                    "Content-Length: 4" "")
-              (concatenate 'string "data"
-                           (woo-test::crlf-lines "GET /next HTTP/1.1"
-                                                 "Host: localhost"
-                                                 "Connection: close" ""))))
+             (let ((client (usocket:socket-connect
+                            "127.0.0.1" clack.test:*clack-test-port*
+                            :element-type '(unsigned-byte 8))))
+               (unwind-protect
+                    (let ((stream (usocket:socket-stream client)))
+                      ;; Keep the connection open while the first response is
+                      ;; consumed.  This makes the assertion below sensitive
+                      ;; to response completion cleanup rather than the socket
+                      ;; close hook.
+                      (write-sequence
+                       (trivial-utf-8:string-to-utf-8-bytes
+                        (concatenate 'string
+                                     (woo-test::crlf-lines
+                                      "POST /spill HTTP/1.1" "Host: localhost"
+                                      "Content-Length: 4" "Connection: keep-alive" "")
+                                     "data"))
+                       stream)
+                      (force-output stream)
+                      (loop for line =
+                              (with-output-to-string (line)
+                                (loop for byte = (read-byte stream nil nil)
+                                      while byte
+                                      until (= byte 10)
+                                      unless (= byte 13)
+                                        do (write-char (code-char byte) line)))
+                            until (string= line ""))
+                      (dotimes (i 2) (read-byte stream nil nil))
+                      (ok (null (directory (merge-pathnames "*" dir))))
+                      (write-sequence
+                       (trivial-utf-8:string-to-utf-8-bytes
+                        (woo-test::crlf-lines "GET /next HTTP/1.1"
+                                              "Host: localhost"
+                                              "Connection: close" ""))
+                       stream)
+                      (force-output stream)
+                      (loop while (read-byte stream nil nil)))
+                 (ignore-errors (usocket:socket-close client)))))
            (ok saw-spill)
            (ok keepalive-seen)
            (ok (null (directory (merge-pathnames "*" dir))))

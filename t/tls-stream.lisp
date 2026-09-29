@@ -193,13 +193,19 @@
 
 (deftest tls-static-preparation-failures-are-wire-visible
   (testing "TLS pathname preparation reports missing, directory, EACCES, and length errors"
-    (let* ((missing (merge-pathnames "woo-tls-missing" (uiop:temporary-directory)))
+    (let* ((missing (merge-pathnames
+                     (format nil "woo-tls-missing-~36R" (random (expt 36 8)))
+                     (uiop:temporary-directory)))
            (directory (uiop:temporary-directory))
-           (private (merge-pathnames "woo-tls-private.txt" (uiop:temporary-directory)))
-           (mismatch (merge-pathnames "woo-tls-mismatch.txt" (uiop:temporary-directory))))
-      (with-open-file (out private :direction :output :if-exists :supersede)
+           (private (merge-pathnames
+                     (format nil "woo-tls-private-~36R.txt" (random (expt 36 8)))
+                     (uiop:temporary-directory)))
+           (mismatch (merge-pathnames
+                      (format nil "woo-tls-mismatch-~36R.txt" (random (expt 36 8)))
+                      (uiop:temporary-directory))))
+      (with-open-file (out private :direction :output :if-exists :error)
         (write-string "private" out))
-      (with-open-file (out mismatch :direction :output :if-exists :supersede)
+      (with-open-file (out mismatch :direction :output :if-exists :error)
         (write-string "mismatch" out))
       (unwind-protect
            (progn

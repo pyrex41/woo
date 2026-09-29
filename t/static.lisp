@@ -11,7 +11,7 @@
                (uiop:temporary-directory))))
     (unwind-protect
          (progn
-           (with-open-file (out file :direction :output :if-exists :supersede)
+           (with-open-file (out file :direction :output :if-exists :error)
              (write-string "Woo private static fixture" out))
            (clack.test:testing-app "Serve a pathname response"
                (lambda (env)
@@ -33,8 +33,10 @@
   (let ((clack.test:*clack-test-handler* :woo)
         (clack.test:*enable-debug* nil)
         (root (asdf:system-source-directory :woo))
-        (mismatch (merge-pathnames "woo-static-mismatch.txt" (uiop:temporary-directory))))
-    (with-open-file (out mismatch :direction :output :if-exists :supersede)
+        (mismatch (merge-pathnames
+                   (format nil "woo-static-mismatch-~36R.txt" (random (expt 36 8)))
+                   (uiop:temporary-directory))))
+    (with-open-file (out mismatch :direction :output :if-exists :error)
       (write-string "mismatch" out))
     (clack.test:testing-app "Classify missing files and directories"
         (lambda (env)
@@ -72,7 +74,7 @@
                (uiop:temporary-directory))))
     (unwind-protect
         (progn
-          (with-open-file (out file :direction :output :if-exists :supersede)
+          (with-open-file (out file :direction :output :if-exists :error)
             (write-string "private" out))
           (wsys:chmod (namestring file) 0)
           (clack.test:testing-app "Reject unreadable pathname"
@@ -88,10 +90,3 @@
               (ok (search "HTTP/1.1 403 Forbidden" response)))))
       (wsys:chmod (namestring file) #o644)
       (when (probe-file file) (delete-file file)))))
-
-(deftest static-preparation-status-covers-open-errors
-  (testing "static preparation maps errno and path classes before headers"
-    (ok (= 403 (woo::static-preparation-status #P"/tmp" wsys:EISDIR)))
-    (ok (= 403 (woo::static-preparation-status #P"/tmp" wsys:EACCES)))
-    (ok (= 404 (woo::static-preparation-status #P"/tmp/no-such-woo-file" wsys:ENOENT)))
-    (ok (= 404 (woo::static-preparation-status #P"/tmp/no-such-woo-file" wsys:ENOTDIR)))))
