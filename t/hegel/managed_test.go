@@ -435,8 +435,11 @@ func TestManagedBudgetAndCancellation(t *testing.T) {
 			}
 			response, err := lane.client.Do(request)
 			if err == nil {
-				io.Copy(io.Discard, response.Body)
+				_, readErr := io.Copy(io.Discard, response.Body)
 				response.Body.Close()
+				if readErr != nil {
+					t.Fatal("oversize response did not finish:", readErr)
+				}
 				if response.StatusCode != http.StatusRequestEntityTooLarge {
 					t.Fatalf("oversize body admitted: %d", response.StatusCode)
 				}
