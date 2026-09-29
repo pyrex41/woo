@@ -57,11 +57,13 @@
 
 (cffi:defcallback worker-stop :void ((evloop :pointer) (listener :pointer) (events :int))
   (declare (ignore listener events))
-  ;; Close existing all sockets.
-  (maphash (lambda (fd socket)
-             (declare (ignore fd))
-             (wev:close-socket socket))
-           wev:*data-registry*)
+  ;; CLOSE-SOCKET removes its descriptor from *DATA-REGISTRY*, so snapshot
+  ;; before walking it. Mutating a hash table during MAPHASH is undefined and
+  ;; can leave accepted sockets open during graceful worker shutdown.
+  (let ((sockets (loop for socket being the hash-values of wev:*data-registry*
+                       collect socket)))
+    (dolist (socket sockets)
+      (wev:close-socket socket)))
 
   ;; Stop all events.
   (lev:ev-break evloop lev:+EVBREAK-ALL+))

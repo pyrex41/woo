@@ -18,17 +18,20 @@
     (3 . sigquit-cb)
     (15 . sigint-cb)))
 
+(defun close-connected-sockets ()
+  ;; CLOSE-SOCKET removes entries from *DATA-REGISTRY*. Walk a snapshot so
+  ;; signal shutdown closes every accepted connection.
+  (dolist (socket (loop for socket being the hash-values of wev:*data-registry*
+                        collect socket))
+    (wev:close-socket socket)))
+
 (cffi:defcallback sigquit-cb :void ((evloop :pointer) (signal :pointer) (events :int))
   (declare (ignore signal events))
   (vom:info "Terminating quiet workers...")
   (lev:ev-io-stop evloop *listener*)
   (if *cluster*
       (woo.worker:stop-cluster *cluster*)
-      ;; Close existing all sockets for singlethreaded process.
-      (maphash (lambda (fd socket)
-                 (declare (ignore fd))
-                 (wev:close-socket socket))
-               wev:*data-registry*))
+      (close-connected-sockets))
   (lev:ev-break evloop lev:+EVBREAK-ALL+))
 
 (cffi:defcallback sigint-cb :void ((evloop :pointer) (signal :pointer) (events :int))
@@ -37,10 +40,7 @@
   (lev:ev-io-stop evloop *listener*)
   (if *cluster*
       (woo.worker:kill-cluster *cluster*)
-      (maphash (lambda (fd socket)
-                 (declare (ignore fd))
-                 (wev:close-socket socket))
-               wev:*data-registry*))
+      (close-connected-sockets))
   (lev:ev-break evloop lev:+EVBREAK-ALL+))
 
 (defun make-signal-watchers ()
