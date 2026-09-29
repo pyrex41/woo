@@ -46,3 +46,14 @@
   :perform (test-op (op c)
              (unless (symbol-call '#:rove '#:run c)
                (error "Woo test gate failed"))))
+
+;; Showcase code is an explicit optional gate, separate from protocol tests.
+(defsystem "woo-test/showcase"
+  :depends-on ("woo-test")
+  :components
+  ((:file "showcase-limits" :pathname "showcase/src/limits")
+   (:file "t/showcase" :depends-on ("showcase-limits"))
+   (:file "t/showcase-e2e" :depends-on ("t/showcase")))
+  :perform (test-op (op c)
+             (unless (symbol-call '#:rove '#:run c)
+               (error "Woo showcase test gate failed"))))
