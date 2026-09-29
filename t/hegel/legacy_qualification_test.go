@@ -296,6 +296,7 @@ func TestLegacyQualification(t *testing.T) {
 	deadline := time.Now().Add(duration)
 	cycles := 0
 	started := time.Now()
+	fmt.Fprintln(os.Stdout, "LEGACY_PHASE soak-start")
 	for time.Now().Before(deadline) {
 		for name, client := range clients {
 			base := "http://" + plain
@@ -338,6 +339,7 @@ func TestLegacyQualification(t *testing.T) {
 		cycles++
 	}
 	soakElapsed := time.Since(started).Seconds()
+	fmt.Fprintln(os.Stdout, "LEGACY_PHASE soak-end")
 	assertSpoolEmpty(t)
 	stopLegacy(t, plain)
 	for i := 0; i < 30; i++ {

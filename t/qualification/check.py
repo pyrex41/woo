@@ -116,6 +116,12 @@ def run(command, env, log, timeout, sample_resources=True):
         peak_rss = 0
         samples = []
         last_sample = 0.0
+        started = time.monotonic()
+        phase = 'bootstrap'
+        log_offset = 0
+        marker_buffer = b''
+        saw_start = False
+        saw_end = False
         try:
             deadline = time.monotonic() + timeout
             while process.poll() is None:
@@ -128,7 +134,26 @@ def run(command, env, log, timeout, sample_resources=True):
                         if process.poll() is not None:
                             break
                         raise
-                    samples.append({'rss_bytes': rss, 'fd_count': fds})
+                    with log.open('rb') as stream:
+                        stream.seek(log_offset)
+                        marker = stream.read()
+                        log_offset = stream.tell()
+                    marker_buffer += marker
+                    start_at = marker_buffer.find(b'LEGACY_PHASE soak-start')
+                    end_at = marker_buffer.find(b'LEGACY_PHASE soak-end')
+                    if not saw_start and start_at >= 0:
+                        if phase != 'bootstrap':
+                            raise RuntimeError('legacy phase markers out of order')
+                        saw_start = True
+                        phase = 'soak'
+                    if not saw_end and end_at >= 0:
+                        if not saw_start or (start_at >= 0 and end_at < start_at):
+                            raise RuntimeError('legacy phase skipped soak-start marker')
+                        saw_end = True
+                        phase = 'post-soak'
+                    marker_buffer = marker_buffer[-64:]
+                    samples.append({'phase': phase, 'elapsed_seconds': time.monotonic() - started,
+                                    'rss_bytes': rss, 'fd_count': fds})
                     peak_rss = max(peak_rss, rss)
                     last_sample = time.monotonic()
                 time.sleep(.2)
@@ -149,11 +174,34 @@ def apply_private_clack_patch(dependencies):
         if result.returncode:
             raise RuntimeError('private Clack integration patch did not apply:\n' + result.stdout.decode(errors='replace'))
 
-def verify_receipt(path):
-    receipt = json.loads(path.read_text())
-    current = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    expected = json.loads((ROOT / 't/compat/dependencies.json').read_text())
-    if not (receipt.get('status') == 'PASS' and receipt.get('head') == current
+def resource_phase_ok(receipt):
+    phases = receipt.get('resource_phases')
+    if not isinstance(phases, dict): return False
+    phase = phases.get('soak')
+    if not isinstance(phase, dict): return False
+    samples = receipt.get('resource_samples')
+    if not isinstance(samples, list): return False
+    soak_samples = [sample for sample in samples
+                    if isinstance(sample, dict) and sample.get('phase') == 'soak']
+    baseline, final = phase.get('baseline'), phase.get('final')
+    if not isinstance(baseline, dict) or not isinstance(final, dict): return False
+    if phase.get('sample_count') != len(soak_samples) or len(soak_samples) < 2: return False
+    if baseline != soak_samples[0] or final != soak_samples[-1]: return False
+    duration = final.get('elapsed_seconds', 0) - baseline.get('elapsed_seconds', 0)
+    if phase.get('duration_seconds') != duration: return False
+    return (phase.get('sample_count', 0) >= 2
+            and isinstance(baseline.get('rss_bytes'), int) and baseline['rss_bytes'] > 0
+            and isinstance(final.get('rss_bytes'), int) and final['rss_bytes'] > 0
+            and isinstance(baseline.get('fd_count'), int) and baseline['fd_count'] > 0
+            and isinstance(final.get('fd_count'), int) and final['fd_count'] > 0
+            and final['fd_count'] <= baseline['fd_count'] + 64
+            and final['rss_bytes'] <= baseline['rss_bytes'] + 64 * 1024 * 1024)
+
+def receipt_qualifies(receipt, current, expected):
+    samples = receipt.get('resource_samples')
+    phases = [sample.get('phase') for sample in samples] if isinstance(samples, list) else []
+    phase_rank = {'bootstrap': 0, 'soak': 1, 'post-soak': 2}
+    return (receipt.get('status') == 'PASS' and receipt.get('head') == current
             and receipt.get('source_digest') == source_digest()
             and not receipt.get('source_changed')
             and receipt.get('soak_seconds') == 1800
@@ -169,15 +217,27 @@ def verify_receipt(path):
             and receipt.get('process_group_cleanup') == 'PASS'
             and receipt.get('socket_cleanup') == 'PASS'
             and receipt.get('spool_cleanup') == 'PASS'
-            and len(receipt.get('resource_samples', [])) >= 10
-            and all(isinstance(sample.get('rss_bytes'), int) and not isinstance(sample.get('rss_bytes'), bool)
+            and isinstance(samples, list) and len(samples) >= 10
+            and all(phase in phase_rank for phase in phases)
+            and phases == sorted(phases, key=phase_rank.get)
+            and phases[:1] == ['bootstrap']
+            and phases[-1:] == ['post-soak']
+            and phases.count('soak') >= 10
+            and resource_phase_ok(receipt)
+            and receipt['resource_phases']['soak']['duration_seconds'] >= 1790
+            and all(isinstance(sample, dict)
+                    and isinstance(sample.get('rss_bytes'), int) and not isinstance(sample.get('rss_bytes'), bool)
                     and sample['rss_bytes'] > 0
                     and isinstance(sample.get('fd_count'), int) and not isinstance(sample.get('fd_count'), bool)
-                    and sample['fd_count'] > 0 for sample in receipt['resource_samples'])
-            and receipt['resource_samples'][-1].get('fd_count', 0) <= receipt['resource_samples'][0].get('fd_count', 0) + 64
-            and receipt['resource_samples'][-1].get('rss_bytes', 0) <= receipt['resource_samples'][0].get('rss_bytes', 0) + 64 * 1024 * 1024
-            and max((sample.get('rss_bytes', 0) for sample in receipt['resource_samples']), default=0) <= 1024 * 1024 * 1024
-            and max((sample.get('fd_count', 0) for sample in receipt['resource_samples']), default=0) <= 4096):
+                    and sample['fd_count'] > 0 for sample in samples)
+            and max((sample.get('rss_bytes', 0) for sample in samples), default=0) <= 1024 * 1024 * 1024
+            and max((sample.get('fd_count', 0) for sample in samples), default=0) <= 4096)
+
+def verify_receipt(path):
+    receipt = json.loads(path.read_text())
+    current = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    expected = json.loads((ROOT / 't/compat/dependencies.json').read_text())
+    if not receipt_qualifies(receipt, current, expected):
         raise RuntimeError('receipt does not qualify the current exact source and full legacy gate')
     print('PASS: current source, pinned dependencies, full legacy soak and cleanup')
 
@@ -251,6 +311,15 @@ def main():
     try:
         receipt['peak_rss_bytes'], receipt['resource_samples'] = run(['go', '-C', 't/hegel', 'test', '-v', '-count=1', '-run', '^TestLegacyQualification$', '-timeout', f'{args.soak_seconds + 300}s'],
             env, args.artifacts/'legacy.log', args.soak_seconds + 300)
+        soak_samples = [sample for sample in receipt['resource_samples'] if sample.get('phase') == 'soak']
+        receipt['resource_phases'] = {'soak': {'sample_count': len(soak_samples),
+                                               'baseline': soak_samples[0] if soak_samples else {},
+                                               'final': soak_samples[-1] if soak_samples else {},
+                                               'duration_seconds': ((soak_samples[-1].get('elapsed_seconds', 0) -
+                                                                     soak_samples[0].get('elapsed_seconds', 0))
+                                                                    if len(soak_samples) >= 2 else 0)}}
+        if args.soak_seconds == 1800 and not resource_phase_ok(receipt):
+            raise RuntimeError('full receipt lacks bounded phase-bound soak resource evidence')
         receipt['gates']['legacy_http_https_static_upload_disconnect'] = 'PASS'
         if not result.exists(): raise RuntimeError('qualification result is missing')
         result_data = json.loads(result.read_text())
@@ -279,6 +348,14 @@ def main():
             receipt['cleanup'] = 'UNKNOWN'
             receipt['status'] = 'UNKNOWN'
             receipt['failure'] = 'private dependency cleanup failed: ' + str(cleanup_error)
+        if succeeded and receipt['cleanup'] == 'PASS':
+            receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
+            if args.soak_seconds == 1800:
+                expected = json.loads((ROOT / 't/compat/dependencies.json').read_text())
+                current = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+                if not receipt_qualifies(receipt, current, expected):
+                    receipt['status'] = 'UNKNOWN'
+                    receipt['failure'] = 'writer rejected receipt: full qualification predicate failed'
         (args.artifacts/'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     if receipt['status'] not in ('PASS', 'DIAGNOSTIC_PASS'): raise RuntimeError('invalid qualification receipt')
 

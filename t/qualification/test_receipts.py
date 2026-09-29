@@ -44,7 +44,15 @@ class ReceiptTests(unittest.TestCase):
                        'soak_elapsed_seconds':1801,
                        'dependencies':json.loads((check.ROOT / 't/compat/dependencies.json').read_text()),
                        'clack_patch_sha256':hashlib.sha256(check.PATCH.read_bytes()).hexdigest(),
-                       'peak_rss_bytes':1024,'resource_samples':[{'rss_bytes':1024,'fd_count':3}]*10,
+                       'peak_rss_bytes':1024,
+                       'resource_samples':([{'phase':'bootstrap','elapsed_seconds':0,'rss_bytes':1024,'fd_count':3}] +
+                                           [{'phase':'soak','elapsed_seconds':elapsed,'rss_bytes':1024,'fd_count':3}
+                                            for elapsed in list(range(1, 1800, 150)) + [1791]] +
+                                           [{'phase':'post-soak','elapsed_seconds':1801,'rss_bytes':1024,'fd_count':3}]),
+                       'resource_phases':{'soak':{'sample_count':13,
+                                                   'baseline':{'phase':'soak','elapsed_seconds':1,'rss_bytes':1024,'fd_count':3},
+                                                   'final':{'phase':'soak','elapsed_seconds':1791,'rss_bytes':1024,'fd_count':3},
+                                                   'duration_seconds':1790}},
                        'gates':{'legacy_http_https_static_upload_disconnect':'PASS'},
                        'process_group_cleanup':'PASS','socket_cleanup':'PASS','spool_cleanup':'PASS'}
             path.write_text(json.dumps(receipt))
@@ -55,6 +63,11 @@ class ReceiptTests(unittest.TestCase):
                            {'soak_elapsed_seconds':20}, {'cleanup':'UNKNOWN'}, {'status':'DIAGNOSTIC_PASS'},
                            {'lifecycle_cycles':0}, {'resource_samples':[]}, {'dependencies':{}},
                            {'gates':{}}, {'source_changed':True},
+                           {'resource_phases':{}},
+                           {'resource_phases':{'soak': []}},
+                           {'resource_phases':{'soak':{'sample_count':2,
+                                                       'baseline':{'rss_bytes':1024,'fd_count':3},
+                                                       'final':{'rss_bytes':100 * 1024 * 1024,'fd_count':3}}}},
                            {'resource_samples':[{'rss_bytes':0,'fd_count':3}]*10},
                            {'resource_samples':[{'rss_bytes':1024,'fd_count':0}]*10},
                            {'resource_samples':[{'rss_bytes':1024,'fd_count':3},
@@ -63,5 +76,14 @@ class ReceiptTests(unittest.TestCase):
                 with patch.object(check, 'source_digest', return_value='current'), \
                      patch.object(check.subprocess, 'check_output', return_value='current\n'):
                     with self.assertRaises(RuntimeError): check.verify_receipt(path)
+            growth = copy.deepcopy(receipt)
+            soak_indexes = [index for index, sample in enumerate(growth['resource_samples'])
+                            if sample['phase'] == 'soak']
+            growth['resource_samples'][soak_indexes[-1]]['rss_bytes'] += 65 * 1024 * 1024
+            growth['resource_phases']['soak']['final'] = growth['resource_samples'][soak_indexes[-1]]
+            path.write_text(json.dumps(growth))
+            with patch.object(check, 'source_digest', return_value='current'), \
+                 patch.object(check.subprocess, 'check_output', return_value='current\n'):
+                with self.assertRaises(RuntimeError): check.verify_receipt(path)
 
 if __name__ == '__main__': unittest.main()
