@@ -18,7 +18,7 @@ jobs:
         run: sh ./t/generate-certificates.sh
       - name: Install Roswell
         env:
-          LISP: ${{ matrix.lisp }}
+          LISP: sbcl-bin/2.6.9
           ROSWELL_INSTALL_DIR: /usr
         run: |
           installer="$RUNNER_TEMP/roswell-install-for-ci-v26.02.116.sh"
@@ -29,6 +29,8 @@ jobs:
             'dc9cf97b20537f13b221a5a5a91761562bcc440f333566be1f455d36551fa693' \
             "$installer" | sha256sum --check --strict
           ROSWELL_BRANCH=v26.02.116 sh "$installer"
+          # The tagged installer downloads this archive during installation;
+          # verify the exact archive left after that build as provenance.
           printf '%s  %s\n' \
             'edece1aa4a807ee36f44061aa802354c722cb5bd80b5056b19aa982c14709a6c' \
             "$HOME/roswell.tar.gz" | sha256sum --check --strict
