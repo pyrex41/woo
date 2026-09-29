@@ -632,15 +632,22 @@ This intentionally yields between reads so a TLS writer must survive a slow peer
     (let* ((root (cert-path "chain-root.crt"))
            (intermediate (cert-path "chain-intermediate.crt"))
            (leaf (cert-path "chain-leaf.crt"))
-           (ok (uiop:run-program (list "openssl" "verify" "-CAfile"
-                                       (namestring root) "-untrusted"
-                                       (namestring intermediate) (namestring leaf))
-                                 :ignore-error-status t :output :string))
-           (missing (uiop:run-program (list "openssl" "verify" "-CAfile"
-                                            (namestring root) (namestring leaf))
-                                      :ignore-error-status t :output :string)))
-      (ok (search "OK" ok) ok)
-      (ok (not (search "OK" missing)) missing))))
+           (ok (multiple-value-list
+                (uiop:run-program (list "openssl" "verify" "-CAfile"
+                                        (namestring root) "-untrusted"
+                                        (namestring intermediate) (namestring leaf))
+                                  :ignore-error-status t :output :string
+                                  :error-output :string)))
+           (missing (multiple-value-list
+                     (uiop:run-program (list "openssl" "verify" "-CAfile"
+                                             (namestring root) (namestring leaf))
+                                       :ignore-error-status t :output :string
+                                       :error-output :string))))
+      (ok (= (third ok) 0) ok)
+      (ok (search "OK" (first ok)) ok)
+      (ok (= (third missing) 2) missing)
+      (ok (search "unable to get local issuer certificate" (second missing))
+          missing))))
 
 (deftest test-two-listener-contexts-keep-alpn-local
   (testing "two listener contexts can carry different ALPN lists concurrently"
