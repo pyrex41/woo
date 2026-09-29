@@ -30,5 +30,8 @@ Existing source branches and failed receipts remain unchanged during diagnosis.
   preserved, and qualification remains UNKNOWN until the validators pass.
 - Repeated native Linux stalls must be explained, not relabeled by a retry.
 - Passing workload tests alone do not establish cleanup or resource stability.
+- Memory results remain lane-specific: the legacy gate measures aggregate
+  owned-group RSS with a 64 MiB growth allowance; the managed Hegel gate measures
+  its fixture process with a separate 256 MiB allowance.
 - Any changed runtime must pass both managed and legacy qualification at the
   final integrated head before those gates are marked satisfied.
