@@ -48,29 +48,39 @@
 (deftest spilled-body-files-are-removed-after-response-and-abort
   (let ((clack.test:*clack-test-handler* :woo)
         (clack.test:*enable-debug* nil)
-        (smart-buffer:*default-memory-limit* 1)
-        (smart-buffer:*default-disk-limit* 64)
-        (dir smart-buffer::*temporary-directory*))
-    (labels ((files () (directory (merge-pathnames "*" dir))))
-      (let ((before (length (files))))
-        (clack.test:testing-app "Remove spilled request body after response"
-            (lambda (env)
-              (declare (ignore env))
-              '(200 nil ("ok")))
-          (woo-test::raw-exchange
-           clack.test:*clack-test-port*
-           (woo-test::crlf-lines "POST /spill HTTP/1.1" "Host: localhost"
-                                 "Content-Length: 4" "")
-           "data"))
-        (ok (= before (length (files)))))
-      (let ((before (length (files))))
-        (clack.test:testing-app "Remove spilled request body after abort"
-            (lambda (env)
-              (declare (ignore env))
-              '(200 nil ("unexpected")))
-          (woo-test::raw-exchange
-           clack.test:*clack-test-port*
-           (woo-test::crlf-lines "POST /abort HTTP/1.1" "Host: localhost"
-                                 "Content-Length: 8" "")
-           "data"))
-        (ok (= before (length (files))))))))
+        (dir smart-buffer::*temporary-directory*)
+        (old-memory smart-buffer::*default-memory-limit*)
+        (old-disk smart-buffer::*default-disk-limit*)
+        (saw-spill nil))
+    (unwind-protect
+         (progn
+           ;; These are global defaults because the request parser runs in a
+           ;; worker thread; lexical bindings in this test thread do not cross
+           ;; that boundary.
+           (setf (symbol-value 'smart-buffer::*default-memory-limit*) 1
+                 (symbol-value 'smart-buffer::*default-disk-limit*) 64)
+           (clack.test:testing-app "Remove spilled request body after response"
+               (lambda (env)
+                 (let ((stream (getf env :raw-body)))
+                   (setf saw-spill (and (streamp stream)
+                                        (probe-file (pathname stream)))))
+                 '(200 nil ("ok")))
+             (woo-test::raw-exchange
+              clack.test:*clack-test-port*
+              (woo-test::crlf-lines "POST /spill HTTP/1.1" "Host: localhost"
+                                    "Content-Length: 4" "")
+              "data"))
+           (ok saw-spill)
+           (ok (null (directory (merge-pathnames "*" dir))))
+           (clack.test:testing-app "Remove spilled request body after abort"
+               (lambda (env)
+                 (declare (ignore env))
+                 '(200 nil ("unexpected")))
+             (woo-test::raw-exchange
+              clack.test:*clack-test-port*
+              (woo-test::crlf-lines "POST /abort HTTP/1.1" "Host: localhost"
+                                    "Content-Length: 8" "")
+              "data"))
+           (ok (null (directory (merge-pathnames "*" dir)))))
+      (setf (symbol-value 'smart-buffer::*default-memory-limit*) old-memory
+            (symbol-value 'smart-buffer::*default-disk-limit*) old-disk))))
