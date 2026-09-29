@@ -13,6 +13,7 @@
                 :socket-remote-addr
                 :socket-remote-port
                 :socket-data
+                :stop-reading-for-close
                 :close-socket
                 :write-socket-data
                 :write-socket-byte
@@ -43,6 +44,7 @@
            :graceful-close-socket
            :with-async-writing
            :socket-data
+           :stop-reading-for-close
            :close-socket
            :*buffer-size*
            :*connection-timeout*

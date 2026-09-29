@@ -54,6 +54,8 @@
            :socket-open-p
            :socket-ssl-handle
            :socket-tls-shutdown-p
+           :socket-input-rejected-p
+           :stop-reading-for-close
            :*ssl-write-function*
            :*ssl-read-function*
            :*ssl-error-function*
@@ -114,6 +116,10 @@
   body-memory-limit
   input-holder
   (input-paused-p nil)
+  ;; A rejected request may still have application bytes in the kernel/TLS
+  ;; input buffer.  Stop consuming them while the error response drains;
+  ;; TLS shutdown itself re-enables the watcher when it needs close_notify.
+  (input-rejected-p nil)
   ;; Incremented when a response starts writing headers. This lets error
   ;; handlers distinguish a pre-commit failure from a committed stream.
   (response-generation 0 :type fixnum)
@@ -229,12 +235,20 @@
           (socket-pending-write-data socket) nil
           (socket-tls-shutdown-p socket) nil
           (socket-tls-close-after-drain-p socket) nil
+          (socket-input-rejected-p socket) nil
           (socket-data socket) nil)
     (let ((sendfile-fd (socket-sendfile-fd socket)))
       (when sendfile-fd
         (wsys:close sendfile-fd)
         (setf (socket-sendfile-fd socket) nil))))
   t)
+
+(defun stop-reading-for-close (socket)
+  "Stop application reads while a terminal response is being drained."
+  (when (socket-open-p socket)
+    (setf (socket-input-rejected-p socket) t)
+    (lev:ev-io-stop *evloop* (socket-read-watcher socket)))
+  socket)
 
 (defun tls-shutdown-step (socket)
   "Advance a nonblocking TLS close_notify, or abort at its deadline."
