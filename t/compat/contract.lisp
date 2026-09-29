@@ -22,6 +22,11 @@
         when (funcall predicate state) return state
         when (> (woo.compat::now) deadline) do (error "State did not converge: ~S" state)
         do (sleep 0.01)))
+(defun await-closed-stream (stream)
+  (loop repeat 500
+        when (and stream (not (open-stream-p stream))) return t
+        do (sleep 0.01)
+        finally (return nil)))
 (defun env (&optional (cookie ""))
   (let ((h (make-hash-table :test 'equal)))
     (setf (gethash "accept" h) "*/*" (gethash "cookie" h) cookie)
@@ -91,7 +96,10 @@
                          (when (equal body file) (setf captured stream))))
                  (multiple-value-bind (body status) (get-body/status port "/mismatch")
                    (declare (ignore body)) (ok (= status 500)))
-                 (ok (not (open-stream-p captured))))
+                 ;; The response can reach the client before the worker's
+                 ;; unwind-protect closes the prepared stream. Poll the
+                 ;; ownership boundary instead of racing that cleanup.
+                 (ok (await-closed-stream captured)))
             (setf woo.compat::*pathname-body-prepared-hook* old-hook)))
         ;; Root can bypass mode bits, so this assertion is intentionally only
         ;; run by a non-root test process. It exercises the actual open(2)
@@ -143,7 +151,7 @@
              (setf allow-rename t)
              (ok (string= (get-body port) "original"))
              (ok hook-ran)
-             (ok (not (open-stream-p captured-stream))))
+             (ok (await-closed-stream captured-stream)))
         (setf woo.compat::*pathname-body-prepared-hook* old-hook)
         (ignore-errors (uiop:delete-directory-tree root :validate t :if-does-not-exist :ignore)))))))
 
