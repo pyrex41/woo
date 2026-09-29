@@ -25,6 +25,19 @@
                 :get-negotiated-protocol
                 :*alpn-protocols*
                 :configure-alpn)
+  (:import-from :woo.websocket
+                :websocket-p
+                :compute-accept-key
+                :setup-websocket
+                :send-text-frame
+                :send-binary-frame
+                :send-ping
+                :send-pong
+                :send-close
+                :write-websocket-upgrade-response
+                :socket-upgraded-p
+                :feed-websocket-data
+                :take-pending-websocket-data)
   (:import-from :woo.http2.clack
                 :make-http2-app-handler)
   (:import-from :woo.http2.constants
@@ -72,6 +85,16 @@
            :*connection-timeout*
            :*default-backlog-size*
            :*default-worker-num*
+           ;; WebSocket exports
+           :websocket-p
+           :compute-accept-key
+           :setup-websocket
+           :send-text-frame
+           :send-binary-frame
+           :send-ping
+           :send-pong
+           :send-close
+           :write-websocket-upgrade-response
            ;; SSL/ALPN exports
            #-woo-no-ssl :*alpn-protocols*
            #-woo-no-ssl :configure-alpn
@@ -345,7 +368,7 @@ SERVER may be the listener or the thread running WOO:RUN."
         #-woo-no-ssl
         (when ssl-context (woo.ssl:free-context ssl-context))))))
 
-(defun respond-and-close (socket status message &optional head-p)
+(defun respond-and-close (socket status message)
   (setf (wev:socket-data socket)
         (lambda (data &key start end)
           (declare (ignore data start end))))
@@ -353,24 +376,31 @@ SERVER may be the listener or the thread running WOO:RUN."
     (wev:with-async-writing (socket :write-cb #'wev:graceful-close-socket)
       (write-response-headers socket status
                               (list :connection "close"
-                                    :content-length (if head-p 0 (length body))))
-      (unless head-p
-        (wev:write-socket-data socket body)))))
+                                    :content-length (length body)))
+      (wev:write-socket-data socket body))))
 
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
     (block read
       (handler-bind (((or fast-http:cb-headers-complete fast-http:cb-body)
                       (lambda (condition)
-                        (let ((cause (slot-value condition 'error)))
+                        (let ((cause (slot-value condition 'fast-http.error::error)))
                           (when (typep cause 'buffer-limit-exceeded)
-                            (respond-and-close socket 413 "413 Request Entity Too Large")
+                            (vom:error "~A" cause)
+                            (respond-and-close socket 413
+                                                "413 Request Entity Too Large")
                             (return-from read nil))))))
         (handler-case (funcall parser data :start start :end end)
+          (woo.ev.condition:output-limit-exceeded () (wev:close-socket socket))
+          (request-body-limit-exceeded ()
+            (respond-and-close socket 413 "413 Request Entity Too Large"))
           (fast-http:parsing-error (e)
             (vom:error "HTTP parse error: ~A" e)
             (respond-and-close socket 400 "400 Bad Request")))))))
 
+(define-condition request-body-limit-exceeded (fast-http:fast-http-error) ()
+  (:report (lambda (condition stream) (declare (ignore condition))
+             (write-string "Request body admission limit exceeded" stream))))
 (define-condition woo-error (simple-error) ())
 (define-condition invalid-http-version (woo-error) ())
 
@@ -387,76 +417,393 @@ SERVER may be the listener or the thread running WOO:RUN."
     (0 :HTTP/1.0)
     (otherwise (error-invalid-http-version major minor))))
 
+(declaim (inline crlf-match-step))
+(defun crlf-match-step (match octet)
+  "The length of the CR LF CR LF prefix ending at OCTET, given the length
+   MATCH of the one before it."
+  (declare (type (integer 0 3) match)
+           (type (unsigned-byte 8) octet)
+           (optimize (speed 3) (safety 0)))
+  (cond ((= octet (if (evenp match) 13 10)) (1+ match))
+        ((= octet 13) 1)
+        (t 0)))
+
+(declaim (inline field-prefix-p))
+(defun field-prefix-p (data i end name)
+  "True if DATA[I..] starts with NAME (lower case, ending in #\:) in any
+   case, or with a prefix of it that the end of the read cuts off."
+  (declare (type (simple-array (unsigned-byte 8) (*)) data name)
+           (type fixnum i end)
+           (optimize (speed 3) (safety 0)))
+  ;; OR-ing #x20 folds ASCII upper case to lower; it leaves #\- and #\:.
+  (loop for k of-type fixnum from 0 below (length name)
+        do (cond ((>= (+ i k) end) (return t))
+                 ((/= (logior (aref data (+ i k)) #x20) (aref name k)) (return nil)))
+        finally (return t)))
+
+(defconstant +field-upgrade+ 1
+  "LINE-FIELD bit: an Upgrade field, the one fast-http flags.")
+(defconstant +field-body+ 2
+  "LINE-FIELD bit: a Content-Length or Transfer-Encoding field, the only
+   ones that give fast-http a request body.")
+
+(declaim (inline line-field))
+(defun line-field (data i end)
+  "LINE-FIELD bits for the header line starting at DATA[I]. A line the end
+   of the read cuts off may be either."
+  (declare (type (simple-array (unsigned-byte 8) (*)) data)
+           (type fixnum i end)
+           (optimize (speed 3) (safety 0)))
+  (if (>= i end)
+      (logior +field-upgrade+ +field-body+)
+      (macrolet ((octets (string)
+                   (map '(simple-array (unsigned-byte 8) (*)) #'char-code string)))
+        (case (logior (aref data i) #x20)
+          (#.(char-code #\u)
+           (if (field-prefix-p data i end (octets "upgrade:")) +field-upgrade+ 0))
+          (#.(char-code #\c)
+           (if (field-prefix-p data i end (octets "content-length:")) +field-body+ 0))
+          (#.(char-code #\t)
+           (if (field-prefix-p data i end (octets "transfer-encoding:")) +field-body+ 0))
+          (otherwise 0)))))
+
+(defun find-header-end (data start end match)
+  "Scan DATA[START:END] for the CR LF CR LF that ends a header block. MATCH
+   is the length of a prefix of it ending just before START (from the
+   previous read). Values: the index after the CR LF CR LF, or END; the
+   prefix length there (2 after a match: its CR LF can begin the next);
+   whether it was found; and the LINE-FIELD bits of the lines scanned."
+  (declare (type (simple-array (unsigned-byte 8) (*)) data)
+           (type fixnum start end)
+           (type (integer 0 3) match)
+           (optimize (speed 3) (safety 0)))
+  (let ((i start)
+        (fields 0))
+    (declare (type fixnum i fields))
+    (loop
+      (cond
+        ((and (zerop match) (< (+ i 3) end))
+         ;; Fast path: find the next CR and look at what follows it.
+         (loop while (and (< i end) (/= (aref data i) 13))
+               do (incf i))
+         (cond
+           ((>= (+ i 3) end))           ; near the end: take the slow path
+           ((/= (aref data (+ i 1)) 10)
+            (incf i))
+           ((and (= (aref data (+ i 2)) 13) (= (aref data (+ i 3)) 10))
+            (return (values (+ i 4) 2 t fields)))
+           (t
+            (incf i 2)
+            (setq fields (logior fields (line-field data i end))))))
+        ((>= i end)
+         (return (values end match nil fields)))
+        (t
+         ;; Octet by octet: a match carried over, or the last 3 octets.
+         (let ((next (crlf-match-step match (aref data i))))
+           (incf i)
+           (case next
+             (4 (return (values i 2 t fields)))
+             (2 (setq fields (logior fields (line-field data i end)))))
+           (setq match next)))))))
+
+(defun crlf-match-after (data start end match)
+  "The CR LF CR LF prefix length at END, having skipped DATA[START:END]
+   unscanned with MATCH at START. It depends only on the last 3 octets."
+  (declare (type (simple-array (unsigned-byte 8) (*)) data)
+           (type fixnum start end)
+           (type (integer 0 3) match)
+           (optimize (speed 3) (safety 0)))
+  (let ((m (if (>= (- end start) 3) 0 match)))
+    (declare (type (integer 0 4) m))
+    (loop for i of-type fixnum from (max start (- end 3)) below end
+          do (setq m (crlf-match-step (if (= m 4) 2 m) (aref data i))))
+    (if (= m 4) 2 m)))
+
+(defun make-request-body-buffer (socket)
+  (let ((limit (woo.ev.socket::socket-body-memory-limit socket)))
+    (if limit
+        (make-smart-buffer
+         :memory-limit (min limit smart-buffer:*default-memory-limit*)
+         :disk-limit limit)
+        (make-smart-buffer))))
+
 (defun setup-parser (socket)
+  ;; A request with an Upgrade header may be followed, in the same read, by
+  ;; octets of the new protocol: a WebSocket client need not wait for the
+  ;; 101. fast-http stops at the end of such a request but does not say
+  ;; where that is. So the reader scans request heads (never bodies) for
+  ;; the CR LF CR LF that ends each and for the fields that matter: an
+  ;; upgrade request is fed only up to the end of its head, or of its
+  ;; Content-Length body. Bodiless requests before it go in the same piece;
+  ;; a fixed-length body is cut at its end so the next request can be
+  ;; scanned. Chunked bodies cannot be cut without parsing their trailers;
+  ;; an upgrade pipelined behind one in the same read is still handled by
+  ;; fast-http alone. Once the application has upgraded the
+  ;; socket, or is still deciding (a delayed response), the rest of the read
+  ;; and every later one go to FEED-WEBSOCKET-DATA, never to fast-http.
   (let ((http (make-http-request))
-        (body-buffer (make-smart-buffer)))
-    (push (lambda ()
-            (unless (smart-buffer::buffer-on-memory-p body-buffer)
-              (ignore-errors
-                (let ((raw-body (finalize-buffer body-buffer)))
-                  (ignore-errors (close raw-body))
-                  (ignore-errors (delete-stream-file raw-body))))))
-          (woo.ev.socket::socket-close-hooks socket))
-    (setf (wev:socket-data socket)
-          (make-parser http
-                       :header-callback
-                       (lambda (headers)
-                         (let ((length (gethash "content-length" headers)))
-                           (when (and length (integer-string-p length)
-                                      (> (parse-integer length) *default-disk-limit*))
-                             (error 'buffer-limit-exceeded))))
-                       :body-callback
-                       (lambda (data start end)
-                         (declare (type (simple-array (unsigned-byte 8) (*)) data))
-                         (if (smart-buffer::buffer-on-memory-p body-buffer)
-                             (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
-                             (write-to-buffer body-buffer data start end)))
-                       :finish-callback
-                       (flet ((main (env cleanup)
-                                (handle-response http socket
-                                                 (if *debug*
-                                                     (funcall *app* env)
-                                                     (if-let (res (handler-case (funcall *app* env)
-                                                                    (error (error)
-                                                                      (vom:error (princ-to-string error))
-                                                                      nil)))
-                                                             res
-                                                             '(500 nil nil)))
-                                                 cleanup (eq (http-method http) :head))))
+        (body-buffer (make-request-body-buffer socket))
+        (body-streams nil)
+        ;; The request being parsed carries an Upgrade header.
+        (upgrade-request nil)
+        ;; The piece being parsed ends at the end of an Upgrade request's
+        ;; head, so a head completing in it completes at its end.
+        (aligned nil)
+        ;; LINE-FIELD bits of the head being scanned, so far.
+        (head-fields 0)
+        ;; A request with an Upgrade header has been answered.
+        (upgrade-seen nil)
+        ;; An upgrade request's delayed response has not been given yet.
+        (response-pending nil)
+        ;; Octets are being held for WebSocket while RESPONSE-PENDING.
+        (holding nil)
+        ;; Length of the CR LF CR LF prefix that ends the octets read.
+        (crlf-match 0)
+        ;; Remaining bytes in the current fixed-length body. This is kept
+        ;; separately from FAST-HTTP's mutable content-length slot because the
+        ;; reader may split one socket read across the body and next request.
+        (body-remaining nil)
+        parser
+        reader
+        (request-completed nil))
+    (declare (type (integer 0 3) crlf-match)
+             (type fixnum head-fields))
+    (labels ((release-body (stream)
+               (setf body-streams (delete stream body-streams :test #'eq))
+               (unwind-protect
+                    (ignore-errors (close stream))
+                 (ignore-errors (delete-stream-file stream))))
+             (cleanup-open-buffer (buffer)
+               (unless (buffer-on-memory-p buffer)
+                 (ignore-errors
+                  (let ((stream (finalize-buffer buffer)))
+                    (release-body stream)))))
+             (next-split (data start end)
+               ;; The end of the next piece to feed fast-http. Second value:
+               ;; true if octets after a completed head go in unscanned.
+               (declare (type (simple-array (unsigned-byte 8) (*)) data)
+                        (type fixnum start end))
+               (let ((state (fast-http.http:http-state http)))
+                 (cond
+                   ((or (= state fast-http.http:+state-first-line+)
+                        (= state fast-http.http:+state-headers+))
+                    ;; Scan heads while their requests have no body: a run of
+                    ;; pipelined GETs is one piece, up to and including an
+                    ;; upgrade request's head.
+                    (let ((pos start))
+                      (declare (type fixnum pos))
+                      (loop
+                        (multiple-value-bind (split match found fields)
+                            (find-header-end data pos end crlf-match)
+                          (declare (type fixnum split fields))
+                          (setq crlf-match match
+                                head-fields (logior head-fields fields))
+                          (cond
+                            ((not found)
+                             (setq aligned nil)
+                             (return end))
+                            ((logtest head-fields +field-upgrade+)
+                             ;; Stop at the end of this head: what follows
+                             ;; may belong to the new protocol.
+                             (setq head-fields 0
+                                   aligned t)
+                             (return split))
+                            ((logtest head-fields +field-body+)
+                             ;; Feed the head separately so fast-http tells
+                             ;; us whether the body has a fixed length. Never
+                             ;; scan the body for what looks like headers.
+                             (setq head-fields 0
+                                   aligned t)
+                             (return split))
+                            ((or (= split end) (woo.ev.socket::socket-body-admitter socket))
+                             (setq head-fields 0
+                                   aligned nil)
+                             (return split))
+                            (t
+                             (setq head-fields 0
+                                   pos split)))))))
+                   (t
+                    ;; A body is never scanned. Cut a fixed-length body at
+                    ;; its end, then scan the next request's head.
+                    (setq aligned nil)
+                    (let* ((n body-remaining)
+                           (split (if (and (= state fast-http.http:+state-body+)
+                                           (typep n 'fixnum)
+                                           (plusp n))
+                                      (min end (+ start n))
+                                      (if (woo.ev.socket::socket-body-admitter socket)
+                                          (min end (1+ start)) end))))
+                      (declare (type fixnum split))
+                      (setq crlf-match (crlf-match-after data start split crlf-match))
+                      (values split (and (= split end)
+                                         (http-chunked-p http))))))))
+             (hold-for-websocket (data start end)
+               ;; From now on reads are buffered until SETUP-WEBSOCKET
+               ;; installs its reader (or, if it already has, parsed by it).
+               (when (eq (wev:socket-data socket) reader)
+                 (setf (wev:socket-data socket)
+                       (lambda (data &key (start 0) (end (length data)))
+                         (feed-websocket-data socket data :start start :end end))))
+               (setq holding (not (socket-upgraded-p socket)))
+               (feed-websocket-data socket data :start start :end end))
+             (resume-http ()
+               ;; A delayed response declined the upgrade: the held octets
+               ;; are HTTP after all.
+               (when (and holding
+                          (not (socket-upgraded-p socket))
+                          (woo.ev.socket:socket-open-p socket))
+                 (setq holding nil)
+                 (let ((held (take-pending-websocket-data socket)))
+                   (setf (wev:socket-data socket) reader)
+                   (when held
+                     (read-cb socket held)))))
+             (watch-response (upgrading res)
+               (if (and upgrading (functionp res))
+                   (progn
+                     (setq response-pending t)
+                     (lambda (responder)
+                       (funcall res
+                                (lambda (clack-res)
+                                  (setq response-pending nil)
+                                  (prog1 (funcall responder clack-res)
+                                    (resume-http))))))
+                   res)))
+      (setq parser
+            (make-parser http
+                         :first-line-callback
                          (lambda ()
-                           (block result
-                             (let ((raw-body (finalize-buffer body-buffer)))
-                               (setq body-buffer (make-smart-buffer))
-                               (handler-bind
-                                   ((error ;; handle errors inside woo
-                                      (lambda (e)
-                                        (unless *debug*
-                                          (vom:crit (princ-to-string e))
-                                          (ignore-errors (close raw-body))
-                                          (ignore-errors (delete-stream-file raw-body))
-                                          (return-from result (handle-response http socket '(500 nil nil)))))))
-                                 (let ((env (nconc (list :raw-body raw-body)
-                                                   (handle-request http socket))))
-                                   (let ((body raw-body)
-                                         (cleaned nil))
-                                     (labels ((cleanup-body ()
-                                                (unless cleaned
-                                                  (setf cleaned t)
-                                                  (when body
-                                                    (ignore-errors (close body))
-                                                    (ignore-errors (delete-stream-file body))
-                                                    (setf body nil)))))
-                                       ;; A peer abort can close the socket
-                                       ;; before an async response callback runs.
-                                       ;; Keep this hook idempotent and clear
-                                       ;; BODY after cleanup so keep-alive
-                                       ;; connections do not retain streams.
-                                       (push #'cleanup-body
-                                             (woo.ev.socket::socket-close-hooks socket))
-                                       (main env #'cleanup-body)))))))))))))
+                           ;; fast-http retains these fields between messages.
+                           (setf (http-content-length http) nil
+                                 (http-chunked-p http) nil
+                                 body-remaining nil))
+                         :header-callback
+                         (lambda (headers)
+                           (let ((content-length (or (http-content-length http)
+                                                     (gethash "content-length" headers))))
+                             (when (and (stringp content-length)
+                                        (integer-string-p content-length))
+                               (setf content-length (parse-integer content-length)))
+                             (let ((limit (or (woo.ev.socket::socket-body-memory-limit socket)
+                                              *default-disk-limit*)))
+                               (when (and content-length (> content-length limit))
+                                 (error 'buffer-limit-exceeded :limit limit)))
+                             (setf body-remaining
+                                   (and (not (http-chunked-p http)) content-length)))
+                           (when (http-upgrade-p http)
+                             (setq upgrade-request t)
+                             ;; fast-http would take a Content-Length body for
+                             ;; the new protocol's first octets. Let it read the
+                             ;; body; NEXT-SPLIT stops the piece where it ends.
+                             ;; Not when the rest of the piece is unknown (the
+                             ;; head did not end it) or the body is chunked:
+                             ;; fast-http then stops here, as it always did.
+                             (when (and aligned (not (http-chunked-p http)))
+                               (setf (http-upgrade-p http) nil))))
+                         :body-callback
+                         (lambda (data start end)
+                           (declare (type (simple-array (unsigned-byte 8) (*)) data))
+                           (when (and (woo.ev.socket::socket-body-admitter socket)
+                                      (not (funcall (woo.ev.socket::socket-body-admitter socket) (- end start))))
+                             (error 'request-body-limit-exceeded))
+                           (if (smart-buffer::buffer-on-memory-p body-buffer)
+                               (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
+                               (write-to-buffer body-buffer data start end)))
+                         :finish-callback
+                         (lambda ()
+                           (setf request-completed t)
+                           (let ((upgrading upgrade-request))
+                             ;; fast-http never clears the flag itself.
+                             (setq upgrade-request nil)
+                             (when upgrading
+                               (setq upgrade-seen t))
+                             (setf (http-upgrade-p http) nil)
+                             (flet ((main (env release)
+                                      (let ((response
+                                              (watch-response
+                                               upgrading
+                                               (if *debug*
+                                                   (funcall *app* env)
+                                                   (if-let (res (handler-case (funcall *app* env)
+                                                                  (error (error)
+                                                                    (vom:error (princ-to-string error))
+                                                                    nil)))
+                                                     res
+                                                     '(500 nil nil))))))
+                                        (handle-response http socket response env release
+                                                         (eq (http-method http) :head))
+                                        response)))
+                               (block result
+                                 (let ((raw-body (finalize-buffer body-buffer)))
+                                   (setq body-buffer (make-request-body-buffer socket))
+                                   (handler-bind
+                                       ((error ;; handle errors inside woo
+                                          (lambda (e)
+                                            (unless *debug*
+                                              (vom:crit (princ-to-string e))
+                                              (return-from result (handle-response http socket '(500 nil nil)))))))
+                                     (let ((env (nconc (list :raw-body raw-body :woo.response-handler nil)
+                                                       (handle-request http socket))))
+                                       (unless (getf env :woo.response-handler)
+                                         (push raw-body body-streams))
+                                       (let ((result (main env (lambda ()
+                                                                 (unless (getf env :woo.response-handler)
+                                                                   (release-body raw-body))))))
+                                         (when (and (not (getf env :woo.response-handler))
+                                                    (listp result))
+                                           (release-body raw-body))))))))))))
+      (setq reader
+            (lambda (data &key (start 0) (end (length data)))
+              (declare (type (simple-array (unsigned-byte 8) (*)) data)
+                       (type fixnum start end))
+              (loop
+                (when (>= start end)
+                  (return))
+                (when (woo.ev.socket::socket-input-paused-p socket)
+                  (when (woo.ev.socket::socket-input-holder socket)
+                    (funcall (woo.ev.socket::socket-input-holder socket) data start end))
+                  (return))
+                ;; No HTTP parsing once the socket belongs to WebSocket.
+                ;; Only an upgrade request's response can upgrade it
+                ;; (WEBSOCKET-P requires the header), so the lookup is
+                ;; skipped until one has been answered.
+                (when (or response-pending
+                          (and upgrade-seen (socket-upgraded-p socket)))
+                  (return (hold-for-websocket data start end)))
+                (multiple-value-bind (split unscanned) (next-split data start end)
+                  (setf request-completed nil)
+                  (let ((body-state (= (fast-http.http:http-state http)
+                                       fast-http.http:+state-body+)))
+                    (funcall parser data :start start :end split)
+                    (when (and body-state (typep body-remaining 'fixnum))
+                      (decf body-remaining (- split start))))
+                  ;; Unlike fixed bodies, fast-http does not reset its state
+                  ;; after a chunked message. The next piece is a fresh request.
+                  (when (and request-completed (http-chunked-p http))
+                    (setf (fast-http.http:http-state http) fast-http.http:+state-first-line+))
+                  (setq start split)
+                  ;; fast-http may have read part of a later head unseen;
+                  ;; its fields are then unknown.
+                  (when (and unscanned
+                             (= (fast-http.http:http-state http)
+                                fast-http.http:+state-headers+))
+                    (setq head-fields (logior +field-upgrade+ +field-body+)))))))
+      (push (lambda ()
+              ;; Managed compatibility requests transfer body ownership to
+              ;; the request lifecycle once the application starts. Their
+              ;; connection close hook marks wire completion; releasing here
+              ;; would race an application producer still reading the body.
+              (unless (woo.ev.socket::socket-body-admitter socket)
+                (dolist (stream (copy-list body-streams))
+                  (release-body stream)))
+              (cleanup-open-buffer body-buffer))
+            (woo.ev.socket::socket-close-hooks socket))
+      (setf (wev:socket-data socket) reader))))
 
 (defun stop (server)
-  (wev:close-tcp-server server))
+  (cond ((null server) nil)
+        ((stop-gracefully server) t)
+        ((bt2:threadp server) nil)
+        (t (wev:close-tcp-server server))))
 
 
 ;;
@@ -575,8 +922,16 @@ SERVER may be the listener or the thread running WOO:RUN."
           (handle-normal-response http socket '(500 (:connection "close") nil))
           (wev:graceful-close-socket socket)))))
 
-(defun handle-response (http socket clack-res &optional body-cleanup head-p)
+(defun handle-response (http socket clack-res &optional env body-cleanup head-p)
 
+  (when (getf env :woo.response-handler)
+    (return-from handle-response
+      (funcall (getf env :woo.response-handler) http socket clack-res)))
+  ;; After a WebSocket upgrade the socket carries frames, not HTTP. Whatever
+  ;; the app returned (NIL, which becomes a 500, or a framework's finalized
+  ;; 200), writing it would corrupt the stream.
+  (when (socket-upgraded-p socket)
+    (return-from handle-response nil))
   (let ((generation (woo.ev.socket::socket-response-generation socket)))
     (handler-case
         (etypecase clack-res
@@ -584,14 +939,16 @@ SERVER may be the listener or the thread running WOO:RUN."
           (function
            (funcall clack-res
                     (lambda (response)
-                      (progn
+                      (unless (socket-upgraded-p socket)
                         (handler-case
                             (handle-normal-response http socket (validate-response response head-p) body-cleanup head-p)
                           (error () (legacy-response-failed http socket generation))))))))
       (error () (legacy-response-failed http socket generation)))))
 
+
 #+sbcl
 (defun fd-file-size (fd)
+  ;; FSTAT mutates its destination; workers must never share that object.
   (let ((stat (make-instance 'sb-posix:stat)))
     (sb-posix:fstat fd stat)
     (sb-posix:stat-size stat)))
@@ -644,19 +1001,6 @@ SERVER may be the listener or the thread running WOO:RUN."
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
-(defun static-preparation-status (pathname &optional errno)
-  (cond ((and (integerp errno) (or (= errno wsys:EACCES) (= errno wsys:EISDIR))) 403)
-        ((and (integerp errno) (or (= errno wsys:ENOENT) (= errno wsys:ENOTDIR))) 404)
-        ((uiop:directory-exists-p pathname) 403)
-        ((probe-file pathname) 500)
-        (t 404)))
-
-(defun response-write-callback (socket close body-cleanup)
-  (when (or close body-cleanup)
-    (lambda (socket)
-      (when close (wev:graceful-close-socket socket))
-      (when body-cleanup (funcall body-cleanup)))))
-
 (defun handle-normal-response (http socket clack-res &optional body-cleanup head-p)
   (flet ((send-error-response (status)
            ;; File preparation happens before headers are committed.  Close
@@ -694,18 +1038,14 @@ SERVER may be the listener or the thread running WOO:RUN."
 
       (etypecase body
         (null
-         (wev:with-async-writing (socket :write-cb (response-write-callback socket close body-cleanup))
+         (wev:with-async-writing (socket :write-cb (and close
+                                                        (lambda (socket)
+                                                          (wev:graceful-close-socket socket))))
            (unless (or head-p (member status '(204 304)))
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
         (pathname
-        (let ((preflight-status (cond ((uiop:directory-exists-p body) 403)
-                                      ;; Avoid relying on the errno exposed by
-                                      ;; the SSL stream's OPEN method.  Some
-                                      ;; implementations signal FILE-ERROR
-                                      ;; after clearing it, while pathname
-                                      ;; existence remains reliable here.
-                                      ((not (probe-file body)) 404))))
+         (let ((preflight-status (woo.http2.clack::pathname-response-status body)))
            (cond
              (preflight-status
              (send-error-response preflight-status))
@@ -723,8 +1063,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                                (setf (getf headers :content-length) size))
                              (unless (getf headers :content-type)
                                (setf (getf headers :content-type) (mimes:mime body)))
-                             (wev:with-async-writing (socket :write-cb
-                                                       (response-write-callback socket close body-cleanup))
+                             (wev:with-async-writing (socket :write-cb (and close #'wev:graceful-close-socket))
                                (setf headers-committed t)
                                (write-response-headers socket status headers (not close))
                                (if head-p
@@ -734,18 +1073,9 @@ SERVER may be the listener or the thread running WOO:RUN."
                                      (setf in nil))))))
                        (file-error (e)
                          (if headers-committed (error e)
-                             (let ((errno (or (ignore-errors (wsys:errno))
-                                              ;; OPEN may signal a FILE-ERROR
-                                              ;; without leaving the errno
-                                              ;; visible through the FFI.  The
-                                              ;; pathname is still enough to
-                                              ;; distinguish the public cases
-                                              ;; we promise to report.
-                                              (cond ((uiop:directory-exists-p body) wsys:EISDIR)
-                                                    ((probe-file body) wsys:EACCES)
-                                                    (t wsys:ENOENT)))))
+                             (let ((errno (ignore-errors (wsys:errno))))
                                (send-error-response
-                                (static-preparation-status body errno)))))
+                                (woo.http2.clack::pathname-response-status body errno)))))
                        (error (e)
                          (if headers-committed (error e) (send-error-response 500))))
                   (when in (ignore-errors (close in :abort t))))))
@@ -754,7 +1084,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                 (if (< fd 0)
                     (send-error-response
                      (let ((errno (wsys:errno)))
-                       (static-preparation-status body errno)))
+                       (woo.http2.clack::pathname-error-status errno)))
                     (let ((headers-committed nil))
                       (unwind-protect
                            (handler-case
@@ -769,8 +1099,9 @@ SERVER may be the listener or the thread running WOO:RUN."
                                    (setf (getf headers :content-length) size))
                                  (unless (getf headers :content-type)
                                    (setf (getf headers :content-type) (mimes:mime body)))
-                                 (wev:with-async-writing (socket :write-cb
-                                                        (response-write-callback socket close body-cleanup))
+                                 (wev:with-async-writing (socket :write-cb (and close
+                                                                                (lambda (socket)
+                                                                                  (wev:graceful-close-socket socket))))
                                    (setf headers-committed t)
                                    (write-response-headers socket status headers (not close))
                                    ;; SEND-STATIC-FILE takes ownership and closes
@@ -791,10 +1122,10 @@ SERVER may be the listener or the thread running WOO:RUN."
                         (when fd (wsys:close fd))))))))))
 
 
-
-
         (list
-         (wev:with-async-writing (socket :write-cb (response-write-callback socket close body-cleanup))
+         (wev:with-async-writing (socket :write-cb (and close
+                                                        (lambda (socket)
+                                                          (wev:graceful-close-socket socket))))
            (cond
              (head-p
               (unless (getf headers :content-length)
@@ -848,7 +1179,9 @@ SERVER may be the listener or the thread running WOO:RUN."
                        when data
                          do (wev:write-socket-data socket data))))))))
         ((vector (unsigned-byte 8))
-         (wev:with-async-writing (socket :write-cb (response-write-callback socket close body-cleanup))
+         (wev:with-async-writing (socket :write-cb (and close
+                                                        (lambda (socket)
+                                                          (wev:graceful-close-socket socket))))
            (response-headers-bytes socket status headers (not close))
            (unless (getf headers :content-length)
              (wev:write-socket-data socket #.(string-to-utf-8-bytes "Content-Length: "))

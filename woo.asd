@@ -1,5 +1,5 @@
 (defsystem "woo"
-  :version "0.12.0"
+  :version "0.13.0"
   :author "Eitaro Fukamachi"
   :license "MIT"
   :defsystem-depends-on ("cffi-grovel")
@@ -17,6 +17,9 @@
                "trivial-mimes"
                "vom"
                "alexandria"
+               ;; WebSocket dependencies
+               "ironclad"
+               "cl-base64"
                (:feature :sbcl "sb-posix")
                (:feature (:and :linux (:not :asdf3)) "uiop")
                (:feature :sbcl "sb-concurrency")
@@ -24,7 +27,8 @@
                (:feature (:not :woo-no-ssl) "cl+ssl"))
   :components ((:module "src"
                 :components
-                ((:file "woo" :depends-on ("ev" "response" "worker" "ssl" "signal" "specials" "util" "http2" "dispatch"))
+                ((:file "woo" :depends-on ("ev" "response" "worker" "ssl" "signal" "specials" "util"
+                                           "websocket" "http2" "dispatch"))
                  (:file "response" :depends-on ("ev"))
                  (:file "ev" :depends-on ("ev-packages"))
                  (:file "worker" :depends-on ("ev" "queue" "specials"))
@@ -38,20 +42,28 @@
                    (:file "tcp" :depends-on ("event-loop" "socket" "util" "condition"))
                    (:file "condition")
                    (:file "util")))
-                 (:file "ssl-alpn" :depends-on ("ev-packages")
+                 ;; SSL with ALPN support
+                 (:file "ssl-alpn"
+                  :depends-on ("ev-packages")
                   :if-feature (:not :woo-no-ssl))
                  (:file "ssl"
                   :depends-on ("ev-packages" "ssl-alpn")
                   :if-feature (:not :woo-no-ssl))
+                 ;; WebSocket support
+                 (:file "websocket" :depends-on ("ev-packages" "response"))
                  (:file "dispatch" :depends-on ("ev-packages"))
-                 (:module "http2" :pathname "http2"
+                 ;; HTTP/2 support
+                 (:module "http2"
+                  :pathname "http2"
                   :depends-on ("ev-packages" "dispatch")
-                  :components ((:file "constants")
-                               (:file "hpack" :depends-on ("constants"))
-                               (:file "frames" :depends-on ("constants"))
-                               (:file "stream" :depends-on ("constants"))
-                               (:file "connection" :depends-on ("constants" "frames" "hpack" "stream"))
-                               (:file "clack" :depends-on ("constants" "frames" "hpack" "stream" "connection"))))
+                  :components
+                  ((:file "constants")
+                   (:file "hpack" :depends-on ("constants"))
+                   (:file "frames" :depends-on ("constants"))
+                   (:file "stream" :depends-on ("constants"))
+                   (:file "connection" :depends-on ("constants" "frames" "hpack" "stream"))
+                   (:file "clack" :depends-on ("constants" "frames" "hpack" "stream" "connection"))))
+                 ;; Other modules
                  (:module "llsocket"
                   :depends-on ("syscall")
                   :serial t
