@@ -1,6 +1,8 @@
 name: TLS live diagnostic
 
 on:
+  push:
+    branches: [diag/tls-live-d85]
   workflow_dispatch:
 
 jobs:
