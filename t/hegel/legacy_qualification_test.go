@@ -53,14 +53,13 @@ func startLegacy(t *testing.T) (string, string) {
 	if lisp == "ros" {
 		command = []string{"ros", "-e", `(load "t/hegel/legacy-server.lisp")`}
 	} else if runtime.GOOS == "darwin" && strings.HasSuffix(lisp, "sbcl") {
-		// Cold Quicklisp compilation on the pinned macOS SBCL can exhaust its
-		// default 1 GiB dynamic space in SB-C constraint propagation. This is a
-		// compiler bootstrap budget, separate from the qualification RSS gate.
+		// Opt-in experiment: cold Quicklisp compilation may exhaust the default
+		// 1 GiB dynamic space in SB-C constraint propagation. This is a compiler
+		// bootstrap budget, separate from the qualification RSS gate.
 		size := os.Getenv("WOO_LEGACY_SBCL_DYNAMIC_SPACE_SIZE")
-		if size == "" {
-			size = "4096"
+		if size != "" {
+			command = []string{lisp, "--dynamic-space-size", size, "--script", "t/hegel/legacy-server.lisp"}
 		}
-		command = []string{lisp, "--dynamic-space-size", size, "--script", "t/hegel/legacy-server.lisp"}
 	}
 	legacyPID := 0
 	requested := os.Getenv("WOO_HEGEL_PORT")
