@@ -105,34 +105,47 @@
                                       #\Return #\Newline #\Return #\Newline))
                              tls)
                             (force-output tls)
-                            (labels ((read-header-line ()
-                                       (let ((line (make-array 0 :element-type 'character
-                                                                :adjustable t :fill-pointer 0)))
-                                         (loop for b = (read-byte tls nil nil)
-                                               while (and b (/= b 10))
-                                               do (unless (= b 13)
-                                                    (vector-push-extend (code-char b) line)))
-                                         (coerce line 'simple-string))))
-                              (read-header-line)
-                              (loop until (zerop (length (read-header-line)))))
-                            (let ((got (make-array size :element-type '(unsigned-byte 8)))
-                                  (chunk (make-array 4096 :element-type '(unsigned-byte 8)))
-                                  (offset 0))
-                              (loop while (< offset size)
-                                    do (let* ((want (min 4096 (- size offset)))
-                                              (n (read-sequence chunk tls :start 0 :end want)))
-                                         (ok (plusp n))
-                                         (replace got chunk :start1 offset
-                                                  :end1 (+ offset n) :end2 n)
-                                         (incf offset n)))
-                              (ok (= offset size))
-                              (ok (every (lambda (i)
-                                           (= (aref got i) (mod (+ i 17) 251)))
-                                         (loop for i below size collect i))))
-                            ;; The server's close_notify must be observed as
-                            ;; clean EOF, rather than an unexpected truncation.
-                            (sb-ext:with-timeout 5
-                              (ok (null (read-byte tls nil nil)))))
+                            (sb-ext:with-timeout 15
+                              (labels ((read-header-line ()
+                                         (let ((line (make-array 0 :element-type 'character
+                                                                  :adjustable t :fill-pointer 0)))
+                                           (loop for b = (read-byte tls nil nil)
+                                                 while (and b (/= b 10))
+                                                 do (unless (= b 13)
+                                                      (vector-push-extend (code-char b) line)))
+                                           (coerce line 'simple-string))))
+                                (let* ((status (read-header-line))
+                                       (headers nil))
+                                  (loop for line = (read-header-line)
+                                        until (zerop (length line))
+                                        do (let ((split (position #\: line)))
+                                             (when split
+                                               (push (cons (string-downcase (subseq line 0 split))
+                                                           (string-trim '(#\Space #\Tab)
+                                                                        (subseq line (1+ split))))
+                                                     headers))))
+                                  (ok (search "HTTP/1.1 200" status))
+                                  (ok (= (parse-integer (cdr (assoc "content-length" headers
+                                                                     :test #'string=)))
+                                         size))
+                                  (let ((got (make-array size :element-type '(unsigned-byte 8)))
+                                        (chunk (make-array 4096 :element-type '(unsigned-byte 8)))
+                                        (offset 0))
+                                    (loop while (< offset size)
+                                          do (let* ((want (min 4096 (- size offset)))
+                                                    (n (read-sequence chunk tls :start 0 :end want)))
+                                               (ok (plusp n))
+                                               (replace got chunk :start1 offset
+                                                        :end1 (+ offset n) :end2 n)
+                                               (incf offset n)
+                                               ;; Keep the peer backpressured between
+                                               ;; bounded reads.
+                                               (sleep 0.001)))
+                                    (ok (= offset size))
+                                    (ok (loop for i below size
+                                              always (= (aref got i) (mod (+ i 17) 251)))))
+                                  ;; Require close_notify/EOF after the exact body.
+                                  (ok (null (read-byte tls nil nil)))))))
                        (ignore-errors (close tls :abort t)))))))))
         (when (probe-file path)
           (delete-file path)))))

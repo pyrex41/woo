@@ -86,11 +86,13 @@
   (let ((*app* app)
         (*debug* debug)
         (*listener* nil)
-        (ssl (or ssl-key-file ssl-cert-file)))
+        (ssl (or ssl-key-file ssl-cert-file))
+        (ssl-context nil))
     (labels ((start-socket (socket)
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
+                                          ssl-context
                                           ssl-cert-file
                                           ssl-key-file
                                           ssl-key-password))
@@ -152,9 +154,19 @@
                   (uiop:native-namestring
                    (or (probe-file ssl-cert-file)
                        (error "SSL certificate '~A' does not exist." ssl-cert-file)))))))
-      (if worker-num
-          (start-multithread-server)
-          (start-singlethread-server)))))
+      #-woo-no-ssl
+      (when ssl
+        (setf ssl-context
+              (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
+        ;; Keep ALPN configuration owned by this listener context.
+        (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*))
+      (unwind-protect
+           (if worker-num
+               (start-multithread-server)
+               (start-singlethread-server))
+        #-woo-no-ssl
+        (when ssl-context
+          (woo.ssl:free-context ssl-context))))))
 
 (defun respond-and-close (socket status message)
   (setf (wev:socket-data socket)
@@ -475,16 +487,25 @@
         (pathname
          (cond
            ((woo.ev.socket:socket-ssl-handle socket)
-            (with-open-file (in body :element-type '(unsigned-byte 8))
-              (let ((size (file-length in)))
-                (unless (getf headers :content-length)
-                  (setf (getf headers :content-length) size))
-                (unless (getf headers :content-type)
-                  (setf (getf headers :content-type) (mimes:mime body)))
-                (wev:with-async-writing (socket :write-cb
-                                                (response-write-callback socket close body-cleanup))
-                  (write-response-headers socket status headers (not close))
-                  (woo.ev.socket:start-static-stream socket in size)))))
+            ;; TLS cannot use sendfile. Transfer the open stream to the
+            ;; socket only after response setup succeeds; otherwise close it
+            ;; here so failed preparation never leaks a descriptor.
+            (let ((in (open body :element-type '(unsigned-byte 8))))
+              (handler-case
+                  (let ((size (file-length in)))
+                    (unless (getf headers :content-length)
+                      (setf (getf headers :content-length) size))
+                    (unless (getf headers :content-type)
+                      (setf (getf headers :content-type) (mimes:mime body)))
+                    (wev:with-async-writing (socket :write-cb
+                                                    (response-write-callback socket close body-cleanup))
+                      (write-response-headers socket status headers (not close))
+                      (woo.ev.socket:start-static-stream socket in size))
+                    ;; START-STATIC-STREAM owns IN from this point onward.
+                    (setf in nil))
+                (error (condition)
+                  (ignore-errors (close in :abort t))
+                  (error condition)))))
            (t
             (if (uiop:directory-exists-p body)
                 (respond-and-close socket 403 "403 Forbidden")
