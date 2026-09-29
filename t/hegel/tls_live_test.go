@@ -1,6 +1,7 @@
 package hegeltest
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -283,14 +284,20 @@ func tlsLiveSlowStatic(t *testing.T, port int, roots *x509.CertPool, bodyPath st
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 	tcp := conn.(*net.TCPConn)
-	if err := tcp.SetReadBuffer(1024); err != nil {
+	// A 1 KiB receive window stalls both Woo and Go's TLS reference on
+	// Linux. Keep backpressure without making TCP window probes the gate.
+	if err := tcp.SetReadBuffer(16 * 1024); err != nil {
 		t.Fatal(err)
 	}
 	tlsConn := tls.Client(tcp, tlsLiveTLSConfig(roots, "http/1.1"))
 	handshakeContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := tlsConn.HandshakeContext(handshakeContext); err != nil {
+		t.Fatal(err)
+	}
+	if err := tlsConn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := io.WriteString(tlsConn, "GET /large-static HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
@@ -300,14 +307,20 @@ func tlsLiveSlowStatic(t *testing.T, port int, roots *x509.CertPool, bodyPath st
 	// retries while retaining an exact end-to-end digest.
 	buf := make([]byte, 4096)
 	var response bytes.Buffer
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
+	cleanEOF := false
 	for time.Now().Before(deadline) {
-		if err := tlsConn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		readDeadline := time.Now().Add(5 * time.Second)
+		if readDeadline.After(deadline) {
+			readDeadline = deadline
+		}
+		if err := tlsConn.SetReadDeadline(readDeadline); err != nil {
 			t.Fatal(err)
 		}
 		n, readErr := tlsConn.Read(buf)
 		response.Write(buf[:n])
 		if readErr == io.EOF {
+			cleanEOF = true
 			break
 		}
 		if readErr != nil {
@@ -315,19 +328,31 @@ func tlsLiveSlowStatic(t *testing.T, port int, roots *x509.CertPool, bodyPath st
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
-	if time.Now().After(deadline) {
-		t.Fatal("slow TLS static response exceeded 15 seconds")
+	if !cleanEOF {
+		t.Fatal("slow TLS static response did not reach clean EOF within 30 seconds")
 	}
-	parts := bytes.SplitN(response.Bytes(), []byte("\r\n\r\n"), 2)
-	if len(parts) != 2 || !bytes.Contains(parts[0], []byte("200")) {
-		t.Fatalf("invalid static response headers: %q", response.Bytes()[:min(len(response.Bytes()), 300)])
+	reader := bufio.NewReader(bytes.NewReader(response.Bytes()))
+	parsed, err := http.ReadResponse(reader, &http.Request{Method: http.MethodGet})
+	if err != nil {
+		t.Fatalf("invalid static response: %v", err)
 	}
+	defer parsed.Body.Close()
 	want, err := os.ReadFile(bodyPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(parts[1], want) {
-		t.Fatalf("static body mismatch: got=%d want=%d sha=%x/%x", len(parts[1]), len(want), sha256.Sum256(parts[1]), sha256.Sum256(want))
+	if parsed.StatusCode != http.StatusOK || parsed.ContentLength != int64(len(want)) {
+		t.Fatalf("static response status=%d content_length=%d, want 200/%d", parsed.StatusCode, parsed.ContentLength, len(want))
+	}
+	got, err := io.ReadAll(parsed.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("static body mismatch: got=%d want=%d sha=%x/%x", len(got), len(want), sha256.Sum256(got), sha256.Sum256(want))
+	}
+	if extra, err := io.ReadAll(reader); err != nil || len(extra) != 0 {
+		t.Fatalf("unexpected bytes after static body: bytes=%d err=%v", len(extra), err)
 	}
 	_ = tlsConn.Close()
 

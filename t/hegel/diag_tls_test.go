@@ -79,7 +79,8 @@ func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, 
 		readErr = context.DeadlineExceeded
 	}
 	var bodyGot []byte
-	parsed, parseErr := http.ReadResponse(bufio.NewReader(bytes.NewReader(response.Bytes())), nil)
+	reader := bufio.NewReader(bytes.NewReader(response.Bytes()))
+	parsed, parseErr := http.ReadResponse(reader, &http.Request{Method: http.MethodGet})
 	var protocolErr error = parseErr
 	status := 0
 	var contentLength int64
@@ -88,6 +89,14 @@ func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, 
 		contentLength = parsed.ContentLength
 		bodyGot, protocolErr = io.ReadAll(parsed.Body)
 		_ = parsed.Body.Close()
+		if protocolErr == nil {
+			extra, err := io.ReadAll(reader)
+			if err != nil {
+				protocolErr = err
+			} else if len(extra) != 0 {
+				protocolErr = fmt.Errorf("%d unexpected bytes after response body", len(extra))
+			}
+		}
 	}
 	return diagReadResult{bytes: len(response.Bytes()), dur: time.Since(start), err: readErr, protocolErr: protocolErr,
 		status: status, contentLength: contentLength, bodyBytes: len(bodyGot),
@@ -111,7 +120,7 @@ func startDiagReference(t *testing.T, certs tlsLiveCertificates, body []byte) *h
 	return s
 }
 
-func TestDiagnosticTLSReferenceAndWoo(t *testing.T) {
+func TestTLSReferenceAndWooBackpressure(t *testing.T) {
 	certs := makeTLSLiveCertificates(t)
 	body, err := os.ReadFile(certs.body)
 	if err != nil {
@@ -119,7 +128,13 @@ func TestDiagnosticTLSReferenceAndWoo(t *testing.T) {
 	}
 	roots := tlsLiveRoots(t, certs.root)
 	ref := startDiagReference(t, certs, body)
-	for _, size := range []int{1024, 16 * 1024} {
+	sizes := []int{16 * 1024}
+	// The tiny-window experiment deliberately reports incomplete transfers;
+	// normal qualification requires exact framing, bytes and EOF for 16 KiB.
+	if os.Getenv("WOO_RUN_TLS_TINY_WINDOW_DIAGNOSTIC") == "1" {
+		sizes = append([]int{1024}, sizes...)
+	}
+	for _, size := range sizes {
 		refResult := diagSlowRead(t, strings.TrimPrefix(ref.URL, "https://"), roots, body, size)
 		t.Logf("reference read_buffer=%d bytes=%d duration=%s err=%v protocol_err=%v status=%d content_length=%d body_bytes=%d body_sha=%s want_sha=%s", size, refResult.bytes, refResult.dur, refResult.err, refResult.protocolErr, refResult.status, refResult.contentLength, refResult.bodyBytes, refResult.gotSHA, refResult.wantSHA)
 
