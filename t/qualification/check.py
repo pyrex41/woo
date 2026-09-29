@@ -80,7 +80,7 @@ def _process_group_stats_once(pgid, deadline):
     if rss <= 0 or fds <= 0:
         # A successful lsof with no f-records is evidence of zero descriptors,
         # not a missing tool. Retry the snapshot, then fail closed if it stays
-        # zero so an unreadable or descriptorless live process never qualifies.
+        # zero so a group with no readable descriptors never qualifies.
         raise _ResourceSampleRetry('resource sampler produced no positive evidence')
     return rss, fds, details
 

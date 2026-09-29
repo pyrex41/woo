@@ -75,6 +75,46 @@ class ReceiptTests(unittest.TestCase):
                                         {'pid': 789, 'rss_bytes': 10240, 'fd_count': 1}]))
             self.assertEqual(sample.call_count, 3)
 
+    def test_group_sampler_shares_deadline_across_pid_probes(self):
+        class Clock:
+            def __init__(self):
+                self.now = 0.0
+
+            def monotonic(self):
+                return self.now
+
+            def spend(self, seconds):
+                self.now += seconds
+
+        clock = Clock()
+        ps = '123 456 10\n123 789 10\n'
+        lsof_timeouts = []
+
+        def sample(command, **kwargs):
+            if command[0] == 'ps':
+                return ps
+            timeout = kwargs['timeout']
+            pid = command[command.index('-p') + 1]
+            lsof_timeouts.append(timeout)
+            if pid == '456' and len(lsof_timeouts) < 3:
+                clock.spend(4.5)
+                raise check.subprocess.TimeoutExpired(command, timeout)
+            if pid == '456':
+                clock.spend(4.0)
+                return 'p456\nf0\n'
+            clock.spend(timeout)
+            raise check.subprocess.TimeoutExpired(command, timeout)
+
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.time, 'monotonic', side_effect=clock.monotonic), \
+             patch.object(check.subprocess, 'check_output', side_effect=sample):
+            with self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+        self.assertEqual(len(lsof_timeouts), 4)
+        self.assertEqual(lsof_timeouts[:3], [5, 5, 5])
+        self.assertLessEqual(lsof_timeouts[3], 2.0)
+        self.assertEqual(clock.now, 15.0)
+
     def test_stale_and_short_receipts_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'receipt.json'
