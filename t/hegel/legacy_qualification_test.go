@@ -31,7 +31,7 @@ func emitLegacyMemoryMetric(label string) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	metric := map[string]any{
-		"label": label, "heap_alloc": stats.HeapAlloc, "heap_inuse": stats.HeapInuse,
+		"pid": os.Getpid(), "label": label, "heap_alloc": stats.HeapAlloc, "heap_inuse": stats.HeapInuse,
 		"heap_sys": stats.HeapSys, "heap_idle": stats.HeapIdle, "heap_released": stats.HeapReleased,
 		"stack_inuse": stats.StackInuse, "mallocs": stats.Mallocs, "frees": stats.Frees,
 		"num_gc": stats.NumGC, "pause_total_ns": stats.PauseTotalNs, "gc_cpu_fraction": stats.GCCPUFraction,
