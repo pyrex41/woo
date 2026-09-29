@@ -88,8 +88,8 @@ func managedClients(t *testing.T, addr string) map[string]struct {
 		base   string
 	}{}
 	for name, transport := range map[string]http.RoundTripper{
-		"http1": &http.Transport{DisableCompression: true},
-		"https": &http.Transport{TLSClientConfig: config.Clone(), DisableCompression: true, ForceAttemptHTTP2: false},
+		"http1": &http.Transport{DisableCompression: true, ExpectContinueTimeout: 5 * time.Second},
+		"https": &http.Transport{TLSClientConfig: config.Clone(), DisableCompression: true, ForceAttemptHTTP2: false, ExpectContinueTimeout: 5 * time.Second},
 		"h2c": &http2.Transport{DisableCompression: true, AllowHTTP: true, DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
 			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
 		}},
@@ -432,6 +432,13 @@ func TestManagedBudgetAndCancellation(t *testing.T) {
 			request, err := http.NewRequest("POST", lane.base+"/echo", bytes.NewReader(make([]byte, 131073)))
 			if err != nil {
 				t.Fatal(err)
+			}
+			if !strings.HasPrefix(name, "h2") {
+				// The server rejects this from Content-Length in the header
+				// callback. Wait for that response before uploading the body so
+				// the assertion observes the HTTP contract instead of racing a
+				// client-side write against the server's intentional close.
+				request.Header.Set("Expect", "100-continue")
 			}
 			response, err := lane.client.Do(request)
 			if err == nil {
