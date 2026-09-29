@@ -161,7 +161,7 @@
         (lambda (data &key start end)
           (declare (ignore data start end))))
   (let ((body (string-to-utf-8-bytes message)))
-    (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+    (wev:with-async-writing (socket :write-cb #'wev:graceful-close-socket)
       (write-response-headers socket status
                               (list :connection "close"
                                     :content-length (length body)))
@@ -433,7 +433,7 @@
 (defun response-write-callback (socket close body-cleanup)
   (when (or close body-cleanup)
     (lambda (socket)
-      (when close (wev:close-socket socket))
+      (when close (wev:graceful-close-socket socket))
       (when body-cleanup (funcall body-cleanup)))))
 
 (defun handle-normal-response (http socket clack-res &optional body-cleanup)
@@ -537,7 +537,7 @@
         ((vector (unsigned-byte 8))
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
+                                                          (wev:graceful-close-socket socket))))
            (response-headers-bytes socket status headers (not close))
            (unless (getf headers :content-length)
              (wev:write-socket-data socket #.(string-to-utf-8-bytes "Content-Length: "))

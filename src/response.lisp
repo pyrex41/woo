@@ -239,6 +239,6 @@
 (defun finish-response (socket &optional (body *empty-bytes*))
   (wev:write-socket-data socket body
                          :write-cb (lambda (socket)
-                                     (wev:close-socket socket))))
+                                     (wev:graceful-close-socket socket))))
 
 (declaim (notinline wev:write-socket-data wev:write-socket-byte))
