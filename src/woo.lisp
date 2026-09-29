@@ -397,10 +397,15 @@
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
-(defun static-preparation-status (pathname condition)
+(defun static-preparation-status (pathname &optional errno)
   "Return the status for a pathname failure before response headers commit."
-  (declare (ignore condition))
-  (if (uiop:directory-exists-p pathname) 403 404))
+  (cond ((and (integerp errno) (= errno wsys:EACCES)) 403)
+        ((and (integerp errno) (or (= errno wsys:EISDIR))) 403)
+        ((and (integerp errno) (or (= errno wsys:ENOENT)
+                                   (= errno wsys:ENOTDIR))) 404)
+        ((uiop:directory-exists-p pathname) 403)
+        ((probe-file pathname) 500)
+        (t 404)))
 
 (defun handle-normal-response (http socket clack-res)
   (let ((no-body '#:no-body)
@@ -451,7 +456,7 @@
                        (progn
                          (setf fd (wsys:open body))
                          (if (< fd 0)
-                             (let ((failure (static-preparation-status body nil)))
+                             (let ((failure (static-preparation-status body (wsys:errno))))
                                (respond-and-close socket failure
                                                    (if (= failure 403)
                                                        "403 Forbidden"
@@ -472,7 +477,7 @@
                                  (setf owned t)))))
                      (file-error (condition)
                        (unless committed
-                         (let ((failure (static-preparation-status body condition)))
+                         (let ((failure (static-preparation-status body (wsys:errno))) )
                            (respond-and-close socket failure
                                                (if (= failure 403)
                                                    "403 Forbidden"

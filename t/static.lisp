@@ -43,3 +43,23 @@
                                      "Connection: close" ""))))
         (ok (and (search "HTTP/1.1 404 Not Found" missing)
                  (search "HTTP/1.1 403 Forbidden" directory)))))))
+
+(deftest unreadable-path-is-forbidden
+  (let ((clack.test:*clack-test-handler* :woo)
+        (clack.test:*enable-debug* nil)
+        (file (merge-pathnames #p"README.md" (asdf:system-source-directory :woo))))
+    (unwind-protect
+        (progn
+          (wsys:chmod (namestring file) 0)
+          (clack.test:testing-app "Reject unreadable pathname"
+              (lambda (env)
+                (declare (ignore env))
+                `(200 nil ,file))
+            (let ((response
+                    (woo-test::raw-exchange
+                     clack.test:*clack-test-port*
+                     (woo-test::crlf-lines
+                      "GET /private HTTP/1.1" "Host: localhost"
+                      "Connection: close" ""))))
+              (ok (search "HTTP/1.1 403 Forbidden" response)))))
+      (wsys:chmod (namestring file) #o644))))
