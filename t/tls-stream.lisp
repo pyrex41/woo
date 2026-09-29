@@ -190,3 +190,57 @@
               (symbol-function 'woo.ssl:configure-context-alpn) configure
               (symbol-function 'woo.ssl:free-context) free)
         (when context (funcall free context))))))
+
+(deftest tls-static-preparation-failures-are-wire-visible
+  (testing "TLS pathname preparation reports missing, directory, EACCES, and length errors"
+    (let* ((missing (merge-pathnames "woo-tls-missing" (uiop:temporary-directory)))
+           (directory (uiop:temporary-directory))
+           (private (merge-pathnames "woo-tls-private.txt" (uiop:temporary-directory)))
+           (mismatch (merge-pathnames "woo-tls-mismatch.txt" (uiop:temporary-directory))))
+      (with-open-file (out private :direction :output :if-exists :supersede)
+        (write-string "private" out))
+      (with-open-file (out mismatch :direction :output :if-exists :supersede)
+        (write-string "mismatch" out))
+      (unwind-protect
+           (progn
+             (wsys:chmod (namestring private) 0)
+             (let ((clack.test:*clack-test-handler* :woo)
+                   (clack.test:*use-https* t)
+                   (clack.test:*clackup-additional-args*
+                     (list :ssl-cert-file #P"t/certs/localhost.crt"
+                           :ssl-key-file #P"t/certs/localhost.key")))
+               (clack.test:testing-app "TLS pathname preparation failures"
+                   (lambda (env)
+                     (cond ((string= (getf env :path-info) "/missing")
+                            `(200 nil ,missing))
+                           ((string= (getf env :path-info) "/directory")
+                            `(200 nil ,directory))
+                           ((string= (getf env :path-info) "/private")
+                            `(200 nil ,private))
+                           (t `(200 (:content-length "999") ,mismatch))))
+                 (labels ((request (path)
+                            (usocket:with-client-socket
+                                (sock stream "127.0.0.1" clack.test:*clack-test-port*
+                                       :element-type '(unsigned-byte 8))
+                              (let ((tls (cl+ssl:make-ssl-client-stream
+                                          stream :hostname "localhost" :verify nil)))
+                                (unwind-protect
+                                     (progn
+                                       (write-sequence
+                                        (trivial-utf-8:string-to-utf-8-bytes
+                                         (format nil "GET ~A HTTP/1.1~C~CHost: localhost~C~CConnection: close~C~C~C~C"
+                                                 path #\Return #\Newline #\Return #\Newline
+                                                 #\Return #\Newline #\Return #\Newline))
+                                        tls)
+                                       (force-output tls)
+                                       (with-output-to-string (out)
+                                         (loop for b = (read-byte tls nil nil)
+                                               while b do (write-char (code-char b) out))))
+                                  (ignore-errors (close tls :abort t)))))))
+                   (ok (search "404 Not Found" (request "/missing")))
+                   (ok (search "403 Forbidden" (request "/directory")))
+                   (ok (search "403 Forbidden" (request "/private")))
+                   (ok (search "500 Internal Server Error" (request "/mismatch"))))))
+        (wsys:chmod (namestring private) #o644)
+        (dolist (path (list private mismatch))
+          (when (probe-file path) (delete-file path))))))))

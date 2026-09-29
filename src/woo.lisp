@@ -393,12 +393,14 @@
       (etypecase clack-res
         (list (handle-normal-response http socket
                                       (validate-response clack-res (eq (http-method http) :head))
-                                      body-cleanup))
+                                      body-cleanup
+                                      (eq (http-method http) :head)))
         (function (funcall clack-res (lambda (clack-res)
                                        (handler-case
                                            (handle-normal-response http socket
                                                                    (validate-response clack-res (eq (http-method http) :head))
-                                                                   body-cleanup)
+                                                                   body-cleanup
+                                                                   (eq (http-method http) :head))
                                          (wev:socket-closed ()))))))
     (wev:tcp-error (e)
       (vom:error (princ-to-string e))
@@ -504,14 +506,19 @@
 
       (etypecase body
         (null
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:graceful-close-socket socket))))
+         (wev:with-async-writing (socket :write-cb
+                                         (response-write-callback socket close body-cleanup))
            (unless (or head-p (member status '(204 304)))
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
         (pathname
-         (let ((preflight-status (and (uiop:directory-exists-p body) 403)))
+        (let ((preflight-status (cond ((uiop:directory-exists-p body) 403)
+                                      ;; Avoid relying on the errno exposed by
+                                      ;; the SSL stream's OPEN method.  Some
+                                      ;; implementations signal FILE-ERROR
+                                      ;; after clearing it, while pathname
+                                      ;; existence remains reliable here.
+                                      ((not (probe-file body)) 404))))
            (cond
              (preflight-status
              (send-error-response preflight-status))
@@ -529,7 +536,8 @@
                                (setf (getf headers :content-length) size))
                              (unless (getf headers :content-type)
                                (setf (getf headers :content-type) (mimes:mime body)))
-                             (wev:with-async-writing (socket :write-cb (and close #'wev:graceful-close-socket))
+                             (wev:with-async-writing (socket :write-cb
+                                                       (response-write-callback socket close body-cleanup))
                                (setf headers-committed t)
                                (write-response-headers socket status headers (not close))
                                (if head-p
@@ -539,7 +547,16 @@
                                      (setf in nil))))))
                        (file-error (e)
                          (if headers-committed (error e)
-                             (let ((errno (ignore-errors (wsys:errno))))
+                             (let ((errno (or (ignore-errors (wsys:errno))
+                                              ;; OPEN may signal a FILE-ERROR
+                                              ;; without leaving the errno
+                                              ;; visible through the FFI.  The
+                                              ;; pathname is still enough to
+                                              ;; distinguish the public cases
+                                              ;; we promise to report.
+                                              (cond ((uiop:directory-exists-p body) wsys:EISDIR)
+                                                    ((probe-file body) wsys:EACCES)
+                                                    (t wsys:ENOENT)))))
                                (send-error-response
                                 (static-preparation-status body errno)))))
                        (error (e)
@@ -565,9 +582,8 @@
                                    (setf (getf headers :content-length) size))
                                  (unless (getf headers :content-type)
                                    (setf (getf headers :content-type) (mimes:mime body)))
-                                 (wev:with-async-writing (socket :write-cb (and close
-                                                                                (lambda (socket)
-                                                                                  (wev:graceful-close-socket socket))))
+                                 (wev:with-async-writing (socket :write-cb
+                                                        (response-write-callback socket close body-cleanup))
                                    (setf headers-committed t)
                                    (write-response-headers socket status headers (not close))
                                    ;; SEND-STATIC-FILE takes ownership and closes
@@ -589,9 +605,8 @@
 
 
         (list
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:graceful-close-socket socket))))
+         (wev:with-async-writing (socket :write-cb
+                                         (response-write-callback socket close body-cleanup))
            (cond
              (head-p
               (unless (getf headers :content-length)
@@ -645,9 +660,8 @@
                        when data
                          do (wev:write-socket-data socket data))))))))
         ((vector (unsigned-byte 8))
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:graceful-close-socket socket))))
+         (wev:with-async-writing (socket :write-cb
+                                         (response-write-callback socket close body-cleanup))
            (response-headers-bytes socket status headers (not close))
            (unless (getf headers :content-length)
              (wev:write-socket-data socket #.(string-to-utf-8-bytes "Content-Length: "))

@@ -55,7 +55,8 @@
         (old-directory smart-buffer::*temporary-directory*)
         (old-memory smart-buffer::*default-memory-limit*)
         (old-disk smart-buffer::*default-disk-limit*)
-        (saw-spill nil))
+        (saw-spill nil)
+        (keepalive-seen nil))
     (unwind-protect
          (progn
            ;; These are global defaults because the request parser runs in a
@@ -67,16 +68,22 @@
            (ensure-directories-exist dir)
            (clack.test:testing-app "Remove spilled request body after response"
                (lambda (env)
-                 (let ((stream (getf env :raw-body)))
-                   (setf saw-spill (and (streamp stream)
-                                        (probe-file (pathname stream)))))
-                 '(200 nil ("ok")))
+                 (if (string= (getf env :path-info) "/next")
+                     (progn (setf keepalive-seen t) '(200 nil ("next")))
+                     (let ((stream (getf env :raw-body)))
+                       (setf saw-spill (and (streamp stream)
+                                            (probe-file (pathname stream))))
+                       '(200 nil ("ok")))))
              (woo-test::raw-exchange
               clack.test:*clack-test-port*
               (woo-test::crlf-lines "POST /spill HTTP/1.1" "Host: localhost"
                                     "Content-Length: 4" "")
-              "data"))
+              (concatenate 'string "data"
+                           (woo-test::crlf-lines "GET /next HTTP/1.1"
+                                                 "Host: localhost"
+                                                 "Connection: close" ""))))
            (ok saw-spill)
+           (ok keepalive-seen)
            (ok (null (directory (merge-pathnames "*" dir))))
            (let ((response (make-string (* 1024 1024) :initial-element #\x))
                  (abort-seen nil)
