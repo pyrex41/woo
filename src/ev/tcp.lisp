@@ -12,10 +12,17 @@
                 :close-socket
                 :socket-ssl-handle
                 :socket-fd
+                :socket-write-watcher
+                :async-write
                 :socket-read-cb
                 :socket-read-watcher
                 :socket-timeout-timer
-                :socket-last-activity)
+                :socket-last-activity
+                :socket-tls-shutdown-p
+                :socket-read-wait-write-p
+                :tls-shutdown-step
+                :*ssl-read-function*
+                :*ssl-error-function*)
   (:import-from :woo.ev.condition
                 :os-error)
   (:import-from :woo.syscall
@@ -65,6 +72,7 @@
                 :ev-timer-init
                 :ev-timer-again
                 :+EV-READ+
+                :+EV-WRITE+
                 :+EV-TIMER+)
   (:import-from :swap-bytes
                 :htonl
@@ -98,27 +106,51 @@
          (socket (deref-data-from-pointer fd))
          (read-cb (socket-read-cb socket))
          (ssl-handle (socket-ssl-handle socket)))
+    (when (socket-tls-shutdown-p socket)
+      (tls-shutdown-step socket)
+      (return-from tcp-read-cb))
     (loop
+      ;; SSL_write can return WANT_READ. Service that exact pending write
+      ;; before attempting another SSL_read; otherwise a readable event can
+      ;; repeatedly bypass the write retry and grow application input.
+      #-woo-no-ssl
+      (when (and ssl-handle (woo.ev.socket::socket-write-wait-read-p socket))
+        (async-write socket)
+        (when (or (not (woo.ev.socket:socket-open-p socket))
+                  (socket-tls-shutdown-p socket))
+          (return))
+        (when (woo.ev.socket::socket-write-wait-read-p socket)
+          (return)))
       (let ((n
               #+woo-no-ssl
               (wsys:read fd (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
               #-woo-no-ssl
               (if ssl-handle
-                  (cl+ssl::ssl-read ssl-handle (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
+                  (funcall *ssl-read-function* ssl-handle
+                           (static-vectors:static-vector-pointer *input-buffer*) buffer-len)
                   (wsys:read fd (static-vectors:static-vector-pointer *input-buffer*) buffer-len))))
-        (declare (type fixnum n))
+         (declare (type fixnum n))
         (case n
           (-1
            (if ssl-handle
                #+woo-no-ssl (close-socket socket)
                #-woo-no-ssl
-               (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
+               (let ((errno (funcall *ssl-error-function* ssl-handle n)))
                  (declare (type fixnum errno))
                  (cond
                    ((or (= errno cl+ssl::+ssl-error-zero-return+)
                         (= errno cl+ssl::+ssl-error-ssl+))
                     (close-socket socket))
-                   ((= errno cl+ssl::+ssl-error-want-read+))
+                   ((= errno cl+ssl::+ssl-error-want-read+)
+                    (setf (socket-read-wait-write-p socket) nil)
+                    (unless (woo.ev.socket::socket-input-paused-p socket)
+                      (lev:ev-io-start *evloop* (socket-read-watcher socket))))
+                   ((= errno cl+ssl::+ssl-error-want-write+)
+                    ;; A nonblocking TLS read may need to emit handshake or
+                    ;; alert bytes. Let the owner loop service the write side.
+                    (setf (socket-read-wait-write-p socket) t)
+                    (lev:ev-io-stop *evloop* (socket-read-watcher socket))
+                    (lev:ev-io-start *evloop* (socket-write-watcher socket)))
                    (t
                     (vom:error "Unexpected error (Code: ~D)" errno)
                     (close-socket socket))))
@@ -145,10 +177,17 @@
            (close-socket socket)
            (return))
           (otherwise
-           (setf (socket-last-activity socket) (lev:ev-now *evloop*))
+           (setf (socket-last-activity socket) (lev:ev-now *evloop*)
+                 (socket-read-wait-write-p socket) nil)
            (when read-cb
              (funcall (the function read-cb) socket *input-buffer* :start 0 :end n))
-           (unless (= n buffer-len)
+           (when (and (woo.ev.socket:socket-open-p socket)
+                      (not (socket-tls-shutdown-p socket))
+                      (not (woo.ev.socket::socket-input-paused-p socket)))
+             (lev:ev-io-start *evloop* (socket-read-watcher socket)))
+           (unless (and (= n buffer-len)
+                        (woo.ev.socket:socket-open-p socket)
+                        (not (woo.ev.socket::socket-input-paused-p socket)))
              (return))))))))
 
 (define-c-callback timeout-cb :void ((evloop :pointer) (timer :pointer) (events :int))
@@ -382,6 +421,12 @@
 
 (defun close-tcp-server (watcher)
   (when watcher
+    ;; The listener is owned by the event-loop thread. Stop it before closing
+    ;; the descriptor and freeing the watcher; callers outside that thread
+    ;; should use WOO:STOP-GRACEFULLY to arrange this ordering.
+    (when (and *evloop*
+               (not (cffi:null-pointer-p *evloop*)))
+      (lev:ev-io-stop *evloop* watcher))
     (let ((fd (io-fd watcher)))
       (when fd
         (wsys:close fd)))

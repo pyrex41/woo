@@ -26,6 +26,8 @@
                 :ev-io-start
                 :ev-io-stop
                 :ev-timer
+                :ev-timer-init
+                :ev-timer-start
                 :ev-timer-stop
                 :+EV-READ+
                 :+EV-WRITE+)
@@ -43,6 +45,7 @@
            :socket-read-watcher
            :socket-write-watcher
            :socket-timeout-timer
+           :socket-shutdown-timer
            :socket-last-activity
            :socket-remote-addr
            :socket-remote-port
@@ -50,6 +53,11 @@
            :socket-read-cb
            :socket-open-p
            :socket-ssl-handle
+           :socket-tls-shutdown-p
+           :*ssl-write-function*
+           :*ssl-read-function*
+           :*ssl-error-function*
+           :async-write
            :check-socket-open
 
            :write-socket-data
@@ -57,9 +65,25 @@
            :write-socket-stream
            :flush-buffer
            :with-async-writing
+           :start-static-stream
            :send-static-file
+           :graceful-close-socket
+           :tls-shutdown-step
            :close-socket))
 (in-package :woo.ev.socket)
+
+#-woo-no-ssl
+(defvar *ssl-write-function* #'cl+ssl::ssl-write
+  "Indirection for the nonblocking SSL_write call; tests may inject WANT results.")
+#-woo-no-ssl
+(defvar *ssl-read-function* #'cl+ssl::ssl-read
+  "Indirection for the nonblocking SSL_read call; tests may inject WANT results.")
+#-woo-no-ssl
+(defvar *ssl-shutdown-function* #'cl+ssl::ssl-shutdown
+  "Indirection for deterministic nonblocking shutdown tests.")
+#-woo-no-ssl
+(defvar *ssl-error-function* #'cl+ssl::ssl-get-error
+  "Indirection for SSL_get_error; tests may inject deterministic retry paths.")
 
 (defstruct (socket (:constructor %make-socket))
   (watchers (make-array 3
@@ -68,6 +92,8 @@
                                                 (cffi:foreign-alloc '(:struct lev:ev-io))
                                                 (cffi:foreign-alloc '(:struct lev:ev-timer))))
    :type (simple-array cffi:foreign-pointer (3)))
+  (shutdown-watcher (cffi:foreign-alloc '(:struct lev:ev-timer))
+                    :type cffi:foreign-pointer)
   (last-activity (lev:ev-now *evloop*) :type double-float)
   (fd nil :type fixnum)
   remote-addr
@@ -78,11 +104,42 @@
   (write-cb nil :type (or null function))
   (ssl-handle nil :type (or null cffi:foreign-pointer))
   (open-p t :type boolean)
+  close-hooks
+  flush-hooks
+  output-admitter
+  output-releaser
+  (charged-output 0)
+  http2-initializer
+  body-admitter
+  body-memory-limit
+  input-holder
+  (input-paused-p nil)
+  ;; Incremented when a response starts writing headers. This lets error
+  ;; handlers distinguish a pre-commit failure from a committed stream.
+  (response-generation 0 :type fixnum)
 
   (buffer (make-output-buffer #+lispworks :output #+lispworks :static))
   (sendfile-fd nil :type (or null fixnum))
   (sendfile-size nil :type (or null integer))
-  (sendfile-offset 0 :type (or null integer)))
+  (sendfile-offset 0 :type (or null integer))
+  ;; TLS cannot use sendfile. Keep the stream alive and pump bounded chunks
+  ;; from the owner event loop instead of loading the whole pathname.
+  (send-stream nil :type (or null stream))
+  (send-stream-size nil :type (or null integer))
+  (send-stream-offset 0 :type (or null integer))
+  ;; Once a TLS write has started, keep its bytes separate from later
+  ;; application writes. OpenSSL may retry the same call after WANT_READ or
+  ;; WANT_WRITE, so appending to the buffer being retried is unsafe.
+  (pending-write-data nil :type (or null (simple-array (unsigned-byte 8) (*))))
+  (pending-write-offset 0 :type fixnum)
+  (pending-output-charge 0 :type integer)
+  (write-wait-read-p nil :type boolean)
+  (read-wait-write-p nil :type boolean)
+  (send-stream-error-p nil :type boolean)
+  (tls-shutdown-p nil :type boolean)
+  (tls-close-after-drain-p nil :type boolean)
+  (tls-drain-deadline nil :type (or null double-float))
+  (tls-shutdown-deadline nil :type (or null double-float)))
 
 (defun buffer-empty-p (socket)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
@@ -98,6 +155,13 @@
                     'async-write-cb
                     fd
                     lev:+EV-WRITE+)
+    ;; Every allocated watcher must be initialized before close-socket can
+    ;; stop it, including sockets closed before start-listening. This timer
+    ;; stays inactive until TCP installs its connection-timeout callback.
+    (lev:ev-timer-init (socket-timeout-timer socket)
+                       'tls-shutdown-cb 0.0d0 0.0d0)
+    (lev:ev-timer-init (socket-shutdown-timer socket)
+                       'tls-shutdown-cb 0.0d0 0.0d0)
     socket))
 
 (declaim (inline socket-read-watcher socket-write-watcher socket-timeout-timer))
@@ -111,10 +175,16 @@
 (defun socket-timeout-timer (socket)
   (svref (socket-watchers socket) 2))
 
+(defun socket-shutdown-timer (socket)
+  (socket-shutdown-watcher socket))
+
 (defun free-watchers (socket)
   (let ((read-watcher (socket-read-watcher socket))
         (write-watcher (socket-write-watcher socket))
         (timeout-timer (socket-timeout-timer socket)))
+    (let ((shutdown-timer (socket-shutdown-timer socket)))
+      (lev:ev-timer-stop *evloop* shutdown-timer)
+      (cffi:foreign-free shutdown-timer))
     (lev:ev-io-stop *evloop* read-watcher)
     (lev:ev-io-stop *evloop* write-watcher)
     (lev:ev-timer-stop *evloop* timeout-timer)
@@ -122,16 +192,43 @@
     (cffi:foreign-free write-watcher)
     (cffi:foreign-free timeout-timer)))
 
-(defun close-socket (socket)
+(defun close-socket (socket &key (abort t))
+  (declare (ignorable abort))
   (when (socket-open-p socket)
     (setf (socket-open-p socket) nil)
+    (release-buffer-charge socket)
+    (when (plusp (socket-pending-output-charge socket))
+      (let ((count (socket-pending-output-charge socket)))
+        (setf (socket-pending-output-charge socket) 0)
+        (when (socket-output-releaser socket)
+          (funcall (socket-output-releaser socket) count))))
+    (dolist (hook (prog1 (socket-close-hooks socket)
+                    (setf (socket-close-hooks socket) nil)))
+      (handler-case (funcall hook)
+        (error () (vom:error "Socket cleanup hook failed"))))
     (free-watchers socket)
+    (let ((stream (socket-send-stream socket)))
+      (when stream
+        (ignore-errors (close stream :abort t))
+        (setf (socket-send-stream socket) nil)))
+    #-woo-no-ssl
+    (let ((ssl-handle (socket-ssl-handle socket)))
+      (when ssl-handle
+        ;; Abort paths skip close_notify. Graceful paths perform it through
+        ;; TLS-SHUTDOWN-STEP before this final teardown.
+        (unless abort
+          (ignore-errors (cl+ssl::ssl-shutdown ssl-handle)))
+        (ignore-errors (cl+ssl::ssl-free ssl-handle))
+        (setf (socket-ssl-handle socket) nil)))
     (let ((fd (socket-fd socket)))
       (wsys:close fd)
       (remove-pointer-from-registry fd))
     (setf (socket-read-cb socket) nil
           (socket-write-cb socket) nil
           (socket-buffer socket) nil
+          (socket-pending-write-data socket) nil
+          (socket-tls-shutdown-p socket) nil
+          (socket-tls-close-after-drain-p socket) nil
           (socket-data socket) nil)
     (let ((sendfile-fd (socket-sendfile-fd socket)))
       (when sendfile-fd
@@ -139,9 +236,118 @@
         (setf (socket-sendfile-fd socket) nil))))
   t)
 
+(defun tls-shutdown-step (socket)
+  "Advance a nonblocking TLS close_notify, or abort at its deadline."
+  (unless (socket-tls-shutdown-p socket)
+    (return-from tls-shutdown-step t))
+  (when (or (not (socket-open-p socket))
+            (and (socket-tls-shutdown-deadline socket)
+                 (>= (lev:ev-now *evloop*)
+                     (socket-tls-shutdown-deadline socket))))
+    (close-socket socket :abort t)
+    (return-from tls-shutdown-step t))
+  #+woo-no-ssl
+  (progn (close-socket socket :abort t) t)
+  #-woo-no-ssl
+  (let ((handle (socket-ssl-handle socket)))
+    (unless handle
+      (close-socket socket :abort t)
+      (return-from tls-shutdown-step t))
+    (let ((result (ignore-errors (funcall *ssl-shutdown-function* handle))))
+      (cond
+        ((eql result 1)
+         (close-socket socket :abort t)
+         t)
+        ((null result)
+         (close-socket socket :abort t)
+         t)
+        ((zerop result)
+         ;; SSL_shutdown returned 0: close_notify was sent and we are
+         ;; waiting for the peer's close_notify on the readable side.
+         (lev:ev-io-stop *evloop* (socket-write-watcher socket))
+         (lev:ev-io-start *evloop* (socket-read-watcher socket))
+         nil)
+        ((member (ignore-errors (funcall *ssl-error-function* handle result))
+                 (list cl+ssl::+ssl-error-want-read+
+                       cl+ssl::+ssl-error-want-write+)
+                 :test #'eql)
+         (let ((errno (funcall *ssl-error-function* handle result)))
+           (if (= errno cl+ssl::+ssl-error-want-read+)
+               (progn (lev:ev-io-stop *evloop* (socket-write-watcher socket))
+                      (lev:ev-io-start *evloop* (socket-read-watcher socket)))
+               (progn (lev:ev-io-stop *evloop* (socket-read-watcher socket))
+                      (lev:ev-io-start *evloop* (socket-write-watcher socket))))
+           nil))
+        (t
+         (close-socket socket :abort t)
+         t)))))
+
+(define-c-callback tls-shutdown-cb :void
+    ((evloop :pointer) (timer :pointer) (events :int))
+  (declare (ignore evloop events))
+  (let* ((watcher (cffi:foreign-slot-value timer '(:struct lev:ev-timer) 'lev::data))
+         (socket (and watcher (deref-data-from-pointer (io-fd watcher)))))
+    (when socket
+      (when (and (socket-tls-close-after-drain-p socket)
+                 (socket-tls-drain-deadline socket)
+                 (>= (lev:ev-now *evloop*) (socket-tls-drain-deadline socket)))
+        (close-socket socket :abort t)
+        (return-from tls-shutdown-cb))
+      (tls-shutdown-step socket))))
+
+(defun graceful-close-socket (socket &key deadline)
+  "Drain accepted output and close_notify within one second or DEADLINE."
+  (when (socket-open-p socket)
+    (when (or (socket-tls-shutdown-p socket)
+              (socket-tls-close-after-drain-p socket))
+      (return-from graceful-close-socket socket))
+    (let ((absolute-deadline
+            (min (or deadline most-positive-double-float)
+                 (+ (lev:ev-now *evloop*) 1.0d0))))
+      (setf (socket-tls-drain-deadline socket) absolute-deadline
+            (socket-tls-shutdown-deadline socket) absolute-deadline)
+      (let ((timer (socket-shutdown-timer socket)))
+        (lev:ev-timer-init timer 'tls-shutdown-cb
+                           (max 0.0d0 (- absolute-deadline (lev:ev-now *evloop*)))
+                           0.0d0)
+        (setf (cffi:foreign-slot-value timer '(:struct lev:ev-timer) 'lev::data)
+              (socket-read-watcher socket))
+        (lev:ev-timer-start *evloop* timer))
+      (when (or (socket-pending-write-data socket)
+                (not (buffer-empty-p socket))
+                (socket-sendfile-fd socket)
+                (socket-send-stream socket))
+        (setf (socket-tls-close-after-drain-p socket) t)
+        (unless (socket-write-wait-read-p socket)
+          (lev:ev-io-start *evloop* (socket-write-watcher socket)))
+        (return-from graceful-close-socket socket))
+      #+woo-no-ssl
+      (return-from graceful-close-socket (close-socket socket :abort t))
+      #-woo-no-ssl
+      (if (null (socket-ssl-handle socket))
+          (close-socket socket :abort t)
+          (progn
+            (setf (socket-tls-shutdown-p socket) t)
+            (lev:ev-io-stop *evloop* (socket-read-watcher socket))
+            (lev:ev-io-stop *evloop* (socket-write-watcher socket))
+            (tls-shutdown-step socket))))))
+
 (defun check-socket-open (socket)
   (unless (socket-open-p socket)
     (error 'socket-closed)))
+
+(defun charge-output (socket count)
+  (when (socket-output-admitter socket)
+    (unless (funcall (socket-output-admitter socket) count)
+      (error 'woo.ev.condition:output-limit-exceeded))
+    (incf (socket-charged-output socket) count)))
+
+(defun release-buffer-charge (socket)
+  (when (plusp (socket-charged-output socket))
+    (let ((count (socket-charged-output socket)))
+      (setf (socket-charged-output socket) 0)
+      (when (socket-output-releaser socket)
+        (funcall (socket-output-releaser socket) count)))))
 
 (defun write-socket-data (socket data &key (start 0) (end (length data))
                                         (write-cb nil write-cb-specified-p))
@@ -149,6 +355,7 @@
            (type vector data)
            (type fixnum start end))
   (when (socket-open-p socket)
+    (charge-output socket (- end start))
     (when write-cb-specified-p
       (setf (socket-write-cb socket) write-cb))
     (if (typep data '(simple-array (unsigned-byte 8) (*)))
@@ -163,6 +370,7 @@
   (declare (optimize speed)
            (type (unsigned-byte 8) byte))
   (when (socket-open-p socket)
+    (charge-output socket 1)
     (when write-cb-specified-p
       (setf (socket-write-cb socket) write-cb))
     (fast-write-byte byte (socket-buffer socket))))
@@ -194,7 +402,41 @@
              (and (flush-buffer socket)
                   (reset-buffer socket)))
             (t
-             (fast-io::extend buffer))))))))
+            (fast-io::extend buffer))))))))
+
+(defun start-static-stream (socket stream size)
+  "Transfer ownership of STREAM to SOCKET and send it in bounded chunks.
+   The stream is closed by the socket on completion, cancellation, or error."
+  (check-socket-open socket)
+  (when (socket-send-stream socket)
+    (ignore-errors (close (socket-send-stream socket) :abort t)))
+  (setf (socket-send-stream socket) stream
+        (socket-send-stream-size socket) size
+        (socket-send-stream-offset socket) (file-position stream))
+  socket)
+
+(defun pump-static-stream (socket)
+  (let ((stream (socket-send-stream socket)))
+    (when stream
+      (let* ((remaining (- (or (socket-send-stream-size socket) 0)
+                           (socket-send-stream-offset socket)))
+             (count (min 65536 (max 0 remaining)))
+             (chunk (make-array count :element-type '(unsigned-byte 8))))
+        (if (zerop count)
+            (progn
+              (ignore-errors (close stream))
+              (setf (socket-send-stream socket) nil))
+            (let ((n (read-sequence chunk stream :end count)))
+              (if (zerop n)
+                  (progn
+                    (ignore-errors (close stream))
+                    (setf (socket-send-stream socket) nil
+                          ;; A short read is valid, but EOF before the
+                          ;; declared Content-Length is a failed response.
+                          (socket-send-stream-error-p socket) t))
+                  (progn
+                    (incf (socket-send-stream-offset socket) n)
+                    (write-socket-data socket chunk :end n)))))))))
 
 (declaim (inline reset-buffer))
 (defun reset-buffer (socket)
@@ -206,70 +448,87 @@
             (fast-io::output-buffer-queue buffer) nil
             (fast-io::output-buffer-last buffer) nil))))
 
+(defun release-pending-charge (socket)
+  (let ((count (socket-pending-output-charge socket)))
+    (setf (socket-pending-output-charge socket) 0)
+    (when (and (plusp count) (socket-output-releaser socket))
+      (funcall (socket-output-releaser socket) count))))
+
 (defun flush-buffer (socket)
+  "Flush one immutable pending write, preserving it across TLS retries."
   (declare (optimize speed))
   (check-socket-open socket)
-  (let ((data (finish-output-buffer (socket-buffer socket)))
-        (fd (socket-fd socket)))
-    (declare (type (simple-array (unsigned-byte 8) (*)) data))
+  (unless (socket-pending-write-data socket)
+    (let ((data (finish-output-buffer (socket-buffer socket))))
+      (setf (socket-pending-write-data socket) data
+            (socket-pending-write-offset socket) 0
+            (socket-pending-output-charge socket)
+            (socket-charged-output socket)
+            (socket-charged-output socket) 0)
+      (reset-buffer socket)))
+  (let* ((data (socket-pending-write-data socket))
+         (offset (socket-pending-write-offset socket))
+         (len (- (length data) offset))
+         (fd (socket-fd socket)))
+    (when (zerop len)
+      (setf (socket-pending-write-data socket) nil
+            (socket-pending-write-offset socket) 0)
+      (release-pending-charge socket)
+      (return-from flush-buffer t))
     (cffi:with-pointer-to-vector-data (data-sap data)
-      (let* ((len (length data))
-             (completedp nil)
-             (ssl-handle (socket-ssl-handle socket))
-             (n
-               #+woo-no-ssl
-               (wsys:write fd data-sap len)
-               #-woo-no-ssl
-               (if ssl-handle
-                   (cl+ssl::ssl-write ssl-handle
-                                      data-sap
-                                      len)
-                   (wsys:write fd data-sap len))))
-        (declare (type fixnum len)
-                 (type fixnum n))
-        (case n
-          (-1
-           (if ssl-handle
-               #+woo-no-ssl (close-socket socket)
-               #-woo-no-ssl
-               (let ((errno (cl+ssl::ssl-get-error ssl-handle n)))
-                 (declare (type fixnum errno))
-                 (cond
-                   ((or (= errno cl+ssl::+ssl-error-zero-return+)
-                        (= errno cl+ssl::+ssl-error-ssl+))
-                    (close-socket socket))
-                   ((= errno cl+ssl::+ssl-error-want-write+))
-                   (t
-                    (vom:error "Unexpected error (Code: ~D)" errno)
-                    (close-socket socket))))
-               (let ((errno (wsys:errno)))
-                 (return-from flush-buffer
+      (let ((ptr (cffi:inc-pointer data-sap offset))
+            (ssl-handle (socket-ssl-handle socket)))
+        (let ((n
+                #+woo-no-ssl
+                (wsys:write fd ptr len)
+                #-woo-no-ssl
+                (if ssl-handle
+                    (funcall *ssl-write-function* ssl-handle ptr len)
+                    (wsys:write fd ptr len))))
+          (declare (type fixnum n))
+          (cond
+            ((plusp n)
+             (incf (socket-pending-write-offset socket) n)
+             ;; Any progress completes the previous WANT_READ transition,
+             ;; even when partial-write mode leaves another record pending.
+             (setf (socket-write-wait-read-p socket) nil
+                   (socket-last-activity socket) (lev:ev-now *evloop*))
+             (lev:ev-io-start *evloop* (socket-write-watcher socket))
+             (when (= (socket-pending-write-offset socket) (length data))
+               (setf (socket-pending-write-data socket) nil
+                     (socket-pending-write-offset socket) 0
+                     (socket-write-wait-read-p socket) nil)
+               (release-pending-charge socket)
+               (lev:ev-io-start *evloop* (socket-write-watcher socket)))
+             (null (socket-pending-write-data socket)))
+            ((and (zerop n) (null ssl-handle)) nil)
+            (t
+             #+woo-no-ssl
+             (let ((errno (wsys:errno)))
+               (cond
+                 ((or (= errno wsys:EWOULDBLOCK) (= errno wsys:EINTR)) nil)
+                 (t (close-socket socket) t)))
+             #-woo-no-ssl
+             (if ssl-handle
+                 (let ((errno (funcall *ssl-error-function* ssl-handle n)))
                    (cond
-                     ((or (= errno wsys:EWOULDBLOCK)
-                          (= errno wsys:EINTR))
+                     ((or (= errno cl+ssl::+ssl-error-want-write+))
+                      (setf (socket-write-wait-read-p socket) nil)
+                      (lev:ev-io-start *evloop* (socket-write-watcher socket))
                       nil)
-                     ((or (= errno wsys:ECONNABORTED)
-                          (= errno wsys:ECONNREFUSED)
-                          (= errno wsys:ECONNRESET)
-                          (= errno wsys:EPIPE)
-                          (= errno wsys:ENOTCONN))
-                      (vom:error "Connection is already closed (Code: ~D)" errno)
-                      (close-socket socket)
-                      t)
+                     ((= errno cl+ssl::+ssl-error-want-read+)
+                      (setf (socket-write-wait-read-p socket) t)
+                      (lev:ev-io-stop *evloop* (socket-write-watcher socket))
+                      (lev:ev-io-start *evloop* (socket-read-watcher socket))
+                      nil)
                      (t
-                      (vom:error "Unexpected error (Code: ~D)" errno)
+                      (vom:error "Unexpected TLS write error (Code: ~D)" errno)
                       (close-socket socket)
-                      t))))))
-          (otherwise
-           (setf (socket-last-activity socket) (lev:ev-now *evloop*))
-           (if (= n len)
-               (setq completedp t)
-               (progn
-                 (reset-buffer socket)
-                 (fast-write-sequence data
-                                      (socket-buffer socket)
-                                      n)))))
-        completedp))))
+                      t)))
+                 (let ((errno (wsys:errno)))
+                   (if (or (= errno wsys:EWOULDBLOCK) (= errno wsys:EINTR))
+                       nil
+                       (progn (close-socket socket) t)))))))))))
 
 (defun send-file (socket)
   (declare (optimize speed))
@@ -313,23 +572,84 @@
   (declare (optimize speed))
   (unless (socket-open-p socket)
     (return-from async-write t))
+  (when (socket-tls-shutdown-p socket)
+    (tls-shutdown-step socket)
+    (return-from async-write t))
 
+  ;; Complete an in-flight TLS write before touching application bytes that
+  ;; arrived while it was waiting for readiness.
+  (when (socket-pending-write-data socket)
+    (unless (flush-buffer socket)
+      (return-from async-write nil)))
+  ;; A nonblocking SSL_read can require write readiness (handshake/alert).
+  ;; Retry that read from the write callback once the write side is serviced.
+  (when (and (socket-open-p socket)
+             (socket-read-wait-write-p socket)
+             (socket-tcp-read-cb socket))
+    (setf (socket-read-wait-write-p socket) nil)
+    (funcall (symbol-function (socket-tcp-read-cb socket))
+             *evloop* (socket-read-watcher socket) lev:+EV-WRITE+)
+    (unless (socket-open-p socket)
+      (return-from async-write t)))
+  ;; The read callback may still need write readiness after the retry.
+  ;; Keep the write watcher armed instead of falling through to the
+  ;; completed-output stop below.
+  (when (socket-read-wait-write-p socket)
+    (return-from async-write nil))
+  (unless (socket-open-p socket)
+    (return-from async-write t))
   ;; Send from buffer
   (unless (buffer-empty-p socket)
     (unless (flush-buffer socket)
-      (return-from async-write nil))
-    (reset-buffer socket))
+      (return-from async-write nil)))
+  ;; TLS pathname responses use a stream rather than sendfile. Pump one
+  ;; bounded chunk per readiness callback to preserve backpressure.
+  (when (and (socket-open-p socket)
+             (null (socket-sendfile-fd socket))
+             (socket-send-stream socket))
+    (pump-static-stream socket)
+    (when (socket-send-stream-error-p socket)
+      (vom:error "TLS static response ended before its declared length")
+      (close-socket socket)
+      (return-from async-write t))
+    (unless (buffer-empty-p socket)
+      (unless (flush-buffer socket)
+        (return-from async-write nil))
+      ;; Leave the write watcher armed for the next bounded chunk. The
+      ;; response callback belongs only to the final chunk.
+      (when (socket-send-stream socket)
+        (return-from async-write nil))))
   ;; Send a static file?
   (when (socket-sendfile-fd socket)
     (unless (send-file socket)
       (return-from async-write nil)))
 
   ;; Transfer has been completed.
-  (when (socket-write-cb socket)
-    (funcall (the function (socket-write-cb socket)) socket))
-  ;; Need to check if 'socket' is still open because it may be closed in write-cb.
-  (when (socket-open-p socket)
+  (unless (socket-open-p socket)
+    (return-from async-write t))
+  (let ((callback (socket-write-cb socket))
+        (hooks (prog1 (socket-flush-hooks socket) (setf (socket-flush-hooks socket) nil))))
     (setf (socket-write-cb socket) nil)
+    (when callback (funcall callback socket))
+    (dolist (hook hooks) (funcall hook)))
+  (when (and (socket-open-p socket)
+             (socket-tls-close-after-drain-p socket)
+             (buffer-empty-p socket)
+             (null (socket-pending-write-data socket))
+             (null (socket-sendfile-fd socket))
+             (null (socket-send-stream socket)))
+    (setf (socket-tls-close-after-drain-p socket) nil)
+    (graceful-close-socket socket :deadline (socket-tls-drain-deadline socket))
+    (return-from async-write t))
+
+  ;; Completion callbacks can enqueue another write. Keep its watcher alive.
+  (when (and (socket-open-p socket) (buffer-empty-p socket)
+             (not (socket-tls-shutdown-p socket))
+             (null (socket-pending-write-data socket))
+             (null (socket-sendfile-fd socket))
+             (null (socket-send-stream socket))
+             (null (socket-flush-hooks socket))
+             (not (socket-read-wait-write-p socket)))
     (lev:ev-io-stop *evloop* (socket-write-watcher socket)))
   t)
 
@@ -343,7 +663,12 @@
       (cffi:foreign-free io)
       (return-from async-write-cb))
 
-    (async-write socket)))
+    (when (socket-tls-shutdown-p socket)
+      (tls-shutdown-step socket)
+      (return-from async-write-cb))
+
+    (handler-case (async-write socket)
+      (woo.ev.condition:output-limit-exceeded () (close-socket socket)))))
 
 (defmacro with-async-writing ((socket &key write-cb force-streaming) &body body)
   `(progn
@@ -351,7 +676,8 @@
      (setf (socket-write-cb ,socket) ,write-cb)
      ,(if force-streaming
           `(unless (async-write ,socket)
-             (lev:ev-io-start *evloop* (socket-write-watcher ,socket)))
+             (unless (socket-write-wait-read-p ,socket)
+               (lev:ev-io-start *evloop* (socket-write-watcher ,socket))))
           `(lev:ev-io-start *evloop* (socket-write-watcher ,socket)))))
 
 (defun send-static-file (socket fd size)
