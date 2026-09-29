@@ -107,6 +107,75 @@ class ReceiptTests(unittest.TestCase):
         self.assertEqual(diagnostic.getvalue(),
                          'WOO_FD_SAMPLE_FAILURE reason=rss-zero rss_bytes=0 fd_count=1\n')
 
+    def test_group_sampler_recovers_after_rss_zero_and_transient_snapshot_error(self):
+        class Clock:
+            def __init__(self):
+                self.now = 0.0
+
+            def monotonic(self):
+                return self.now
+
+            def sleep(self, seconds):
+                self.now += seconds
+
+        clock = Clock()
+        zero_ps = '123 456 0\n'
+        positive_ps = '123 456 10\n'
+        calls = 0
+
+        def sample(command, **kwargs):
+            nonlocal calls
+            calls += 1
+            if command[0] == 'ps':
+                return zero_ps if calls <= 6 else positive_ps
+            if calls == 8:
+                raise check.subprocess.CalledProcessError(1, ['lsof'], output='')
+            return 'p456\nf0\n'
+
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.time, 'monotonic', side_effect=clock.monotonic), \
+             patch.object(check.time, 'sleep', side_effect=clock.sleep), \
+             patch.object(check.subprocess, 'check_output', side_effect=sample):
+            self.assertEqual(check.process_group_stats(123),
+                             (10240, 1, [{'pid': 456, 'rss_bytes': 10240, 'fd_count': 1}]))
+        self.assertEqual(calls, 10)
+        self.assertLess(clock.now, check.FD_SAMPLE_DEADLINE)
+
+    def test_group_sampler_stops_after_persistent_snapshot_errors(self):
+        class Clock:
+            def __init__(self):
+                self.now = 0.0
+
+            def monotonic(self):
+                return self.now
+
+            def sleep(self, seconds):
+                self.now += seconds
+
+        clock = Clock()
+        calls = 0
+
+        def sample(command, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return '123 456 0\n'
+            if calls == 2:
+                return 'p456\nf0\n'
+            raise OSError('ps unavailable')
+
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.time, 'monotonic', side_effect=clock.monotonic), \
+             patch.object(check.time, 'sleep', side_effect=clock.sleep), \
+             patch.object(check.subprocess, 'check_output', side_effect=sample):
+            diagnostic = io.StringIO()
+            with redirect_stderr(diagnostic), self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+        self.assertEqual(calls, 5)
+        self.assertEqual(diagnostic.getvalue(),
+                         'WOO_FD_SAMPLE_FAILURE reason=process-snapshot-error\n')
+        self.assertLess(clock.now, check.FD_SAMPLE_DEADLINE)
+
     def test_group_sampler_accepts_zero_fd_child_with_positive_group_total(self):
         ps = '123 456 10\n123 789 10\n'
         with patch.object(check.Path, 'is_dir', return_value=False), \

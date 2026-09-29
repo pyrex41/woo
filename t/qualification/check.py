@@ -114,7 +114,7 @@ def _process_group_stats_once(pgid, deadline):
 def process_group_stats(pgid):
     last_error = None
     deadline = time.monotonic() + FD_SAMPLE_DEADLINE
-    max_attempts = 3
+    non_rss_errors = 0
     for attempt in range(FD_SAMPLE_MAX_ATTEMPTS):
         if time.monotonic() >= deadline:
             break
@@ -125,17 +125,18 @@ def process_group_stats(pgid):
         except _ResourceSampleRetry as error:
             last_error = error
             if error.reason == 'rss-zero':
-                max_attempts = FD_SAMPLE_MAX_ATTEMPTS
-            elif max_attempts > 3:
-                max_attempts = 3
-            if attempt + 1 >= max_attempts:
+                non_rss_errors = 0
+            else:
+                non_rss_errors += 1
+            if non_rss_errors >= 3:
                 break
             delay = FD_SAMPLE_RETRY_DELAY if error.reason == 'rss-zero' else 0.05
             time.sleep(min(delay, max(0, deadline - time.monotonic())))
         except (OSError, subprocess.SubprocessError) as error:
             last_error = _ResourceSampleRetry('resource process snapshot failed', 'process-snapshot-error')
             last_error.__cause__ = error
-            if attempt + 1 >= max_attempts:
+            non_rss_errors += 1
+            if non_rss_errors >= 3:
                 break
             time.sleep(min(0.05, max(0, deadline - time.monotonic())))
     reason = getattr(last_error, 'reason', 'unknown')
