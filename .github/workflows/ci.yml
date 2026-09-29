@@ -1,6 +1,10 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore: [diag/tls-live-d85]
+  pull_request:
+    branches-ignore: [diag/tls-live-d85]
 
 jobs:
   test:

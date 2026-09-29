@@ -1,0 +1,31 @@
+name: TLS live diagnostic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tls-live:
+    name: Go TLS reference vs Woo
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies from APT
+        run: sudo apt-get install -y libev-dev gcc libc6-dev
+      - name: Install Roswell
+        env:
+          LISP: sbcl-bin
+          ROSWELL_INSTALL_DIR: /usr
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+      - name: Install frozen Quicklisp distribution
+        run: ros -e '(ql-dist:install-dist "http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt" :prompt nil :replace t)'
+      - name: Install Rove
+        run: ros install rove
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: t/hegel/go.mod
+      - name: Run bounded reference and Woo TLS diagnostic
+        env:
+          WOO_HEGEL_LISP: ros
+        run: go -C t/hegel test -v -run '^TestDiagnosticTLSReferenceAndWoo$' -count=1 -timeout 8m .
