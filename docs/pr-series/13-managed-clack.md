@@ -12,6 +12,7 @@ This is one clean commit in a dependency-ordered series. Review the topic delta 
 
 ## Verification
 
+- PASS: load-only (no SSL); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/d7585aab637b-no-ssl-woo-lack-compat_tests-load.json).
 - PASS: load-only (no SSL); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/d7585aab637b-no-ssl-woo-test-load.json).
 - PASS: woo-lack-compat/tests (SSL enabled); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/d7585aab637b-ssl-woo-lack-compat_tests-all.json).
 - Hosted CI: [PASS](https://github.com/pyrex41/woo/actions/runs/36520527799), exact head `d7585aab637b14a46b482f990e307b687358d4da`.

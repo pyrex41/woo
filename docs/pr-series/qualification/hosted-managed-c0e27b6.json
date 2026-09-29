@@ -1,0 +1,298 @@
+{
+  "repo": "pyrex41/woo",
+  "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "worktree": "<HOME>/projects/woo-pr-series/16-showcase",
+  "worktree_status": "clean",
+  "workflows": {
+    "CI": {
+      "run_id": 36520528021,
+      "url": "https://github.com/pyrex41/woo/actions/runs/36520528021",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "Lack compatibility": {
+      "run_id": 36520527923,
+      "url": "https://github.com/pyrex41/woo/actions/runs/36520527923",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": {
+        "macos-15": "success",
+        "ubuntu-24.04": "success"
+      }
+    },
+    "Legacy qualification": {
+      "run_id": 36520527924,
+      "url": "https://github.com/pyrex41/woo/actions/runs/36520527924",
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": {
+        "macos-15": "success",
+        "ubuntu-24.04": "failure"
+      }
+    }
+  },
+  "qualification_status": "FAIL",
+  "managed_lack_status": "PASS",
+  "receipts": {
+    "lack_macos_15": {
+      "path": "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/receipt.json",
+      "status": "PASS",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "source_digest": "d7c7bbfbc17021ae3dd52dbf17eb1dfc33683ee0894aca1c1a91b80af933c2df",
+      "soak_seconds": 1800,
+      "soak_elapsed_seconds": 1805.439460042,
+      "elapsed_seconds": 1942.4228579159999,
+      "cleanup": "PASS",
+      "gates": {
+        "receipt_validator": "PASS",
+        "lisp_contract_lifecycle_middleware_services": "PASS",
+        "transport_matrix_budget_cancellation_drain": "PASS",
+        "http1_https_h2c_h2tls_websocket_soak": "PASS"
+      },
+      "failure": null,
+      "dependencies": {
+        "quicklisp_dist": "2026-01-01",
+        "sources": [
+          {
+            "name": "clack",
+            "repository": "fukamachi/clack",
+            "commit": "9435762a8fc139edde8c682502a037332b0655f8",
+            "sha256": "63c0972641eeaa3a779ed6cb8bdaa7a5de44c269592cd29e4ee79e6aa033822c"
+          },
+          {
+            "name": "lack",
+            "repository": "fukamachi/lack",
+            "commit": "35d8b0ab38a5f3a8ce885f9b135152ce932a45e2",
+            "sha256": "61b70ec3baee7df3a14a4aa7047c7c3f157bb8ead214776a2ec6db0bf708e3ef"
+          },
+          {
+            "name": "websocket-driver",
+            "repository": "fukamachi/websocket-driver",
+            "commit": "137e3132075996b4b21874dad50a02e28aacc64c",
+            "sha256": "6f762cc286d6cb36e266b3dd0474e84616e37bc265faf80d74000c7348d2464f"
+          },
+          {
+            "name": "hunchentoot",
+            "repository": "edicl/hunchentoot",
+            "commit": "65a3a3cca7e6e91fb068efc2ef8069b5c78ee91f",
+            "sha256": "6b50e690b5786ef5878e517ff198eab39c5becd6d152d5d5dee012d8855d2d49"
+          }
+        ]
+      },
+      "dependencies_match_expected": true
+    },
+    "lack_ubuntu_24_04": {
+      "path": "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/receipt.json",
+      "status": "PASS",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "source_digest": "d7c7bbfbc17021ae3dd52dbf17eb1dfc33683ee0894aca1c1a91b80af933c2df",
+      "soak_seconds": 1800,
+      "soak_elapsed_seconds": 1802.748867349,
+      "elapsed_seconds": 1938.3904190920002,
+      "cleanup": "PASS",
+      "gates": {
+        "receipt_validator": "PASS",
+        "lisp_contract_lifecycle_middleware_services": "PASS",
+        "transport_matrix_budget_cancellation_drain": "PASS",
+        "http1_https_h2c_h2tls_websocket_soak": "PASS"
+      },
+      "failure": null,
+      "dependencies": {
+        "quicklisp_dist": "2026-01-01",
+        "sources": [
+          {
+            "name": "clack",
+            "repository": "fukamachi/clack",
+            "commit": "9435762a8fc139edde8c682502a037332b0655f8",
+            "sha256": "63c0972641eeaa3a779ed6cb8bdaa7a5de44c269592cd29e4ee79e6aa033822c"
+          },
+          {
+            "name": "lack",
+            "repository": "fukamachi/lack",
+            "commit": "35d8b0ab38a5f3a8ce885f9b135152ce932a45e2",
+            "sha256": "61b70ec3baee7df3a14a4aa7047c7c3f157bb8ead214776a2ec6db0bf708e3ef"
+          },
+          {
+            "name": "websocket-driver",
+            "repository": "fukamachi/websocket-driver",
+            "commit": "137e3132075996b4b21874dad50a02e28aacc64c",
+            "sha256": "6f762cc286d6cb36e266b3dd0474e84616e37bc265faf80d74000c7348d2464f"
+          },
+          {
+            "name": "hunchentoot",
+            "repository": "edicl/hunchentoot",
+            "commit": "65a3a3cca7e6e91fb068efc2ef8069b5c78ee91f",
+            "sha256": "6b50e690b5786ef5878e517ff198eab39c5becd6d152d5d5dee012d8855d2d49"
+          }
+        ]
+      },
+      "dependencies_match_expected": true
+    },
+    "legacy_macos_15": {
+      "path": "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/receipt.json",
+      "status": "PASS",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "source_digest": "cf5e2112218f26176941b2b539664684d188159ee5a00dfd248b905ed9f92bbb",
+      "soak_seconds": 1800,
+      "soak_elapsed_seconds": 1800.211517083,
+      "elapsed_seconds": 1980.0389891250002,
+      "cleanup": "PASS",
+      "gates": {
+        "legacy_http_https_static_upload_disconnect": "PASS"
+      },
+      "failure": null,
+      "dependencies": {
+        "quicklisp_dist": "2026-01-01",
+        "sources": [
+          {
+            "name": "clack",
+            "repository": "fukamachi/clack",
+            "commit": "9435762a8fc139edde8c682502a037332b0655f8",
+            "sha256": "63c0972641eeaa3a779ed6cb8bdaa7a5de44c269592cd29e4ee79e6aa033822c"
+          },
+          {
+            "name": "lack",
+            "repository": "fukamachi/lack",
+            "commit": "35d8b0ab38a5f3a8ce885f9b135152ce932a45e2",
+            "sha256": "61b70ec3baee7df3a14a4aa7047c7c3f157bb8ead214776a2ec6db0bf708e3ef"
+          },
+          {
+            "name": "websocket-driver",
+            "repository": "fukamachi/websocket-driver",
+            "commit": "137e3132075996b4b21874dad50a02e28aacc64c",
+            "sha256": "6f762cc286d6cb36e266b3dd0474e84616e37bc265faf80d74000c7348d2464f"
+          },
+          {
+            "name": "hunchentoot",
+            "repository": "edicl/hunchentoot",
+            "commit": "65a3a3cca7e6e91fb068efc2ef8069b5c78ee91f",
+            "sha256": "6b50e690b5786ef5878e517ff198eab39c5becd6d152d5d5dee012d8855d2d49"
+          }
+        ]
+      },
+      "dependencies_match_expected": true
+    },
+    "legacy_ubuntu_24_04": {
+      "path": "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/receipt.json",
+      "status": "FAIL",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "source_digest": "cf5e2112218f26176941b2b539664684d188159ee5a00dfd248b905ed9f92bbb",
+      "soak_seconds": 1800,
+      "soak_elapsed_seconds": null,
+      "elapsed_seconds": 1990.393031227,
+      "cleanup": "UNKNOWN",
+      "gates": {},
+      "failure": "full receipt lacks bounded phase-bound soak resource evidence",
+      "dependencies": {
+        "quicklisp_dist": "2026-01-01",
+        "sources": [
+          {
+            "name": "clack",
+            "repository": "fukamachi/clack",
+            "commit": "9435762a8fc139edde8c682502a037332b0655f8",
+            "sha256": "63c0972641eeaa3a779ed6cb8bdaa7a5de44c269592cd29e4ee79e6aa033822c"
+          },
+          {
+            "name": "lack",
+            "repository": "fukamachi/lack",
+            "commit": "35d8b0ab38a5f3a8ce885f9b135152ce932a45e2",
+            "sha256": "61b70ec3baee7df3a14a4aa7047c7c3f157bb8ead214776a2ec6db0bf708e3ef"
+          },
+          {
+            "name": "websocket-driver",
+            "repository": "fukamachi/websocket-driver",
+            "commit": "137e3132075996b4b21874dad50a02e28aacc64c",
+            "sha256": "6f762cc286d6cb36e266b3dd0474e84616e37bc265faf80d74000c7348d2464f"
+          },
+          {
+            "name": "hunchentoot",
+            "repository": "edicl/hunchentoot",
+            "commit": "65a3a3cca7e6e91fb068efc2ef8069b5c78ee91f",
+            "sha256": "6b50e690b5786ef5878e517ff198eab39c5becd6d152d5d5dee012d8855d2d49"
+          }
+        ]
+      },
+      "dependencies_match_expected": true
+    }
+  },
+  "evidence_paths": [
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/certificates.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/lisp.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/receipt.json",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/receipts.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/redis.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/soak.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-macos-15/transports.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/certificates.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/lisp.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/receipt.json",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/receipts.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/redis.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/soak.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/lack/lack-compatibility-ubuntu-24.04/transports.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certificates.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-intermediate.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-intermediate.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-intermediate.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-intermediate.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-intermediate.srl",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-leaf.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-leaf.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-leaf.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-leaf.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-root.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-root.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/chain-root.srl",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localCA.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localCA.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localCA.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localCA.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localCA.srl",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localhost.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localhost.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localhost.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/certs/localhost.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/fixture.txt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/legacy.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/receipt.json",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/result.json",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-macos-15/stop.result",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certificates.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-intermediate.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-intermediate.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-intermediate.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-intermediate.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-intermediate.srl",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-leaf.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-leaf.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-leaf.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-leaf.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-root.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-root.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/chain-root.srl",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localCA.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localCA.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localCA.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localCA.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localCA.srl",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localhost.crt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localhost.csr",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localhost.csx",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/certs/localhost.key",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/fixture.txt",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/legacy.log",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/receipt.json",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/result.json",
+    "<HOME>/projects/woo-pr-series-evidence/hosted-managed-c0e27b6/legacy/legacy-qualification-ubuntu-24.04/stop.result"
+  ],
+  "limitations": [
+    "Legacy qualification is not a full green: Ubuntu receipt FAIL because full receipt lacks bounded phase-bound soak resource evidence; cleanup UNKNOWN.",
+    "The macOS legacy receipt PASS and both managed Lack receipts PASS; overall qualification remains FAIL until the Ubuntu legacy validator issue is resolved."
+  ],
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "13f7c7e06709b9cafcf8043056770cdeccb76afc433275198acc3b8b9241a222"
+  }
+}

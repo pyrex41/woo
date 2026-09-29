@@ -1,5 +1,5 @@
 {
-  "observed_at": "2026-09-29T04:27:40.469728+00:00",
+  "observed_at": "2026-09-29T04:52:19.429370+00:00",
   "repository": "pyrex41/woo",
   "runs": [
     {
@@ -30,11 +30,11 @@
       "workflowName": "CI"
     },
     {
-      "conclusion": "",
+      "conclusion": "success",
       "databaseId": 36520530272,
       "headBranch": "codex/upstream-09-h2-codecs",
       "headSha": "2403a847381cb410db26dfd1d0db38783945b5c6",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/pyrex41/woo/actions/runs/36520530272",
       "workflowName": "CI"
     },
@@ -57,11 +57,11 @@
       "workflowName": "CI"
     },
     {
-      "conclusion": "",
+      "conclusion": "failure",
       "databaseId": 36520529633,
       "headBranch": "codex/upstream-15-qualification",
       "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/pyrex41/woo/actions/runs/36520529633",
       "workflowName": "Legacy qualification"
     },
@@ -75,11 +75,11 @@
       "workflowName": "CI"
     },
     {
-      "conclusion": "",
+      "conclusion": "failure",
       "databaseId": 36520529575,
       "headBranch": "codex/upstream-15-qualification",
       "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/pyrex41/woo/actions/runs/36520529575",
       "workflowName": "Lack compatibility"
     },
@@ -129,11 +129,11 @@
       "workflowName": "CI"
     },
     {
-      "conclusion": "",
+      "conclusion": "cancelled",
       "databaseId": 36520528290,
       "headBranch": "codex/upstream-11-h2-server",
       "headSha": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/pyrex41/woo/actions/runs/36520528290",
       "workflowName": "CI"
     },
@@ -147,20 +147,20 @@
       "workflowName": "CI"
     },
     {
-      "conclusion": "",
+      "conclusion": "failure",
       "databaseId": 36520527924,
       "headBranch": "codex/upstream-16-showcase",
       "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/pyrex41/woo/actions/runs/36520527924",
       "workflowName": "Legacy qualification"
     },
     {
-      "conclusion": "",
+      "conclusion": "success",
       "databaseId": 36520527923,
       "headBranch": "codex/upstream-16-showcase",
       "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/pyrex41/woo/actions/runs/36520527923",
       "workflowName": "Lack compatibility"
     },

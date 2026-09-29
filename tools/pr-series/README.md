@@ -45,3 +45,8 @@ replaced by `<HOME>`. The raw receipts remain private in the evidence workspace;
 public metadata records their SHA256 hashes. The source HEAD/tree and outcomes
 are preserved. Public command scripts contain placeholders; rerun the helper
 tools to generate actual paths on your host.
+
+`qualification.py` publishes the selected assembled-head hosted receipts without
+changing their outcomes. Intermediate PR 15 receipts and CI retry logs are
+archived separately. [Verification notes](../../docs/pr-series/verification.md)
+identify failed gates and the evidence needed before upstream publication.

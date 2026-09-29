@@ -676,6 +676,13 @@
           "system": "woo-test"
         },
         {
+          "path": "docs/pr-series/receipts/2403a847381c-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": false,
+          "system": "woo-test"
+        },
+        {
           "path": "docs/pr-series/receipts/2403a847381c-ssl-woo-test-woo-test.hpack-woo-test.http2-frames.json",
           "result": "PASS",
           "scope": [
@@ -689,11 +696,11 @@
       "related_upstream_prs": [],
       "hosted_checks": [
         {
-          "conclusion": "",
+          "conclusion": "success",
           "databaseId": 36520530272,
           "headBranch": "codex/upstream-09-h2-codecs",
           "headSha": "2403a847381cb410db26dfd1d0db38783945b5c6",
-          "status": "in_progress",
+          "status": "completed",
           "url": "https://github.com/pyrex41/woo/actions/runs/36520530272",
           "workflowName": "CI"
         }
@@ -852,6 +859,13 @@
           "system": "woo-test"
         },
         {
+          "path": "docs/pr-series/receipts/a6352421df46-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": false,
+          "system": "woo-test"
+        },
+        {
           "path": "docs/pr-series/receipts/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.json",
           "result": "PASS",
           "scope": [
@@ -868,11 +882,11 @@
       "related_upstream_prs": [],
       "hosted_checks": [
         {
-          "conclusion": "",
+          "conclusion": "cancelled",
           "databaseId": 36520528290,
           "headBranch": "codex/upstream-11-h2-server",
           "headSha": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
-          "status": "in_progress",
+          "status": "completed",
           "url": "https://github.com/pyrex41/woo/actions/runs/36520528290",
           "workflowName": "CI"
         }
@@ -1001,6 +1015,13 @@
         "woo-lack-compat.asd"
       ],
       "evidence": [
+        {
+          "path": "docs/pr-series/receipts/d7585aab637b-no-ssl-woo-lack-compat_tests-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-lack-compat/tests"
+        },
         {
           "path": "docs/pr-series/receipts/d7585aab637b-no-ssl-woo-test-load.json",
           "result": "PASS",
@@ -1212,11 +1233,11 @@
       "related_upstream_prs": [],
       "hosted_checks": [
         {
-          "conclusion": "",
+          "conclusion": "failure",
           "databaseId": 36520529633,
           "headBranch": "codex/upstream-15-qualification",
           "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
-          "status": "in_progress",
+          "status": "completed",
           "url": "https://github.com/pyrex41/woo/actions/runs/36520529633",
           "workflowName": "Legacy qualification"
         },
@@ -1230,11 +1251,11 @@
           "workflowName": "CI"
         },
         {
-          "conclusion": "",
+          "conclusion": "failure",
           "databaseId": 36520529575,
           "headBranch": "codex/upstream-15-qualification",
           "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
-          "status": "in_progress",
+          "status": "completed",
           "url": "https://github.com/pyrex41/woo/actions/runs/36520529575",
           "workflowName": "Lack compatibility"
         }
@@ -1357,20 +1378,20 @@
           "workflowName": "CI"
         },
         {
-          "conclusion": "",
+          "conclusion": "failure",
           "databaseId": 36520527924,
           "headBranch": "codex/upstream-16-showcase",
           "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
-          "status": "in_progress",
+          "status": "completed",
           "url": "https://github.com/pyrex41/woo/actions/runs/36520527924",
           "workflowName": "Legacy qualification"
         },
         {
-          "conclusion": "",
+          "conclusion": "success",
           "databaseId": 36520527923,
           "headBranch": "codex/upstream-16-showcase",
           "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
-          "status": "in_progress",
+          "status": "completed",
           "url": "https://github.com/pyrex41/woo/actions/runs/36520527923",
           "workflowName": "Lack compatibility"
         }
@@ -2968,5 +2989,5 @@
     "15": "Restored full native suite while retaining focused correctness suites; neutralized fork-specific historical qualification claims.",
     "16": "Neutral upstream documentation; optional showcase and benchmarks remain separate from conformance."
   },
-  "hosted_observed_at": "2026-09-29T04:27:40.469728+00:00"
+  "hosted_observed_at": "2026-09-29T04:52:19.429370+00:00"
 }

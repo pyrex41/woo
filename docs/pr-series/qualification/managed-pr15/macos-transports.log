@@ -1,0 +1,62 @@
+go: downloading golang.org/x/net v0.40.0
+go: downloading hegel.dev/go/hegel v0.9.9
+go: downloading golang.org/x/text v0.25.0
+go: downloading github.com/ebitengine/purego v0.11.0-alpha.6.0.20260707033313-5f49e7c49322
+=== RUN   TestManagedFinalStatusRange
+=== RUN   TestManagedFinalStatusRange/http1
+=== RUN   TestManagedFinalStatusRange/https
+=== RUN   TestManagedFinalStatusRange/h2c
+=== RUN   TestManagedFinalStatusRange/h2tls
+--- PASS: TestManagedFinalStatusRange (3.70s)
+    --- PASS: TestManagedFinalStatusRange/http1 (0.05s)
+    --- PASS: TestManagedFinalStatusRange/https (0.09s)
+    --- PASS: TestManagedFinalStatusRange/h2c (0.08s)
+    --- PASS: TestManagedFinalStatusRange/h2tls (0.06s)
+=== RUN   TestManagedTransportMatrix
+=== RUN   TestManagedTransportMatrix/http1
+=== RUN   TestManagedTransportMatrix/https
+=== RUN   TestManagedTransportMatrix/h2c
+=== RUN   TestManagedTransportMatrix/h2tls
+--- PASS: TestManagedTransportMatrix (5.96s)
+    --- PASS: TestManagedTransportMatrix/http1 (0.53s)
+    --- PASS: TestManagedTransportMatrix/https (0.17s)
+    --- PASS: TestManagedTransportMatrix/h2c (0.43s)
+    --- PASS: TestManagedTransportMatrix/h2tls (1.37s)
+=== RUN   TestManagedHTTP1Pipeline
+--- PASS: TestManagedHTTP1Pipeline (3.05s)
+=== RUN   TestManagedWebsocketDriver
+--- PASS: TestManagedWebsocketDriver (2.91s)
+=== RUN   TestManagedBudgetAndCancellation
+=== RUN   TestManagedBudgetAndCancellation/http1
+=== RUN   TestManagedBudgetAndCancellation/https
+    managed_test.go:447: HTTP/1 body limit did not return 413: Post "https://127.0.0.1:49854/echo": write tcp 127.0.0.1:49913->127.0.0.1:49854: write: broken pipe
+=== RUN   TestManagedBudgetAndCancellation/h2c
+=== RUN   TestManagedBudgetAndCancellation/h2tls
+=== NAME  TestManagedBudgetAndCancellation
+    harness_test.go:138: Woo managed output:
+        Woo-Managed server is going to start.
+        Listening on 127.0.0.1:49854.
+        Woo-Managed server is going to start.
+        Listening on 127.0.0.1:49853.
+        (:ERROR-TYPE SIMPLE-ERROR)
+         <ERROR> [04:15:42] woo - Buffer exceeded the limit: 131072
+        (:ERROR-TYPE SIMPLE-ERROR)
+         <ERROR> [04:15:42] woo - Buffer exceeded the limit: 131072
+         <ERROR> [04:15:42] woo.http2.clack - HTTP/2 protocol error 2: NIL
+        (:ERROR-TYPE SIMPLE-ERROR)
+         <ERROR> [04:15:42] woo.http2.clack - HTTP/2 protocol error 2: NIL
+         <ERROR> [04:15:42] woo.http2.clack - HTTP/2 protocol error 8: NIL
+         <ERROR> [04:15:42] woo.http2.clack - HTTP/2 protocol error 2: NIL
+        (:ERROR-TYPE SIMPLE-ERROR)
+         <ERROR> [04:15:42] woo.http2.clack - HTTP/2 protocol error 2: NIL
+         <ERROR> [04:15:42] woo.http2.clack - HTTP/2 protocol error 8: NIL
+--- FAIL: TestManagedBudgetAndCancellation (2.76s)
+    --- PASS: TestManagedBudgetAndCancellation/http1 (0.00s)
+    --- FAIL: TestManagedBudgetAndCancellation/https (0.01s)
+    --- PASS: TestManagedBudgetAndCancellation/h2c (0.00s)
+    --- PASS: TestManagedBudgetAndCancellation/h2tls (0.00s)
+=== RUN   TestManagedHTTP2Drain
+--- PASS: TestManagedHTTP2Drain (3.36s)
+FAIL
+exit status 1
+FAIL	woo.local/hegel	21.758s

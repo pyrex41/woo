@@ -1,0 +1,60 @@
+{
+  "run_id": 36520529633,
+  "run_url": "https://github.com/pyrex41/woo/actions/runs/36520529633",
+  "workflow": "Legacy qualification",
+  "head": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+  "source_bound": true,
+  "validator_performed": true,
+  "validator": "macOS CI ran t/qualification/check.py --verify-receipt and passed; Ubuntu writer failed closed before verifier due bounded phase resource predicate",
+  "artifacts": {
+    "ubuntu-24.04": {
+      "receipt": "hosted-legacy-564d08d8/ubuntu-24.04/receipt.json",
+      "artifact_url": "https://github.com/pyrex41/woo/actions/runs/36520529633/artifacts/11013364217",
+      "job_log": "hosted-legacy-564d08d8/ubuntu-job.log"
+    },
+    "macos-15": {
+      "receipt": "hosted-legacy-564d08d8/macos-15/receipt.json",
+      "artifact_url": "https://github.com/pyrex41/woo/actions/runs/36520529633/artifacts/11013670729",
+      "job_log": "hosted-legacy-564d08d8/macos-job.log"
+    }
+  },
+  "results": {
+    "macos-15": {
+      "status": "PASS",
+      "elapsed_seconds": 1974.525595958,
+      "soak_elapsed_seconds": 1800.182615708,
+      "cleanup": "PASS",
+      "process_group_cleanup": "PASS",
+      "socket_cleanup": "PASS",
+      "spool_cleanup": "PASS",
+      "cycles": 20001,
+      "lifecycle_cycles": 30,
+      "peak_rss_bytes": 817610752,
+      "resource_samples": 1586,
+      "soak_samples": 1447,
+      "soak_duration_seconds": 1799.119203833
+    },
+    "ubuntu-24.04": {
+      "status": "FAIL",
+      "failure": "full receipt lacks bounded phase-bound soak resource evidence",
+      "elapsed_seconds": 1954.974976461,
+      "soak_duration_seconds": 1799.029391312,
+      "cleanup": "UNKNOWN",
+      "baseline_rss_bytes": 283115520,
+      "final_rss_bytes": 474759168,
+      "rss_growth_bytes": 191643648,
+      "fd_baseline": 33,
+      "fd_final": 30,
+      "peak_rss_bytes": 670023680,
+      "resource_samples": 1942,
+      "soak_samples": 1788
+    }
+  },
+  "production_claim": "UNKNOWN: PR15 has one passing macOS lane and one failing Ubuntu lane; hosted qualification is not production proof.",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "58af5368ae0d516583dc3be8c8a4b137a5055c46b046067522cd1ed68e6eec9f"
+  }
+}

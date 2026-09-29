@@ -1,0 +1,55 @@
+{
+  "status": "PASS",
+  "source_digest": "4f3be31162ec50fa46070c88f89b829cc347c6fa856a2ed9cd6bb641ca9b1453",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.42",
+  "head": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+  "soak_seconds": 1800,
+  "gates": {
+    "receipt_validator": "PASS",
+    "lisp_contract_lifecycle_middleware_services": "PASS",
+    "transport_matrix_budget_cancellation_drain": "PASS",
+    "http1_https_h2c_h2tls_websocket_soak": "PASS"
+  },
+  "dependencies": {
+    "quicklisp_dist": "2026-01-01",
+    "sources": [
+      {
+        "name": "clack",
+        "repository": "fukamachi/clack",
+        "commit": "9435762a8fc139edde8c682502a037332b0655f8",
+        "sha256": "63c0972641eeaa3a779ed6cb8bdaa7a5de44c269592cd29e4ee79e6aa033822c"
+      },
+      {
+        "name": "lack",
+        "repository": "fukamachi/lack",
+        "commit": "35d8b0ab38a5f3a8ce885f9b135152ce932a45e2",
+        "sha256": "61b70ec3baee7df3a14a4aa7047c7c3f157bb8ead214776a2ec6db0bf708e3ef"
+      },
+      {
+        "name": "websocket-driver",
+        "repository": "fukamachi/websocket-driver",
+        "commit": "137e3132075996b4b21874dad50a02e28aacc64c",
+        "sha256": "6f762cc286d6cb36e266b3dd0474e84616e37bc265faf80d74000c7348d2464f"
+      },
+      {
+        "name": "hunchentoot",
+        "repository": "edicl/hunchentoot",
+        "commit": "65a3a3cca7e6e91fb068efc2ef8069b5c78ee91f",
+        "sha256": "6b50e690b5786ef5878e517ff198eab39c5becd6d152d5d5dee012d8855d2d49"
+      }
+    ]
+  },
+  "lisp": "SBCL 2.6.8",
+  "go": "go version go1.26.7 linux/amd64",
+  "rss_unit": "KiB",
+  "soak_elapsed_seconds": 1803.813496053,
+  "elapsed_seconds": 1975.9703075490002,
+  "peak_child_rss": 867468,
+  "cleanup": "PASS",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "b74273716fda6470e3b559f1bc5f333619b86eee6992334144f856fade55d991"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "artifacts": [
+    {
+      "path": "docs/pr-series/qualification/managed/macos-15/receipt.json",
+      "raw_sha256": "e82c2788cf9716bfd2c28306bb2d0ef5267b30f8a8e727e5fb7a17522025ea75",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "managed",
+      "platform": "macos-15",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/pr-series/qualification/managed/ubuntu-24.04/receipt.json",
+      "raw_sha256": "1d756d94fd96a6ed285b3a625b476743a9f607c757713ff364ddace5a0a3e281",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "managed",
+      "platform": "ubuntu-24.04",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/pr-series/qualification/legacy/macos-15/receipt.json",
+      "raw_sha256": "d8458f279c5b3a7e1f1a0fddbda6102c83c8ae06540204ab5570ce8731898ee4",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "legacy",
+      "platform": "macos-15",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/pr-series/qualification/legacy/macos-15/result.json",
+      "raw_sha256": "e35cd862437fb8c9df5261d3d99890849d812b07fe11dfe7ff256fb4de78d0d0",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "legacy",
+      "platform": "macos-15",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/pr-series/qualification/legacy/macos-15/stop.result",
+      "raw_sha256": "c26de83abdc9496cd1301470918ec39ecca1cf389ef0ae1c6504da1800d1c431",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "legacy",
+      "platform": "macos-15",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/pr-series/qualification/legacy/ubuntu-24.04/receipt.json",
+      "raw_sha256": "84b594ce633618255e42088a32c3b7bfd3716e7a3653cfb9a97e1fb8c1697458",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "legacy",
+      "platform": "ubuntu-24.04",
+      "status": "FAIL"
+    },
+    {
+      "path": "docs/pr-series/qualification/legacy/ubuntu-24.04/result.json",
+      "raw_sha256": "e55d64ed78756fc05f0d197def5d34fb9534cd04ab5e1b56f43bec00b799d67c",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "legacy",
+      "platform": "ubuntu-24.04",
+      "status": "FAIL"
+    },
+    {
+      "path": "docs/pr-series/qualification/legacy/ubuntu-24.04/stop.result",
+      "raw_sha256": "c26de83abdc9496cd1301470918ec39ecca1cf389ef0ae1c6504da1800d1c431",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "lane": "legacy",
+      "platform": "ubuntu-24.04",
+      "status": "FAIL"
+    }
+  ],
+  "limits": "Evidence is source-bound qualification only. Failed receipts remain failed. Certificate/key fixtures are excluded."
+}

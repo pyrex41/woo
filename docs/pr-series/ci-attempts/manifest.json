@@ -1,0 +1,26 @@
+[
+  {
+    "topic": 9,
+    "attempt": 1,
+    "head": "2403a847381cb410db26dfd1d0db38783945b5c6",
+    "outcome": "cancelled",
+    "log": "docs/pr-series/ci-attempts/09-attempt-1.log",
+    "raw_sha256": "6f31ee815e0dc1044a4256b727bfd9f25dfa3c91499a1bd0c9bdadaa3eaeebbc"
+  },
+  {
+    "topic": 11,
+    "attempt": 1,
+    "head": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+    "outcome": "cancelled",
+    "log": "docs/pr-series/ci-attempts/11-attempt-1.log",
+    "raw_sha256": "d67168be8b03b5477ee95d579346381fc56a557c71a53b72743c19ecfcf45918"
+  },
+  {
+    "topic": 11,
+    "attempt": 2,
+    "head": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+    "outcome": "cancelled",
+    "log": "docs/pr-series/ci-attempts/11-attempt-2.log",
+    "raw_sha256": "40ca0b502808b86a545bce06293ff1126067582ae7298481a9e33903e9618a8d"
+  }
+]

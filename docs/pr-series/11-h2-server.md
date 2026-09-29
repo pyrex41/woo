@@ -13,8 +13,11 @@ This is one clean commit in a dependency-ordered series. Review the topic delta 
 ## Verification
 
 - PASS: load-only (no SSL); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/a6352421df46-no-ssl-woo-test-load.json).
+- PASS: woo-test (SSL enabled); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/a6352421df46-ssl-woo-test-all.json).
 - PASS: ['woo-test.http2-clack', 'woo-test.http2-e2e', 'woo-test.alpn', 'woo-test', 'woo-test.upload'] (SSL enabled); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.json).
-- Hosted CI: [IN_PROGRESS](https://github.com/pyrex41/woo/actions/runs/36520528290), exact head `a6352421df46cdfcce74ff127f1e35c5e9e452f8`.
+- Hosted CI: [CANCELLED](https://github.com/pyrex41/woo/actions/runs/36520528290), exact head `a6352421df46cdfcce74ff127f1e35c5e9e452f8`.
+
+Review [qualification and CI attempt notes](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/verification.md) before publication. PR 11 has a repeated hosted Linux stall; PR 15 and the assembled head have failed qualification lanes. These outcomes remain unresolved.
 
 Receipts specify the actual ASDF source directory, source tree and command. Load checks establish loadability only. Focused tests cover their named suites; production readiness remains UNKNOWN.
 

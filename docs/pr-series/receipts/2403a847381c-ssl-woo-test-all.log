@@ -1,0 +1,1973 @@
+
+Testing System woo-test
+
+;; testing 'woo-test.event-loop'
+[37mevent-loop-backend-descriptors-close[0m
+  [32m✓ [0m[90mdescriptors before=4 after=4[0m
+
+;; testing 'woo-test'
+[37mwoo-server-tests[0m
+
+;; testing 'clack.test.suite'
+[37mresponse-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlist[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (plain/text)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "This is a text for test." BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (binary)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/png") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 12155) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbigger file[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/jpeg") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 139616) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (response)[0m
+    [32m✓ [0m[90mExpect (SCAN "foo,\\s*bar,\\s*baz" (GET-HEADER HEADERS :X-FOO)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mno entity headers on 304[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 304) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP BODY #()) to be true.[0m
+    [32m✓ [0m[90mNo Content-Type[0m
+    [32m✓ [0m[90mNo Content-Length[0m
+    [32m✓ [0m[90mNo Transfer-Encoding[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mCRLF output[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :FOO)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "Foo: Bar~A~A~A~AHello World" #\Return #\Newline
+                            #\Return #\Newline)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mtest 404[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 404) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Not Found") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mContent-Length 0 is not set Transfer-Encoding[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-TRANSFER-ENCODING)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "") to be true.[0m
+[37menv-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME[0m
+    [32m✓ [0m[90mExpect (MEMBER (DEXADOR:GET (LOCALHOST)) '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37murl-scheme[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "http") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle HTTP-Header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~A~%~}"
+                            `("REQUEST-METHOD::GET" "PATH-INFO:\"/foo/\""
+                              "QUERY-STRING:\"ediweitz=weitzedi\""
+                              "SERVER-NAME:\"127.0.0.1\""
+                              ,(FORMAT NIL "SERVER-PORT:~D"
+                                       *CLACK-TEST-ACCESS-PORT*)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env (must be integer)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~{~A:~A~%~}~}"
+                            `((:SERVER-PORT T) (:REMOTE-PORT T) (:CONTENT-LENGTH T)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%2cbaz")) "/foo/bar,baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% double encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%252cbaz")) "/foo/bar%2cbaz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO (outside of URI characters)[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo%E3%81%82"))
+                    (FORMAT NIL "/foo~A"
+                            (OCTETS-TO-STRING #(227 129 130) :EXTERNAL-FORMAT
+                                              :UTF-8))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mInvalid UTF-8 encoded PATH-INFO[0m
+    [32m✓ [0m[90mExpect (SCAN (FORMAT NIL "/あ~A" #\REPLACEMENT_CHARACTER)
+                   (DEXADOR:GET (LOCALHOST "/%E3%81%82%BF%27%22%28"))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSERVER-PROTOCOL is required[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "^:HTTP/1\\.[01]$" BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME should not be nil[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/?ediweitz=weitzedi")) (STRING T)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mDo not set COOKIE[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-COOKIE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "foo=bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mREQUEST-URI is set[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%20baz%73?x=a"))
+                    "/foo/bar%20baz%73?x=a") to be true.[0m
+[37mrequest-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mGET[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=fukamachi") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mPOST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) "11") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-TYPE)
+                    "application/x-www-form-urlencoded") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=eitaro") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) (PRINC-TO-STRING LEN)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST (chunked)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (request)[0m
+    [32m✓ [0m[90mExpect (SCAN "^bar,\\s*baz$"
+                   (DEXADOR:GET (LOCALHOST) :HEADERS
+                                '(("Foo" . "bar") ("Foo" . "baz")))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma big header value > 128 bytes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY CHUNK) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrequest -> input seekable[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:POST (LOCALHOST) :CONTENT "body") "body") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle Authorization header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :X-AUTHORIZATION) (STRING T)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Basic XXXX") to be true.[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-AUTHORIZATION)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER BODY '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrepeated slashes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "/foo///bar/baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mfile upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "This is a text for test.
+      ") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlarge file upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "ok") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mstreaming[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY (FORMAT NIL "0~%1~%2~%")) to be true.[0m
+[37mdebug-tests[0m
+  [37mDo not crash when the app dies[0m
+ <ERROR> [23:35:04] woo - #<FLEXI-STREAMS::VECTOR-INPUT-STREAM {80147802D3}> cannot be printed readably.
+    [32m✓ [0m[90m500 Internal Server Error[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+[37mwoo-ssl-server-tests[0m
+
+;; testing 'clack.test.suite'
+[37mresponse-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlist[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (plain/text)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "This is a text for test." BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (binary)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/png") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 12155) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbigger file[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/jpeg") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 139616) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (response)[0m
+    [32m✓ [0m[90mExpect (SCAN "foo,\\s*bar,\\s*baz" (GET-HEADER HEADERS :X-FOO)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mno entity headers on 304[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 304) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP BODY #()) to be true.[0m
+    [32m✓ [0m[90mNo Content-Type[0m
+    [32m✓ [0m[90mNo Content-Length[0m
+    [32m✓ [0m[90mNo Transfer-Encoding[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mCRLF output[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :FOO)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "Foo: Bar~A~A~A~AHello World" #\Return #\Newline
+                            #\Return #\Newline)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mtest 404[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 404) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Not Found") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mContent-Length 0 is not set Transfer-Encoding[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-TRANSFER-ENCODING)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "") to be true.[0m
+[37menv-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME[0m
+    [32m✓ [0m[90mExpect (MEMBER (DEXADOR:GET (LOCALHOST)) '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37murl-scheme[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "http") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle HTTP-Header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~A~%~}"
+                            `("REQUEST-METHOD::GET" "PATH-INFO:\"/foo/\""
+                              "QUERY-STRING:\"ediweitz=weitzedi\""
+                              "SERVER-NAME:\"127.0.0.1\""
+                              ,(FORMAT NIL "SERVER-PORT:~D"
+                                       *CLACK-TEST-ACCESS-PORT*)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env (must be integer)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~{~A:~A~%~}~}"
+                            `((:SERVER-PORT T) (:REMOTE-PORT T) (:CONTENT-LENGTH T)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%2cbaz")) "/foo/bar,baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% double encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%252cbaz")) "/foo/bar%2cbaz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO (outside of URI characters)[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo%E3%81%82"))
+                    (FORMAT NIL "/foo~A"
+                            (OCTETS-TO-STRING #(227 129 130) :EXTERNAL-FORMAT
+                                              :UTF-8))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mInvalid UTF-8 encoded PATH-INFO[0m
+    [32m✓ [0m[90mExpect (SCAN (FORMAT NIL "/あ~A" #\REPLACEMENT_CHARACTER)
+                   (DEXADOR:GET (LOCALHOST "/%E3%81%82%BF%27%22%28"))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSERVER-PROTOCOL is required[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "^:HTTP/1\\.[01]$" BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME should not be nil[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/?ediweitz=weitzedi")) (STRING T)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mDo not set COOKIE[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-COOKIE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "foo=bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mREQUEST-URI is set[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%20baz%73?x=a"))
+                    "/foo/bar%20baz%73?x=a") to be true.[0m
+[37mrequest-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mGET[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=fukamachi") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mPOST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) "11") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-TYPE)
+                    "application/x-www-form-urlencoded") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=eitaro") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) (PRINC-TO-STRING LEN)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST (chunked)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (request)[0m
+    [32m✓ [0m[90mExpect (SCAN "^bar,\\s*baz$"
+                   (DEXADOR:GET (LOCALHOST) :HEADERS
+                                '(("Foo" . "bar") ("Foo" . "baz")))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma big header value > 128 bytes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY CHUNK) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrequest -> input seekable[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:POST (LOCALHOST) :CONTENT "body") "body") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle Authorization header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :X-AUTHORIZATION) (STRING T)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Basic XXXX") to be true.[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-AUTHORIZATION)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER BODY '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrepeated slashes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "/foo///bar/baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mfile upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "This is a text for test.
+      ") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlarge file upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "ok") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mstreaming[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY (FORMAT NIL "0~%1~%2~%")) to be true.[0m
+[37mdebug-tests[0m
+  [37mDo not crash when the app dies[0m
+ <ERROR> [23:35:29] woo - #<FLEXI-STREAMS::VECTOR-INPUT-STREAM {8016E002D3}> cannot be printed readably.
+    [32m✓ [0m[90m500 Internal Server Error[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+[37mgraceful-stop-by-server-thread[0m
+  [32m✓ [0m[90mthe running server is addressable by its thread[0m
+  [32m✓ [0m[90mthe thread stop request is accepted[0m
+  [32m✓ [0m[90mthe server thread exits within five seconds[0m
+  [32m✓ [0m[90mthe accepted socket closes on stop[0m
+  [32m✓ [0m[90mthe thread control is removed after cleanup[0m
+[37mgraceful-stop-closes-worker-sockets[0m
+  [32m✓ [0m[90mclustered server registers a graceful stop control[0m
+  [32m✓ [0m[90mclustered stop request is accepted[0m
+  [32m✓ [0m[90mclustered server exits within twelve seconds[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+[37mevent-loop-backend-descriptors-close[0m
+  [32m✓ [0m[90mdescriptors before=77 after=77[0m
+
+;; testing 'woo-test.ipv6'
+[37mipv6-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mIPv6[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+
+;; testing 'woo-test.file-size'
+[37mfd-file-size-single-threaded-tests[0m
+  [37mreports the true size of the file behind the fd[0m
+    [32m✓ [0m[90mExpect (= (WOO::FD-FILE-SIZE FD) *SMALL-SIZE*) to be true.[0m
+[37mfd-file-size-concurrency-tests[0m
+  [37mconcurrent callers each get their own file's size[0m
+    [32m✓ [0m[90m0/80000 concurrent fd-file-size calls returned another file's size[0m
+[37mfd-file-size-closed-descriptor-tests[0m
+  [37ma closed descriptor fails instead of returning stale metadata[0m
+    [32m✓ [0m[90mExpect (WOO::FD-FILE-SIZE FD) to signal ERROR.[0m
+
+;; testing 'woo-test.worker'
+[37mlegacy-worker-random-bindings-are-private[0m
+  [37mactual legacy workers receive distinct random states[0m
+    [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE DONE :TIMEOUT 5) to be true.[0m
+    [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE DONE :TIMEOUT 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= 2 (LENGTH (REMOVE-DUPLICATES STATES :TEST #'EQ))) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER *RANDOM-STATE* STATES :TEST #'EQ) to be false.[0m
+
+;; testing 'woo-test.response'
+[37mstatus-code-to-text-tests[0m
+  [37mreturns the reason phrase for known codes[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 200) "OK") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 404) "Not Found") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 500) "Internal Server Error") to be true.[0m
+  [37mreturns NIL for unassigned codes[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 306)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 419)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 499)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 599)) to be true.[0m
+  [37mreturns NIL outside the HTTP status range[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 99)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 600)) to be true.[0m
+[37mstatus-line-format-tests[0m
+  [37ma status line is HTTP/1.1 SP code SP reason CRLF[0m
+    [32m✓ [0m[90mExpect (EQUAL (STATUS-LINE-STRING 200)
+                    (FORMAT NIL "HTTP/1.1 200 OK~C~C" #\Return #\Newline)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (STATUS-LINE-STRING 404)
+                    (FORMAT NIL "HTTP/1.1 404 Not Found~C~C" #\Return #\Newline)) to be true.[0m
+  [37mevery registered status line is well formed[0m
+    [32m✓ [0m[90mmalformed status lines for: NIL[0m
+  [37mstatus lines are octet vectors, not strings[0m
+    [32m✓ [0m[90mnon-octet status lines for: NIL[0m
+[37mstatus-line-table-consistency-tests[0m
+  [37mevery code with a reason phrase is registered in *status-line*[0m
+    [32m✓ [0m[90mcodes with a reason phrase but no status line: NIL[0m
+  [37mevery registered code has a reason phrase[0m
+    [32m✓ [0m[90mregistered codes with no reason phrase: NIL[0m
+  [37mno reason phrase exists beyond the loop's upper bound[0m
+    [32m✓ [0m[90mreason phrases outside the built range: NIL[0m
+[37mrfc-6585-and-8470-status-tests[0m
+  [37mRFC 6585 codes are present[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 429) "Too Many Requests") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 428) "Precondition Required") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 431) "Request Header Fields Too Large") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 511) "Network Authentication Required") to be true.[0m
+  [37mRFC 8470 425 Too Early is present[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 425) "Too Early") to be true.[0m
+  [37mthey render as complete status lines[0m
+    [32m✓ [0m[90m425 has a status line[0m
+    [32m✓ [0m[90m428 has a status line[0m
+    [32m✓ [0m[90m429 has a status line[0m
+    [32m✓ [0m[90m431 has a status line[0m
+    [32m✓ [0m[90m511 has a status line[0m
+  [37m511 specifically, as it sits on the loop's upper bound[0m
+    [32m✓ [0m[90mExpect (EQUAL (STATUS-LINE-STRING 511)
+                    (FORMAT NIL "HTTP/1.1 511 Network Authentication Required~C~C"
+                            #\Return #\Newline)) to be true.[0m
+[37mcommon-status-coverage-tests[0m
+  [37mthe codes a typical app returns are all registered[0m
+    [32m✓ [0m[90m200 is registered[0m
+    [32m✓ [0m[90m201 is registered[0m
+    [32m✓ [0m[90m204 is registered[0m
+    [32m✓ [0m[90m206 is registered[0m
+    [32m✓ [0m[90m301 is registered[0m
+    [32m✓ [0m[90m302 is registered[0m
+    [32m✓ [0m[90m303 is registered[0m
+    [32m✓ [0m[90m304 is registered[0m
+    [32m✓ [0m[90m307 is registered[0m
+    [32m✓ [0m[90m308 is registered[0m
+    [32m✓ [0m[90m400 is registered[0m
+    [32m✓ [0m[90m401 is registered[0m
+    [32m✓ [0m[90m403 is registered[0m
+    [32m✓ [0m[90m404 is registered[0m
+    [32m✓ [0m[90m405 is registered[0m
+    [32m✓ [0m[90m409 is registered[0m
+    [32m✓ [0m[90m410 is registered[0m
+    [32m✓ [0m[90m413 is registered[0m
+    [32m✓ [0m[90m415 is registered[0m
+    [32m✓ [0m[90m422 is registered[0m
+    [32m✓ [0m[90m500 is registered[0m
+    [32m✓ [0m[90m501 is registered[0m
+    [32m✓ [0m[90m502 is registered[0m
+    [32m✓ [0m[90m503 is registered[0m
+    [32m✓ [0m[90m504 is registered[0m
+[37mfinal-status-wire-range[0m
+  [37mAll final HTTP statuses reach the wire[0m
+    [32m✓ [0m[90mbad final statuses: NIL[0m
+[37mmalformed-response-is-contained[0m
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019D42213}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+Backtrace for: #<SB-THREAD:THREAD tid=10803 "clack-handler-woo" RUNNING {8019D1B433}>
+0: (SB-DEBUG::DEBUGGER-DISABLED-HOOK #<SB-SYS:MEMORY-FAULT-ERROR {8019D419D3}> #<unused argument> :QUIT T)
+1: (SB-DEBUG::RUN-HOOK *INVOKE-DEBUGGER-HOOK* #<SB-SYS:MEMORY-FAULT-ERROR {8019D419D3}>)
+2: (INVOKE-DEBUGGER #<SB-SYS:MEMORY-FAULT-ERROR {8019D419D3}>)
+3: (ERROR SB-SYS:MEMORY-FAULT-ERROR :ADDRESS 18446744046339609792)
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+4: (SB-SYS:MEMORY-FAULT-ERROR #<unused argument> #.(SB-SYS:INT-SAP #XFFFFFFF9A09FD4C0))
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+5: ("foreign function: call_into_lisp")
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+5: ("foreign function: call_into_lisp")
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019D72163}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+5: ("foreign function: call_into_lisp")
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019D72163}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+The integrity of this image is possibly compromised.
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+Continuing with fingers crossed.
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019DB2163}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019E022C3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019E022C3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019E022C3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019E821F3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019E022C3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019E821F3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019EA21F3}>>: Unhandled memory fault at #xFFFFFFF9A09FD4C0.
+
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+Backtrace for: #<SB-THREAD:THREAD tid=10911 "clack-handler-woo" RUNNING {8019E78133}>
+  [37mMalformed response receives one 500[0m
+CORRUPTION WARNING in SBCL pid 60643 pthread 0x16b56f000:
+Memory fault at 0xfffffff9a09fd4c0 (pc=0x104b5acb4)
+The integrity of this image is possibly compromised.
+Continuing with fingers crossed.
+    [32m✓ [0m[90mExpect (UIOP/UTILITY:STRING-PREFIX-P "HTTP/1.1 500 " RESULT) to be true.[0m
+Backtrace for: #<SB-THREAD:THREAD tid=10911 "clack-handler-woo" RUNNING {8019E78133}>
+
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESULT :START2 1) to be false.[0m
+  [32m✓ [0m[90mExpect (EQUAL (WOO::VALIDATE-RESPONSE '(200 NIL "hello")) '(200 NIL ("hello"))) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (WOO::VALIDATE-RESPONSE '(200 NIL)) '(200 NIL)) to be true.[0m
+[37mworker-random-bindings-are-private[0m
+  [32m✓ [0m[90mExpect A to be an instance of RANDOM-STATE.[0m
+  [32m✓ [0m[90mExpect B to be an instance of RANDOM-STATE.[0m
+  [32m✓ [0m[90mExpect (EQ A B) to be false.[0m
+  [32m✓ [0m[90mExpect (EQ A *RANDOM-STATE*) to be false.[0m
+  [32m✓ [0m[90mExpect (= (RANDOM 1000000 CALLER)
+              (RANDOM 1000000 (MAKE-RANDOM-STATE *RANDOM-STATE*))) to be true.[0m
+[37mempty-status-framing[0m
+  [37mBodyless statuses ignore application payload[0m
+    [32m✓ [0m[90mExpect (SEARCH "must-not-send" RESPONSE) to be false.[0m
+    [32m✓ [0m[90mExpect (SEARCH "Content-Length:" RESPONSE) to be false.[0m
+  [37mBodyless statuses ignore application payload[0m
+    [32m✓ [0m[90mExpect (SEARCH "must-not-send" RESPONSE) to be false.[0m
+    [32m✓ [0m[90mExpect (SEARCH "Content-Length: 0" RESPONSE) to be true.[0m
+  [37mBodyless statuses ignore application payload[0m
+    [32m✓ [0m[90mExpect (SEARCH "must-not-send" RESPONSE) to be false.[0m
+[37mresponse-framing-and-header-storage[0m
+  [32m✓ [0m[90mExpect (EQUAL (WOO::VALIDATE-RESPONSE '(200 (:CONTENT-LENGTH 2) ("λ")))
+                  '(200 (:CONTENT-LENGTH 2) ("λ"))) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (WOO::VALIDATE-RESPONSE '(200 (:CONTENT-LENGTH 0) NIL))
+                  '(200 (:CONTENT-LENGTH 0) NIL)) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (WOO::VALIDATE-RESPONSE '(200 (:CONTENT-LENGTH 10) NIL) T)
+                  '(200 (:CONTENT-LENGTH 10) NIL)) to be true.[0m
+  [32m✓ [0m[90mExpect (STRINGP (FIRST NORMALIZED)) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (FIND-SYMBOL (STRING-UPCASE KEY) :KEYWORD)) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL
+            (GETF
+             (SECOND
+              (WOO::VALIDATE-RESPONSE
+               '(200 (:TRANSFER-ENCODING "chunked") ("ok"))))
+             :TRANSFER-ENCODING)) to be true.[0m
+[37mlegacy-head-persistent-pipeline-and-utf8-length[0m
+  [37mHEAD preserves metadata and pipeline has no HEAD body[0m
+    [32m✓ [0m[90mExpect FIRST-END to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "content-length: 100" (SUBSEQ WIRE 0 FIRST-END) :TEST
+                     #'CHAR-EQUAL) to be true.[0m
+    [32m✓ [0m[90mthe pipelined GET starts immediately after HEAD headers[0m
+    [32m✓ [0m[90mExpect (= 2
+                (LOOP WITH START = 0
+                      FOR POS = (SEARCH "HTTP/1.1 200" WIRE :START2 START)
+                      WHILE POS
+                      COUNT 1
+                      DO (SETF START (+ POS 1)))) to be true.[0m
+    [32m✓ [0m[90mExpect (AND GET-END (STRING= (SUBSEQ UTF8-WIRE (+ GET-END 4)) EXPECTED)) to be true.[0m
+    [32m✓ [0m[90mExpect (AND HEAD-END (= (LENGTH HEAD-WIRE) (+ HEAD-END 4))) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH
+              (FORMAT NIL "content-length: ~D"
+                      (REDUCE #'+ UTF8 :KEY #'TRIVIAL-UTF-8:UTF-8-BYTE-LENGTH))
+              (WOO-TEST::RAW-EXCHANGE CLACK.TEST:*CLACK-TEST-PORT*
+                                      (WOO-TEST::CRLF-LINES "HEAD /utf8 HTTP/1.1"
+                                                            "Host: localhost"
+                                                            "Connection: close" ""))
+              :TEST #'CHAR-EQUAL) to be true.[0m
+[37mlegacy-head-pathname-plain-no-payload[0m
+  [37mpathname HEAD has no payload[0m
+    [32m✓ [0m[90mExpect (SEARCH "content-length: 13" WIRE :TEST #'CHAR-EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (AND SECOND-START
+                  (= SECOND-START
+                     (OR (SEARCH "HTTP/1.1 200" WIRE :START2 SECOND-START) -1))) to be true.[0m
+    [32m✓ [0m[90mExpect (AND SECOND-END (STRING= (SUBSEQ WIRE (+ SECOND-END 4)) "pathname body")) to be true.[0m
+[37mlegacy-head-pathname-tls-no-payload[0m
+  [37mTLS pathname HEAD has no payload[0m
+    [32m✓ [0m[90mExpect (= STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LENGTH BODY)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (GETHASH "content-length" HEADERS) "12") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING=
+              (DEXADOR:GET
+               (FORMAT NIL "https://127.0.0.1:~D/" CLACK.TEST:*CLACK-TEST-PORT*)
+               :KEEP-ALIVE NIL :FORCE-STRING T)
+              "tls pathname") to be true.[0m
+
+;; testing 'woo-test.tls-stream'
+[37mtls-completed-error-paths-retry-shutdown[0m
+  [37mcompleted TLS error closes gracefully[0m
+    [32m✓ [0m[90mExpect (SEARCH (FORMAT NIL "HTTP/1.1 ~D " STATUS) RESPONSE) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "Content-Length: 0" RESPONSE) to be true.[0m
+    [32m✓ [0m[90mserver retried SSL_shutdown after WANT_WRITE[0m
+  [37mcompleted TLS error closes gracefully[0m
+    [32m✓ [0m[90mExpect (SEARCH (FORMAT NIL "HTTP/1.1 ~D " STATUS) RESPONSE) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "Content-Length: 0" RESPONSE) to be true.[0m
+    [32m✓ [0m[90mserver retried SSL_shutdown after WANT_WRITE[0m
+[37mtls-static-stream-pumps-bounded-chunks[0m
+  [37mTLS pathname sends keep at most one 64 KiB chunk pending[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-SEND-STREAM-OFFSET SOCKET) 65536) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))
+                 65536) to be true.[0m
+[37mtls-pending-write-isolated-from-new-output[0m
+  [37mapplication writes do not mutate bytes awaiting TLS retry[0m
+    [32m✓ [0m[90mExpect (EQUALP PENDING #(1 2 3 4)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET)) 2) to be true.[0m
+[37mtls-ffi-retry-hooks-are-injectable[0m
+  [37mWANT results can be supplied without changing the OpenSSL ABI[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-WRITE-FUNCTION* NIL NIL 8) -1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-ERROR-FUNCTION* NIL -1)
+                CL+SSL::+SSL-ERROR-WANT-READ+) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+[37mtls-alpn-setup-failure-releases-listener-context[0m
+  [37ma failure after ALPN setup releases the listener context[0m
+    [32m✓ [0m[90mExpect (WOO:RUN (LAMBDA (ENV) (DECLARE (IGNORE ENV)) '(200 NIL ("ok"))) :DEBUG
+                      NIL :WORKER-NUM NIL :SSL-CERT-FILE #P"t/certs/localhost.crt"
+                      :SSL-KEY-FILE #P"t/certs/localhost.key") to signal ERROR.[0m
+    [32m✓ [0m[90mExpect CONFIGURED to be true.[0m
+    [32m✓ [0m[90mExpect (= FREED 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= BASELINE (HASH-TABLE-COUNT WOO.SSL.ALPN::*ALPN-CTX-ARGS*)) to be true.[0m
+[37mtls-pathname-live-exact-body-and-clean-eof[0m
+  [37ma live TLS pathname response preserves bytes and closes cleanly[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.    [37mTLS pathname exact body[0m
+      [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 200" STATUS) to be true.[0m
+      [32m✓ [0m[90mExpect (=
+                (PARSE-INTEGER (CDR (ASSOC "content-length" HEADERS :TEST #'STRING=)))
+                SIZE) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (= OFFSET SIZE) to be true.[0m
+      [32m✓ [0m[90mExpect (LOOP FOR I BELOW SIZE
+                     ALWAYS (= (AREF GOT I) (MOD (+ I 17) 251))) to be true.[0m
+      [32m✓ [0m[90mExpect (NULL (READ-BYTE TLS NIL NIL)) to be true.[0m
+[37mtls-static-preparation-failures-are-wire-visible[0m
+  [37mTLS pathname preparation reports missing, directory, EACCES, and length errors[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.    [37mTLS pathname preparation failures[0m
+      [32m✓ [0m[90mExpect (SEARCH "404 Not Found" (REQUEST "/missing")) to be true.[0m
+      [32m✓ [0m[90mExpect (SEARCH "403 Forbidden" (REQUEST "/directory")) to be true.[0m
+      [32m✓ [0m[90mExpect (SEARCH "403 Forbidden" (REQUEST "/private")) to be true.[0m
+      [32m✓ [0m[90mExpect (SEARCH "500 Internal Server Error" (REQUEST "/mismatch")) to be true.[0m
+
+;; testing 'woo-test.tlsretry'
+[37mtls-retry-keeps-pending-bytes-before-new-output[0m
+  [37ma WANT_READ retry preserves order and queue accounting[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (NREVERSE WRITES) '((1 2 3 4) (1 2 3 4) (9 8))) to be true.[0m
+    [32m✓ [0m[90mExpect (= ADMITTED 6) to be true.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 6) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-DATA SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP
+              (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))) to be true.[0m
+[37mtls-retry-partials-want-transitions-and-reentrant-release[0m
+  [37mpartial progress and both readiness retries preserve accounting[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-WRITE-WAIT-READ-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 7) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (NREVERSE WRITES)
+                    '((1 2 3 4 5 6) (3 4 5 6) (3 4 5 6) (5 6) (5 6) (6) (9 8 7))) to be true.[0m
+    [32m✓ [0m[90mExpect (= ADMITTED 9) to be true.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 9) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-DATA SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP
+              (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))) to be true.[0m
+[37mtls-fatal-write-releases-once-and-closes[0m
+  [37ma fatal TLS write closes safely and does not reuse its buffer[0m
+ <ERROR> [23:35:45] woo.ev.socket - Unexpected TLS write error (Code: 1)
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 4) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 4) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-DATA SOCKET)) to be true.[0m
+[37mtls-shutdown-want-write-survives-flush-completion[0m
+  [32m✓ [0m[90mExpect (= SHUTDOWN-CALLS 1) to be true.[0m
+  [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-TLS-SHUTDOWN-P SOCKET) to be true.[0m
+  [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-READ-WATCHER SOCKET))) to be true.[0m
+  [32m✓ [0m[90mExpect (= SHUTDOWN-CALLS 2) to be true.[0m
+  [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be false.[0m
+
+;; testing 'woo-test.tlsreadretry'
+[37mtls-read-want-write-keeps-write-readiness[0m
+  [37mSSL_read WANT_WRITE stops read polling and preserves write retry[0m
+    [32m✓ [0m[90mExpect (= READ-CALLS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-READ-WAIT-WRITE-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-READ-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:ASYNC-WRITE SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-READ-WAIT-WRITE-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= READ-CALLS 3) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-READ-WAIT-WRITE-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-READ-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+
+;; testing 'woo-test.alpn'
+[37mtest-alpn-constants[0m
+  [37mALPN error constants have correct values[0m
+    [32m✓ [0m[90mExpect (= +SSL-TLSEXT-ERR-OK+ 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= +SSL-TLSEXT-ERR-ALERT-FATAL+ 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= +SSL-TLSEXT-ERR-NOACK+ 3) to be true.[0m
+[37mtest-parse-alpn-protocols-empty[0m
+  [37mparse-alpn-protocols handles empty buffer[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-parse-alpn-protocols-single[0m
+  [37mparse-alpn-protocols parses single protocol[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2")) to be true.[0m
+[37mtest-parse-alpn-protocols-multiple[0m
+  [37mparse-alpn-protocols parses multiple protocols[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2" "http/1.1")) to be true.[0m
+[37mtest-parse-alpn-protocols-three-protocols[0m
+  [37mparse-alpn-protocols parses three protocols[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2" "http/1.1" "h3")) to be true.[0m
+[37mtest-parse-alpn-protocols-zero-length-protocol[0m
+  [37mparse-alpn-protocols skips zero-length protocol[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2")) to be true.[0m
+[37mtest-parse-alpn-protocols-truncated[0m
+  [37mparse-alpn-protocols handles truncated buffer gracefully[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-parse-alpn-protocols-truncated-after-valid[0m
+  [37ma truncated entry does not discard an earlier protocol or read past inlen[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2")) to be true.[0m
+[37mtest-find-protocol-in-buffer-found[0m
+  [37mfind-protocol-in-buffer finds existing protocol[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be false.[0m
+    [32m✓ [0m[90mExpect (= LEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 1) 50) to be true.[0m
+[37mtest-find-protocol-in-buffer-second-protocol[0m
+  [37mfind-protocol-in-buffer finds second protocol[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be false.[0m
+    [32m✓ [0m[90mExpect (= LEN 8) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 1) 116) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 2) 116) to be true.[0m
+[37mtest-find-protocol-in-buffer-not-found[0m
+  [37mfind-protocol-in-buffer returns nil when protocol not found[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-find-protocol-in-buffer-empty[0m
+  [37mfind-protocol-in-buffer handles empty buffer[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-find-protocol-in-buffer-partial-match[0m
+  [37mfind-protocol-in-buffer doesn't match partial strings[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-find-protocol-in-buffer-truncated-entry[0m
+  [37mfind-protocol-in-buffer does not read past inlen[0m
+    [32m✓ [0m[90mtruncated h2 is not a match[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+    [32m✓ [0m[90min-bounds h3 is still found[0m
+    [32m✓ [0m[90mExpect (= LEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-make-alpn-selector-basic[0m
+  [37mmake-alpn-selector creates working selector[0m
+    [32m✓ [0m[90mExpect (FUNCTIONP SELECTOR) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "http/1.1") to be true.[0m
+[37mtest-make-alpn-selector-order-preference[0m
+  [37mmake-alpn-selector respects server preference order[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h2") to be true.[0m
+[37mtest-make-alpn-selector-no-match[0m
+  [37mmake-alpn-selector returns nil when no match[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-empty-client-list[0m
+  [37mmake-alpn-selector handles empty client list[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-empty-preferred-list[0m
+  [37mmake-alpn-selector with empty preference list returns nil[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-single-protocol[0m
+  [37mmake-alpn-selector works with single protocol[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "http/1.1") to be true.[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-case-sensitive[0m
+  [37mmake-alpn-selector is case-sensitive[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-multiple-matches[0m
+  [37mmake-alpn-selector returns first match in preference order[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h3") to be true.[0m
+[37mtest-alpn-protocols-default[0m
+  [37m*alpn-protocols* has correct default value[0m
+    [32m✓ [0m[90mExpect (EQUAL (SYMBOL-VALUE (FIND-SYMBOL "*ALPN-PROTOCOLS*" :WOO.SSL))
+                    '("http/1.1")) to be true.[0m
+[37mtest-alpn-callback-arg-roundtrip[0m
+  [37mpreferred protocols encoded in a private callback arg[0m
+    [32m✓ [0m[90meach encode allocates its own buffer[0m
+    [32m✓ [0m[90mearlier buffer is not freed by a later encode[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG SECOND) '("http/1.1")) to be true.[0m
+[37mtest-alpn-arg-per-context[0m
+  [37meach SSL_CTX has its own callback arg and reconfigure does not free it[0m
+    [32m✓ [0m[90munchanged protocols keep the same pointer[0m
+    [32m✓ [0m[90mcontexts do not share one C buffer[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG A1) '("h2" "http/1.1")) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG B1) '("http/1.1")) to be true.[0m
+    [32m✓ [0m[90ma new list gets a new buffer[0m
+    [32m✓ [0m[90mprevious arg is still readable[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG A3) '("h2")) to be true.[0m
+    [32m✓ [0m[90mthe other context is untouched[0m
+[37mtest-alpn-callback-inbounds-and-truncated[0m
+  [37mALPN callback selects an in-bounds protocol and rejects a truncated list[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-OK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= OUTLEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (CFFI-SYS:NULL-POINTER-P OUT) to be false.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 1) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-NOACK+) to be true.[0m
+    [32m✓ [0m[90mtruncated match must not publish a length[0m
+    [32m✓ [0m[90mtruncated match must not publish a pointer past inlen[0m
+[37mtest-alpn-truncated-allocation[0m
+  [37mscanner and callback do not read past a truncated ALPN buffer[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be false.[0m
+    [32m✓ [0m[90mExpect (= LEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 1) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-OK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= OUTLEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (CFFI-SYS:NULL-POINTER-P OUT) to be false.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 1) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-NOACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= OUTLEN 0) to be true.[0m
+    [32m✓ [0m[90mExpect (CFFI-SYS:NULL-POINTER-P OUT) to be true.[0m
+
+;; testing 'woo-test.response-validation'
+[37mvalidates-response-shape-and-types[0m
+  [32m✓ [0m[90mExpect (HANDLER-CASE (PROGN (WOO::VALIDATE-RESPONSE '(200 NIL ("ok"))) NIL)
+                         (ERROR NIL T)) to be false.[0m
+[37mnormalizes-without-interning[0m
+  [32m✓ [0m[90mExpect (STRINGP (FIRST (SECOND RESPONSE))) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (FIND-SYMBOL (STRING-UPCASE NAME) :KEYWORD)) to be true.[0m
+[37mchecks-content-length-and-generated-framing[0m
+  [32m✓ [0m[90mExpect (HANDLER-CASE
+            (PROGN (WOO::VALIDATE-RESPONSE '(200 (:CONTENT-LENGTH 2) ("bad"))) NIL)
+            (ERROR NIL T)) to be true.[0m
+  [32m✓ [0m[90mapplication transfer encoding is removed[0m
+  [32m✓ [0m[90mHEAD responses do not compare body length[0m
+
+;; testing 'woo-test.static'
+[37mpathname-response-has-a-body[0m
+  [37mServe a pathname response[0m
+    [32m✓ [0m[90mExpect (AND (SEARCH "HTTP/1.1 200 OK" RESPONSE)
+                  (SEARCH "Woo private static fixture" RESPONSE)) to be true.[0m
+[37mpathname-failures-have-distinct-statuses[0m
+  [37mClassify missing files and directories[0m
+    [32m✓ [0m[90mExpect (AND (SEARCH "HTTP/1.1 404 Not Found" MISSING)
+                  (SEARCH "HTTP/1.1 500 Internal Server Error" MISMATCH-RESPONSE)
+                  (SEARCH "HTTP/1.1 403 Forbidden" DIRECTORY)) to be true.[0m
+[37munreadable-path-is-forbidden[0m
+  [37mReject unreadable pathname[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 403 Forbidden" RESPONSE) to be true.[0m
+
+;; testing 'woo-test.upload'
+[37mdeclared-body-limit-is-rejected[0m
+  [37mReject an oversized declared request body[0m
+    [32m✓ [0m[90mExpect (AND (SEARCH "413 Request Entity Too Large" RESPONSE) (NOT CALLED)) to be true.[0m
+[37mfragmented-fixed-body-preserves-next-request[0m
+  [37mKeep fragmented fixed bodies aligned[0m
+    [32m✓ [0m[90mExpect (AND (SEARCH "HTTP/1.1 200 OK" RESPONSE)
+                  (EQUAL (REVERSE SEEN) '("/body" "/next"))) to be true.[0m
+[37mspilled-body-files-are-removed-after-response-and-abort[0m
+  [37mRemove spilled request body after response[0m
+    [32m✓ [0m[90mExpect (AND SPILL-PATH
+                  (SEARCH (STRING (CAR (LAST (PATHNAME-DIRECTORY DIR))))
+                          (NAMESTRING SPILL-PATH))) to be true.[0m
+    [32m✓ [0m[90mExpect (OPEN-STREAM-P SPILL-STREAM) to be false.[0m
+    [32m✓ [0m[90mExpect (PROBE-FILE SPILL-PATH) to be false.[0m
+  [32m✓ [0m[90mExpect SAW-SPILL to be true.[0m
+  [32m✓ [0m[90mExpect KEEPALIVE-SEEN to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (UIOP/FILESYSTEM:DIRECTORY-FILES DIR)) to be true.[0m
+  [37mRemove spilled request body after abort[0m
+    [32m✓ [0m[90mExpect ABORT-SEEN to be true.[0m
+    [32m✓ [0m[90mExpect ABORT-BODY-PATH to be true.[0m
+    [32m✓ [0m[90mExpect (OPEN-STREAM-P ABORT-BODY-STREAM) to be false.[0m
+    [32m✓ [0m[90mExpect (PROBE-FILE ABORT-BODY-PATH) to be false.[0m
+    [32m✓ [0m[90mExpect (NULL (UIOP/FILESYSTEM:DIRECTORY-FILES DIR)) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 200 OK"
+                     (WOO-TEST::RAW-EXCHANGE CLACK.TEST:*CLACK-TEST-PORT*
+                                             (WOO-TEST::CRLF-LINES
+                                              "GET /health HTTP/1.1"
+                                              "Host: localhost" "Connection: close"
+                                              ""))) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (UIOP/FILESYSTEM:DIRECTORY-FILES DIR)) to be true.[0m
+
+;; testing 'woo-test.body-limit'
+[37mbody-limit-and-cleanup[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma spilled body is released after the response[0m
+    [32m✓ [0m[90mExpect (= STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESPONSE (PRINC-TO-STRING (LENGTH BODY))) to be true.[0m
+    [32m✓ [0m[90mthe body crossed the memory limit[0m
+    [32m✓ [0m[90mthe finalized body file is deleted within the cleanup deadline[0m[33m (50ms)[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma chunked body over the limit is cleaned up[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 413 " RESPONSE) to be true.[0m
+    [32m✓ [0m[90mthe rejected body file is deleted[0m
+[37mdeclared-body-limit-before-payload[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma declared oversized body is rejected without sending payload[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 413 " RESPONSE) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 " RESPONSE :START2 1) to be false.[0m
+    [32m✓ [0m[90mExpect (NULL (BODY-FILES)) to be true.[0m
+
+;; testing 'woo-test.hpack'
+[37mhpack-context-creation[0m
+  [37mCreate default HPACK context[0m
+    [32m✓ [0m[90mExpect CTX to be an instance of HPACK-CONTEXT.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+  [37mCreate HPACK context with custom max size[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 8192) to be true.[0m
+[37mhpack-integer-encoding-small[0m
+  [37mEncode small integers (less than 2^N-1)[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(10)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(5)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(42)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 1) to be true.[0m
+[37mhpack-integer-encoding-boundary[0m
+  [37mEncode integers at boundary (2^N-1)[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(31 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(7 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(63 0)) to be true.[0m
+[37mhpack-integer-encoding-large[0m
+  [37mEncode large integers (greater than 2^N-1)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FIRST BYTES) 31) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (SECOND BYTES) 128) 128) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (THIRD BYTES) 128) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (>= (LENGTH BYTES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FIRST BYTES) 127) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(127 1)) to be true.[0m
+[37mhpack-integer-encoding-with-prefix[0m
+  [37mEncode integers with non-zero first byte prefix[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(234)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (FIRST BYTES) 224) 224) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(106)) to be true.[0m
+[37mhpack-integer-decoding-roundtrip[0m
+  [37mDecode integers - roundtrip with encoding[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-integer-decoding-with-offset[0m
+  [37mDecode integers with non-zero start offset[0m
+    [32m✓ [0m[90mExpect (= DECODED 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-string-encoding-ascii[0m
+  [37mEncode ASCII strings[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 0) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 1) (CHAR-CODE #\h)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 2) (CHAR-CODE #\e)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 3) (CHAR-CODE #\l)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 4) (CHAR-CODE #\l)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 5) (CHAR-CODE #\o)) to be true.[0m
+[37mhpack-string-encoding-utf8[0m
+  [37mEncode UTF-8 strings[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (>= (LENGTH ENCODED) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (>= (LENGTH ENCODED) 9) to be true.[0m
+[37mhpack-string-encoding-empty[0m
+  [37mEncode empty string[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH ENCODED) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 0) 0) to be true.[0m
+[37mhpack-string-decoding-roundtrip[0m
+  [37mDecode strings - roundtrip with encoding[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-string-decoding-with-offset[0m
+  [37mDecode strings with non-zero start offset[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED "test") to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-static-table-lookup[0m
+  [37mLookup entries in static table (indices 1-61)[0m
+    [32m✓ [0m[90mExpect (CONSP ENTRY) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":authority") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "GET") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "POST") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "200") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "content-type") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "www-authenticate") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "") to be true.[0m
+[37mhpack-static-table-invalid-index[0m
+  [37mInvalid index 0 should error[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 0) to signal ERROR.[0m
+[37mhpack-dynamic-table-add-entry[0m
+  [37mAdd entry to dynamic table[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (> (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (CONSP ENTRY) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "custom-header") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "custom-value") to be true.[0m
+[37mhpack-dynamic-table-multiple-entries[0m
+  [37mAdd multiple entries to dynamic table[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "header-3") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "value-3") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "header-2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "value-2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "header-1") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "value-1") to be true.[0m
+[37mhpack-dynamic-table-entry-size[0m
+  [37mEntry size is octets, not Lisp characters (RFC 7541 §4.1)[0m
+    [32m✓ [0m[90mExpect (= SIZE (+ 32 4 5)) to be true.[0m
+    [32m✓ [0m[90mExpect (= SIZE (+ 32 1 2)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH VALUE) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= SIZE (+ 32 1 9)) to be true.[0m
+[37mhpack-dynamic-table-eviction[0m
+  [37mEvict entries when max size exceeded[0m
+    [32m✓ [0m[90mExpect (<= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (< (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+[37mhpack-dynamic-table-size-update[0m
+  [37mUpdate dynamic table max size and trigger eviction[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) OLD-COUNT) to be true.[0m
+[37mhpack-dynamic-table-entry-too-large[0m
+  [37mEntry larger than max size should not be added[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+  [37mOversized insert empties existing entries and does not insert (RFC 7541 §4.4)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+[37mhpack-encode-headers-simple[0m
+  [37mEncode simple headers[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-encode-headers-with-static-table[0m
+  [37mEncode headers using static table[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (AREF ENCODED 0) 128) 128) to be true.[0m
+[37mhpack-encode-headers-custom[0m
+  [37mEncode custom headers not in static table[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-encode-headers-mixed[0m
+  [37mEncode mix of static and custom headers[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-encode-headers-symbol-names[0m
+  [37mEncode headers with symbol names (keyword and regular)[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-decode-headers-indexed[0m
+  [37mDecode indexed header (static table)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+[37mhpack-decode-headers-literal-without-indexing[0m
+  [37mDecode literal header without indexing[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "test") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "value") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+[37mhpack-decode-headers-literal-with-indexing[0m
+  [37mDecode literal header with incremental indexing[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "custom") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "test") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+[37mhpack-decode-headers-dynamic-table-size-update[0m
+  [37mDecode dynamic table size update[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 1024) to be true.[0m
+[37mhpack-decode-headers-multiple[0m
+  [37mDecode multiple headers in one block[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAADR HEADERS) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDADR HEADERS) "200") to be true.[0m
+[37mhpack-roundtrip-simple-headers[0m
+  [37mRoundtrip encode/decode simple headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-static-table-headers[0m
+  [37mRoundtrip encode/decode static table headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-custom-headers[0m
+  [37mRoundtrip encode/decode custom headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-mixed-headers[0m
+  [37mRoundtrip encode/decode mixed static and custom headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-utf8-headers[0m
+  [37mRoundtrip encode/decode UTF-8 header values[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-empty-values[0m
+  [37mRoundtrip encode/decode headers with empty values[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-common-http-headers[0m
+  [37mRoundtrip encode/decode common HTTP/2 request headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-response-headers[0m
+  [37mRoundtrip encode/decode common HTTP/2 response headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-encode-empty-header-list[0m
+  [37mEncode empty header list[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-decode-empty-data[0m
+  [37mDecode empty data[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 0) to be true.[0m
+[37mhpack-large-header-value[0m
+  [37mEncode/decode large header value[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR DECODED) "x-large") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR DECODED) LARGE-VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (CDAR DECODED)) 10000) to be true.[0m
+[37mhpack-special-characters-in-values[0m
+  [37mEncode/decode headers with special characters[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-integer-truncated[0m
+  [37mTruncated integer (prefix filled, no continuation) is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-DECODE-INTEGER DATA 0 5) to signal HPACK-COMPRESSION-ERROR.[0m
+[37mhpack-integer-0x80-chain[0m
+  [37mUnbounded 0x80 continuation chain is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-DECODE-INTEGER DATA 0 5) to signal HPACK-COMPRESSION-ERROR.[0m
+[37mhpack-unknown-index[0m
+  [37mUnknown static/dynamic index is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 62) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 1000) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX DATA) to signal HPACK-COMPRESSION-ERROR.[0m
+[37mhpack-dynamic-table-octet-size-non-ascii[0m
+  [37mNon-ASCII value is sized in UTF-8 octets and forces eviction[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "a") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (MAP 'LIST #'CHAR-CODE (CDAR HEADERS)) '(26085 26412 35486)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+  [37mSame value is inserted and counted as 42 octets when it fits[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 41) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+[37mhpack-oversized-insert-on-wire[0m
+  [37mWire insert larger than the table max empties the table[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "name") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (CDAR HEADERS)) 15) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+[37mhpack-rfc7541-c5-eviction[0m
+  [37mRFC 7541 C.5 responses evict at SETTINGS_HEADER_TABLE_SIZE 256[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "302") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "307") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "307") to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 66) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (FIND "302" (HPACK-CONTEXT-DYNAMIC-TABLE CTX) :KEY #'CDR :TEST #'STRING=) to be false.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 6) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "200") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR (CAR (LAST HEADERS))) "set-cookie") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 215) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+[37mhpack-rfc7541-c6-huffman-eviction[0m
+  [37mRFC 7541 C.6 evicts using decoded octets, not Huffman wire length[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "302") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR (NTH 3 HEADERS)) "https://www.example.com") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "307") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (FIND "302" (HPACK-CONTEXT-DYNAMIC-TABLE CTX) :KEY #'CDR :TEST #'STRING=) to be false.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 6) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR (CAR (LAST HEADERS)))
+                      "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 215) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+[37mhpack-size-update-literal-octets[0m
+  [37mPublished size-update octets, not an encode/decode round trip[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 130 32)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 63 226 31)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 34) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 63 69))) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 63 70)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+[37mhpack-dynamic-table-size-update-rules[0m
+  [37mSize update equal to the advertised limit is accepted[0m
+    [32m✓ [0m[90mExpect (NULL (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 4096))) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+  [37mEncoder may lower the table and later raise it back to the limit[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 200) to be true.[0m
+  [37mSize update above SETTINGS_HEADER_TABLE_SIZE is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 4097)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) SIZE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) MAX) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+  [37mCustom context limit is the ceiling, not only the default 4096[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 101)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+  [37mSETTINGS_HEADER_TABLE_SIZE raises the ceiling[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 8192) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 8193)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 8192) to be true.[0m
+  [37mSize update after a header field is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX
+                                   (HPACK-CAT (HPACK-BYTES 130)
+                                              (HPACK-SIZE-UPDATE-BYTES 0))) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+  [37mTwo size updates before the first field are accepted[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 256) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+[37mhpack-obs-text-not-utf8[0m
+  [37mRaw obs-text is not a compression error and counts as one octet[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CHAR-CODE (CHAR (CAAR HEADERS) 0)) 255) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "a") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) (+ 32 1 1)) to be true.[0m
+  [37mA later indexed name keeps the raw octet length[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) (+ 34 34)) to be true.[0m
+  [37mHuffman-coded obs-text does not signal[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "x") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (CDAR HEADERS)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CHAR-CODE (CHAR (CDAR HEADERS) 0)) 255) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+[37mhpack-huffman-method-get[0m
+  [37mHuffman-encoded :method GET decodes correctly[0m
+    [32m✓ [0m[90mExpect (LOGBITP 7 (AREF NAME-ENC 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (LOGBITP 7 (AREF VALUE-ENC 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+  [37mHuffman string roundtrip[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-header-list-limit-while-decoding[0m
+  [37mdecoding stops at the field that crosses the limit[0m
+    [32m✓ [0m[90mExpect (EQL FIELDS 17) to be true.[0m
+  [37mthe limit counts name + value + 32 per field[0m
+    [32m✓ [0m[90mExpect (= 2
+                (LENGTH
+                 (HPACK-DECODE-HEADERS (MAKE-HPACK-CONTEXT) BLOCK
+                                       :MAX-HEADER-LIST-SIZE 86))) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS (MAKE-HPACK-CONTEXT) BLOCK :MAX-HEADER-LIST-SIZE
+                                   85) to signal HPACK-HEADER-LIST-TOO-LARGE.[0m
+  [37mwithout a limit the whole block decodes[0m
+    [32m✓ [0m[90mExpect (= 1001
+                (LENGTH
+                 (HPACK-DECODE-HEADERS (MAKE-HPACK-CONTEXT)
+                                       (INDEXED-BOMB-BLOCK 4000 1000)))) to be true.[0m
+
+;; testing 'woo-test.http2-frames'
+[37mparse-frame-header-basic[0m
+  [37mparse-frame-header with valid 9-byte header[0m
+    [32m✓ [0m[90mExpect (= LENGTH 16) to be true.[0m
+    [32m✓ [0m[90mExpect (= TYPE +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= FLAGS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= STREAM-ID 1) to be true.[0m
+[37mparse-frame-header-insufficient-data[0m
+  [37mparse-frame-header with insufficient data returns NIL[0m
+    [32m✓ [0m[90mExpect (NULL (PARSE-FRAME-HEADER DATA)) to be true.[0m
+[37mparse-frame-header-with-offset[0m
+  [37mparse-frame-header with offset[0m
+    [32m✓ [0m[90mExpect (= LENGTH 32) to be true.[0m
+    [32m✓ [0m[90mExpect (= TYPE +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= FLAGS 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= STREAM-ID 0) to be true.[0m
+[37mparse-frame-header-reserved-bit[0m
+  [37mparse-frame-header clears reserved bit in stream-id[0m
+    [32m✓ [0m[90mReserved bit should be cleared[0m
+[37mparse-frame-header-max-values[0m
+  [37mparse-frame-header with maximum values[0m
+    [32m✓ [0m[90mExpect (= LENGTH 16777215) to be true.[0m
+    [32m✓ [0m[90mExpect (= TYPE +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= FLAGS 255) to be true.[0m
+    [32m✓ [0m[90mExpect (= STREAM-ID 2147483647) to be true.[0m
+[37mparse-frame-basic[0m
+  [37mparse-frame with DATA frame[0m
+    [32m✓ [0m[90mExpect FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= BYTES-CONSUMED 25) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 16) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) PAYLOAD) to be true.[0m
+[37mparse-frame-empty-payload[0m
+  [37mparse-frame with empty payload[0m
+    [32m✓ [0m[90mExpect FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= BYTES-CONSUMED 9) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mparse-frame-insufficient-data[0m
+  [37mparse-frame with insufficient data for payload[0m
+    [32m✓ [0m[90mExpect (NULL (PARSE-FRAME DATA)) to be true.[0m
+[37mparse-frame-exceeds-max-frame-size[0m
+  [37mparse-frame signals :frame-size-error when length exceeds max[0m
+    [32m✓ [0m[90mExpect (NULL FRAME) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ STATUS :FRAME-SIZE-ERROR) to be true.[0m
+[37mparse-frame-with-offset[0m
+  [37mparse-frame with offset[0m
+    [32m✓ [0m[90mExpect FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= BYTES-CONSUMED 13) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-PING+) to be true.[0m
+[37mserialize-frame-basic[0m
+  [37mserialize-frame produces correct byte sequence[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SERIALIZED) 17) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 0) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 1) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 2) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 3) +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 4) +FLAG-END-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 5) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 6) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 7) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 8) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SUBSEQ SERIALIZED 9) PAYLOAD) to be true.[0m
+[37mserialize-frame-empty-payload[0m
+  [37mserialize-frame with empty payload[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SERIALIZED) 9) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 0) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 1) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 2) 0) to be true.[0m
+[37mserialize-parse-roundtrip[0m
+  [37mserialize and parse roundtrip[0m
+    [32m✓ [0m[90mExpect PARSED-FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE PARSED-FRAME) (FRAME-TYPE ORIGINAL-FRAME)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS PARSED-FRAME) (FRAME-FLAGS ORIGINAL-FRAME)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID PARSED-FRAME) (FRAME-STREAM-ID ORIGINAL-FRAME)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD PARSED-FRAME) (FRAME-PAYLOAD ORIGINAL-FRAME)) to be true.[0m
+[37mmake-settings-frame-basic[0m
+  [37mmake-settings-frame with settings list[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 18) to be true.[0m
+    [32m✓ [0m[90mExpect (= (+ (ASH (AREF PAYLOAD 0) 8) (AREF PAYLOAD 1))
+                +SETTINGS-HEADER-TABLE-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 2) 24) (ASH (AREF PAYLOAD 3) 16)
+                 (ASH (AREF PAYLOAD 4) 8) (AREF PAYLOAD 5))
+              4096) to be true.[0m
+[37mmake-settings-frame-empty[0m
+  [37mmake-settings-frame with empty settings[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mmake-settings-ack-frame[0m
+  [37mmake-settings-ack-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mmake-settings-frame-with-ack[0m
+  [37mmake-settings-frame with :ack t[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mmake-headers-frame-basic[0m
+  [37mmake-headers-frame with basic options[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-HEADERS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-HEADERS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) HEADER-BLOCK) to be true.[0m
+[37mmake-headers-frame-with-flags[0m
+  [37mmake-headers-frame with END_STREAM and END_HEADERS[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) (LOGIOR +FLAG-END-STREAM+ +FLAG-END-HEADERS+)) to be true.[0m
+[37mmake-headers-frame-no-end-headers[0m
+  [37mmake-headers-frame without END_HEADERS[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+[37mmake-headers-frame-end-stream-only[0m
+  [37mmake-headers-frame with END_STREAM only[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+[37mmake-headers-frame-with-priority[0m
+  [37mmake-headers-frame encodes the optional PRIORITY field[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) (LOGIOR +FLAG-END-HEADERS+ +FLAG-PRIORITY+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 7) to be true.[0m
+    [32m✓ [0m[90mexclusive and dependency high octet[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 1) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 2) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 3) 4) to be true.[0m
+    [32m✓ [0m[90mwire weight is weight minus one[0m
+    [32m✓ [0m[90mheader block follows priority[0m
+[37mmake-headers-frame-rejects-invalid-priority[0m
+  [37mmake-headers-frame rejects invalid priority fields[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN (MAKE-HEADERS-FRAME 1 #() :PRIORITY T :WEIGHT 0) NIL)
+              (ERROR NIL T)) to be true.[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN
+               (MAKE-HEADERS-FRAME 1 #() :PRIORITY T :STREAM-DEPENDENCY 2147483648)
+               NIL)
+              (ERROR NIL T)) to be true.[0m
+    [32m✓ [0m[90mself dependency retains the RFC 9113 wire format[0m
+[37mmake-data-frame-basic[0m
+  [37mmake-data-frame with byte vector[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) DATA) to be true.[0m
+[37mmake-data-frame-with-end-stream[0m
+  [37mmake-data-frame with END_STREAM flag[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+[37mmake-data-frame-empty[0m
+  [37mmake-data-frame with empty data[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+[37mmake-data-frame-coercion[0m
+  [37mmake-data-frame with list (coercion)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (FRAME-PAYLOAD FRAME) to be an instance of (SIMPLE-ARRAY
+                                                         (UNSIGNED-BYTE 8) (*)).[0m
+[37mmake-data-frame-with-padding[0m
+  [37mmake-data-frame encodes PADDED payload shape[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) (LOGIOR +FLAG-END-STREAM+ +FLAG-PADDED+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 6) to be true.[0m
+    [32m✓ [0m[90mpad length octet[0m
+    [32m✓ [0m[90mdata precedes padding[0m
+    [32m✓ [0m[90mpadding octets are zero[0m
+[37mmake-data-frame-with-padding-and-empty-data[0m
+  [37mmake-data-frame can pad an empty DATA payload[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-PADDED+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 0) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EVERY #'ZEROP (SUBSEQ PAYLOAD 1)) to be true.[0m
+[37mmake-data-frame-rejects-invalid-padding-length[0m
+  [37mmake-data-frame rejects a pad length outside the octet range[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN (MAKE-DATA-FRAME 1 #() :PADDED T :PAD-LENGTH 256) NIL)
+              (ERROR NIL T)) to be true.[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN (MAKE-DATA-FRAME 1 #() :PADDED T :PAD-LENGTH -1) NIL)
+              (ERROR NIL T)) to be true.[0m
+[37mmake-window-update-frame-basic[0m
+  [37mmake-window-update-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-WINDOW-UPDATE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              1024) to be true.[0m
+[37mmake-window-update-frame-connection[0m
+  [37mmake-window-update-frame for connection (stream 0)[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+[37mmake-window-update-frame-max-increment[0m
+  [37mmake-window-update-frame with maximum increment[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              2147483647) to be true.[0m
+[37mmake-ping-frame-basic[0m
+  [37mmake-ping-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-PING+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) OPAQUE-DATA) to be true.[0m
+[37mmake-ping-frame-with-ack[0m
+  [37mmake-ping-frame with ACK flag[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+[37mmake-ping-ack-frame[0m
+  [37mmake-ping-ack-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-PING+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) OPAQUE-DATA) to be true.[0m
+[37mmake-ping-frame-invalid-length[0m
+  [37mmake-ping-frame with invalid opaque data length[0m
+    [32m✓ [0m[90mExpect (MAKE-PING-FRAME INVALID-DATA) to signal SIMPLE-ERROR.[0m
+[37mmake-goaway-frame-basic[0m
+  [37mmake-goaway-frame without debug data[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              10) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 4) 24) (ASH (AREF PAYLOAD 5) 16)
+                 (ASH (AREF PAYLOAD 6) 8) (AREF PAYLOAD 7))
+              +NO-ERROR+) to be true.[0m
+[37mmake-goaway-frame-with-debug-data[0m
+  [37mmake-goaway-frame with debug data[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 18) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 4) 24) (ASH (AREF PAYLOAD 5) 16)
+                 (ASH (AREF PAYLOAD 6) 8) (AREF PAYLOAD 7))
+              +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SUBSEQ PAYLOAD 8) DEBUG-DATA) to be true.[0m
+[37mmake-goaway-frame-various-errors[0m
+  [37mmake-goaway-frame with various error codes[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+[37mmake-rst-stream-frame-basic[0m
+  [37mmake-rst-stream-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              +CANCEL+) to be true.[0m
+[37mmake-rst-stream-frame-various-errors[0m
+  [37mmake-rst-stream-frame with various error codes[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+[37mparse-settings-payload-basic[0m
+  [37mparse-settings-payload with multiple settings[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SETTINGS) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-HEADER-TABLE-SIZE+ SETTINGS)) 8192) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-MAX-CONCURRENT-STREAMS+ SETTINGS)) 128) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-INITIAL-WINDOW-SIZE+ SETTINGS)) 65536) to be true.[0m
+[37mparse-settings-payload-empty[0m
+  [37mparse-settings-payload with empty payload[0m
+    [32m✓ [0m[90mExpect (NULL (PARSE-SETTINGS-PAYLOAD PAYLOAD)) to be true.[0m
+[37mparse-settings-payload-incomplete[0m
+  [37mparse-settings-payload with incomplete setting[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SETTINGS) 1) to be true.[0m
+[37mparse-window-update-payload-basic[0m
+  [37mparse-window-update-payload[0m
+    [32m✓ [0m[90mExpect (= (PARSE-WINDOW-UPDATE-PAYLOAD PAYLOAD) 1024) to be true.[0m
+[37mparse-window-update-payload-reserved-bit[0m
+  [37mparse-window-update-payload clears reserved bit[0m
+    [32m✓ [0m[90mExpect (= (PARSE-WINDOW-UPDATE-PAYLOAD PAYLOAD) 2147483647) to be true.[0m
+[37mparse-window-update-payload-max-value[0m
+  [37mparse-window-update-payload with maximum increment[0m
+    [32m✓ [0m[90mExpect (= (PARSE-WINDOW-UPDATE-PAYLOAD PAYLOAD) 2147483647) to be true.[0m
+[37mparse-goaway-payload-basic[0m
+  [37mparse-goaway-payload without debug data[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL DEBUG-DATA) to be true.[0m
+[37mparse-goaway-payload-with-debug-data[0m
+  [37mparse-goaway-payload with debug data[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 100) to be true.[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +INTERNAL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect DEBUG-DATA to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DEBUG-DATA) 12) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF DEBUG-DATA 0) 65) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF DEBUG-DATA 11) 76) to be true.[0m
+[37mparse-goaway-payload-reserved-bit[0m
+  [37mparse-goaway-payload clears reserved bit in last-stream-id[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 2147483647) to be true.[0m
+[37mparse-rst-stream-payload-basic[0m
+  [37mparse-rst-stream-payload[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) +CANCEL+) to be true.[0m
+[37mparse-rst-stream-payload-various-errors[0m
+  [37mparse-rst-stream-payload with various error codes[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+[37mintegration-settings-roundtrip[0m
+  [37mSETTINGS frame complete roundtrip[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PARSED-SETTINGS) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-HEADER-TABLE-SIZE+ PARSED-SETTINGS)) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-MAX-CONCURRENT-STREAMS+ PARSED-SETTINGS)) 100) to be true.[0m
+[37mintegration-window-update-roundtrip[0m
+  [37mWINDOW_UPDATE frame complete roundtrip[0m
+    [32m✓ [0m[90mExpect (= INCREMENT 32768) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID PARSED-FRAME) 3) to be true.[0m
+[37mintegration-goaway-roundtrip[0m
+  [37mGOAWAY frame complete roundtrip with debug data[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP DEBUG-DATA DEBUG-MSG) to be true.[0m
+[37mintegration-rst-stream-roundtrip[0m
+  [37mRST_STREAM frame complete roundtrip[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID PARSED-FRAME) 7) to be true.[0m
+
+[32m✓ 16 tests completed[0m
+
+Summary:
+  All 16 tests passed.
+Unhandled SB-SYS:MEMORY-FAULT-ERROR in thread #<error printing a SB-THREAD:THREAD: #<PRINT-NOT-READABLE {8019EC21C3}>>: Unhandle

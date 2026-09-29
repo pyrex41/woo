@@ -1,0 +1,56 @@
+{
+  "run_id": 36520527924,
+  "run_url": "https://github.com/pyrex41/woo/actions/runs/36520527924",
+  "workflow": "Legacy qualification",
+  "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "checkout_head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_bound": true,
+  "validator_performed": true,
+  "validator": "t/qualification/check.py receipt_qualifies evaluated against checkout HEAD and pinned dependencies; no local --verify used across platforms",
+  "artifacts": {
+    "ubuntu-24.04": {
+      "receipt": "hosted-legacy-c0e27b6/ubuntu-24.04/receipt.json",
+      "artifact_url": "https://github.com/pyrex41/woo/actions/runs/36520527924/artifacts/11012719254",
+      "job_log": "hosted-legacy-c0e27b6/ubuntu-job.log"
+    },
+    "macos-15": {
+      "receipt": "hosted-legacy-c0e27b6/macos-15/receipt.json",
+      "artifact_url": "https://github.com/pyrex41/woo/actions/runs/36520527924/artifacts/11013468984",
+      "job_log": "hosted-legacy-c0e27b6/macos-job.log"
+    }
+  },
+  "results": {
+    "macos-15": {
+      "status": "PASS",
+      "elapsed_seconds": 1980.0389891250002,
+      "soak_elapsed_seconds": 1800.211517083,
+      "cleanup": "PASS",
+      "process_group_cleanup": "PASS",
+      "socket_cleanup": "PASS",
+      "spool_cleanup": "PASS",
+      "cycles": 19721,
+      "lifecycle_cycles": 30,
+      "peak_rss_bytes": 810844160,
+      "resource_samples": 1586,
+      "soak_samples": 1443,
+      "soak_duration_seconds": 1798.708313958
+    },
+    "ubuntu-24.04": {
+      "status": "FAIL",
+      "elapsed_seconds": 1990.393031227,
+      "cleanup": "UNKNOWN",
+      "failure": "full receipt lacks bounded phase-bound soak resource evidence",
+      "peak_rss_bytes": 673914880,
+      "resource_samples": 1971,
+      "soak_samples": 1783,
+      "soak_duration_seconds": 1799.530140525
+    }
+  },
+  "production_claim": "UNKNOWN: hosted qualification has one passing macOS lane and one failing Ubuntu lane; this is local/hosted qualification evidence only, not production proof.",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "3828c808205bd5f99b4ffc9a0c0b332fc14791755e8a1b3e2f5ca018ae9dea21"
+  }
+}

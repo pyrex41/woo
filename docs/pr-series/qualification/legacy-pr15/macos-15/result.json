@@ -1,0 +1,13 @@
+{
+  "cycles": 20001,
+  "duration_seconds": 1901.657883583,
+  "lifecycle_cycles": 30,
+  "soak_elapsed_seconds": 1800.182615708,
+  "spool_cleanup": "PASS",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "6cf4fe219b1413086c7ff893f8452f9e003a0f5164b91fcdd60603adf71c3f3c"
+  }
+}

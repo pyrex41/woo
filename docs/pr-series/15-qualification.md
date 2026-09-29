@@ -13,9 +13,11 @@ This is one clean commit in a dependency-ordered series. Review the topic delta 
 ## Verification
 
 - PASS: load-only (no SSL); [receipt](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/receipts/564d08d9e1be-no-ssl-woo-test-load.json).
-- Hosted Legacy qualification: [IN_PROGRESS](https://github.com/pyrex41/woo/actions/runs/36520529633), exact head `564d08d9e1beca7706a81821b0ec2b5660b55313`.
+- Hosted Legacy qualification: [FAILURE](https://github.com/pyrex41/woo/actions/runs/36520529633), exact head `564d08d9e1beca7706a81821b0ec2b5660b55313`.
 - Hosted CI: [PASS](https://github.com/pyrex41/woo/actions/runs/36520529577), exact head `564d08d9e1beca7706a81821b0ec2b5660b55313`.
-- Hosted Lack compatibility: [IN_PROGRESS](https://github.com/pyrex41/woo/actions/runs/36520529575), exact head `564d08d9e1beca7706a81821b0ec2b5660b55313`.
+- Hosted Lack compatibility: [FAILURE](https://github.com/pyrex41/woo/actions/runs/36520529575), exact head `564d08d9e1beca7706a81821b0ec2b5660b55313`.
+
+Review [qualification and CI attempt notes](https://github.com/pyrex41/woo/blob/codex/pr-series-plan/docs/pr-series/verification.md) before publication. PR 11 has a repeated hosted Linux stall; PR 15 and the assembled head have failed qualification lanes. These outcomes remain unresolved.
 
 Receipts specify the actual ASDF source directory, source tree and command. Load checks establish loadability only. Focused tests cover their named suites; production readiness remains UNKNOWN.
 

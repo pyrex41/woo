@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run a bounded native gate from the selected worktree, record its identity."""
-import argparse, hashlib, json, os, resource, subprocess, time
+import argparse, hashlib, json, os, resource, signal, subprocess, time
 from pathlib import Path
 p=argparse.ArgumentParser(); p.add_argument('worktree'); p.add_argument('--suite',action='append',default=[]); p.add_argument('--no-ssl',action='store_true'); p.add_argument('--load-only',action='store_true'); p.add_argument('--system',default='woo-test'); p.add_argument('--timeout',type=int,default=480); a=p.parse_args()
 w=Path(a.worktree).resolve(); head=subprocess.check_output(['git','-C',str(w),'rev-parse','HEAD'],text=True).strip()
@@ -38,11 +38,21 @@ def limits():
 tree=subprocess.check_output(['git','-C',str(w),'rev-parse','HEAD^{tree}'],text=True).strip()
 start=time.time()
 with log.open('w') as out:
- try:result=subprocess.run(cmd,cwd=w,env=env,stdout=out,stderr=subprocess.STDOUT,timeout=a.timeout,preexec_fn=limits);rc=result.returncode
+ child=subprocess.Popen(cmd,cwd=w,env=env,stdout=out,stderr=subprocess.STDOUT,preexec_fn=limits,start_new_session=True)
+ try:rc=child.wait(timeout=a.timeout)
  except subprocess.TimeoutExpired:rc=124
+ finally:
+  try:os.killpg(child.pid,signal.SIGTERM)
+  except ProcessLookupError:pass
+  try:child.wait(timeout=5)
+  except subprocess.TimeoutExpired:
+   os.killpg(child.pid,signal.SIGKILL);child.wait(timeout=5)
+  try:os.killpg(child.pid,signal.SIGKILL)
+  except ProcessLookupError:pass
 current_head=subprocess.check_output(['git','-C',str(w),'rev-parse','HEAD'],text=True).strip()
-if current_head!=head or subprocess.check_output(['git','-C',str(w),'status','--porcelain'],text=True).strip():rc=125
-receipt.write_text(json.dumps(dict(head=head,worktree=str(w),system=a.system,suites=a.suite,no_ssl=a.no_ssl,load_only=a.load_only,command=cmd,elapsed_seconds=round(time.time()-start,2),exit_code=rc,result='PASS' if rc==0 else 'FAIL',source_tree=tree,current_head=current_head,source_changed=current_head!=head,runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),log=str(log)),indent=2)+'\n')
+changed=current_head!=head or bool(subprocess.check_output(['git','-C',str(w),'status','--porcelain'],text=True).strip())
+if changed:rc=125
+receipt.write_text(json.dumps(dict(head=head,worktree=str(w),system=a.system,suites=a.suite,no_ssl=a.no_ssl,load_only=a.load_only,command=cmd,elapsed_seconds=round(time.time()-start,2),exit_code=rc,result='UNKNOWN' if changed else 'PASS' if rc==0 else 'FAIL',source_tree=tree,current_head=current_head,source_changed=changed,runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),log=str(log)),indent=2)+'\n')
 print(receipt.read_text());
 if rc:print(log.read_text()[-10000:])
 raise SystemExit(rc)
