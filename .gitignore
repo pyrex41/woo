@@ -13,3 +13,29 @@ benchmark/benchmark.log
 qlfile
 qlfile.lock
 t/certs/
+t/prop/.qc-failures
+/artifacts/h2spec/
+/artifacts/autobahn/
+/t/hegel/oracle/target/
+/t/conformance/__pycache__/
+
+# SCUD
+.scud/
+
+# Compiled core images
+*.core
+
+# Claude Code
+.claude/
+
+# Working notes
+thoughts/
+dump.md
+
+# Managed compatibility receipts and Python bytecode
+/.artifacts/
+/t/compat/__pycache__/
+
+# Local qualification bytecode and Hegel replay corpus
+/t/qualification/__pycache__/
+/t/hegel/.hegel/

@@ -22,13 +22,18 @@ jobs:
           ROSWELL_INSTALL_DIR: /usr
         run: |
           curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
-      - name: Install Ultralisp
-        run: ros -e '(ql-dist:install-dist "http://dist.ultralisp.org/" :prompt nil)'
+      - name: Install frozen Quicklisp distribution
+        run: ros -e '(ql-dist:install-dist "http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt" :prompt nil :replace t)'
       - name: Install Rove
         run: ros install rove
       - name: Run tests
         env:
           LISP: ${{ matrix.lisp }}
         run: |
-          PATH="~/.roswell/bin:$PATH"
-          rove woo-test.asd
+          ulimit -n 256
+          PATH="$HOME/.roswell/bin:$PATH"
+          export PATH
+          ros dynamic-space-size=4096 \
+            -e '(push (truename "./") asdf:*central-registry*)' \
+            -s woo-test \
+            -e '(unless (rove:run :woo-test) (uiop:quit 1))'
