@@ -386,3 +386,341 @@
             (cffi:foreign-free prefer-h2)
             (cffi:foreign-free prefer-11)))))))
 
+;;; End to end: a real TLS client offers ALPN to a running Woo server.
+
+(defun cert-path (name)
+  (asdf:system-relative-pathname :woo-test (format nil "t/certs/~A" name)))
+
+(defun octets (&rest parts)
+  (apply #'concatenate '(simple-array (unsigned-byte 8) (*))
+         (mapcar (lambda (p) (coerce p '(simple-array (unsigned-byte 8) (*)))) parts)))
+
+(defun call-with-deadline (seconds fn)
+  "Run FN in its own thread. Returns its values, or signals if it has not
+   finished within SECONDS (the thread is then destroyed)."
+  (let* ((result nil)
+         (err nil)
+         (done nil)
+         (thread (bt2:make-thread
+                  (lambda ()
+                    (handler-case (setf result (multiple-value-list (funcall fn)))
+                      (error (e) (setf err e)))
+                    (setf done t))
+                  :name "alpn-client"))
+         (deadline (+ (get-internal-real-time)
+                      (* seconds internal-time-units-per-second))))
+    (loop until done
+          do (when (> (get-internal-real-time) deadline)
+               (ignore-errors (bt2:destroy-thread thread))
+               (error "TLS client did not finish within ~As" seconds))
+             (sleep 0.02))
+    (when err (error err))
+    (values-list result)))
+
+(defun call-with-tls (port alpn fn)
+  "Connect to 127.0.0.1:PORT, handshake offering ALPN, and call
+   (FN stream selected-protocol)."
+  (let ((sock (usocket:socket-connect "127.0.0.1" port
+                                      :element-type '(unsigned-byte 8))))
+    (unwind-protect
+         (let ((tls (cl+ssl:make-ssl-client-stream (usocket:socket-stream sock)
+                                                   :hostname "localhost"
+                                                   :verify nil
+                                                   :alpn-protocols alpn)))
+           (unwind-protect
+                (funcall fn tls (cl+ssl:get-selected-alpn-protocol tls))
+             (ignore-errors (close tls))))
+      (ignore-errors (usocket:socket-close sock)))))
+
+(defun read-octets (stream n)
+  (let ((buf (make-array n :element-type '(unsigned-byte 8))))
+    (let ((got (read-sequence buf stream)))
+      (unless (= got n)
+        (error "connection closed after ~A of ~A bytes" got n)))
+    buf))
+
+(defun read-h2-frame (stream)
+  "Returns (values type flags stream-id payload)."
+  (let* ((header (read-octets stream 9))
+         (len (+ (ash (aref header 0) 16) (ash (aref header 1) 8) (aref header 2)))
+         (sid (logand (+ (ash (aref header 5) 24) (ash (aref header 6) 16)
+                         (ash (aref header 7) 8) (aref header 8))
+                      #x7fffffff)))
+    (values (aref header 3) (aref header 4) sid (read-octets stream len))))
+
+(defun h2-get (stream)
+  "Speak HTTP/2 on STREAM: preface, SETTINGS, GET /. Returns
+   (values first-frame-type response-headers body-string)."
+  (write-sequence
+   (octets woo.http2.constants:+connection-preface+
+           (woo.http2.frames:serialize-frame (woo.http2.frames:make-settings-frame nil))
+           (woo.http2.frames:serialize-frame
+            (woo.http2.frames:make-headers-frame
+             1 (woo.http2.hpack:hpack-encode-headers
+                (woo.http2.hpack:make-hpack-context)
+                '((":method" . "GET") (":scheme" . "https")
+                  (":path" . "/") (":authority" . "localhost")))
+             :end-headers t :end-stream t)))
+   stream)
+  (force-output stream)
+  (let ((first-type nil)
+        (headers nil)
+        (body (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
+        (hpack (woo.http2.hpack:make-hpack-context)))
+    (loop repeat 50
+          do (multiple-value-bind (type flags sid payload) (read-h2-frame stream)
+               (unless first-type (setf first-type type))
+               (cond
+                 ((and (= type woo.http2.constants:+frame-settings+)
+                       (zerop (logand flags woo.http2.constants:+flag-ack+)))
+                  (write-sequence (woo.http2.frames:serialize-frame
+                                   (woo.http2.frames:make-settings-ack-frame))
+                                  stream)
+                  (force-output stream))
+                 ((and (= type woo.http2.constants:+frame-headers+) (= sid 1))
+                  (setf headers (woo.http2.hpack:hpack-decode-headers hpack payload)))
+                 ((and (= type woo.http2.constants:+frame-data+) (= sid 1))
+                  (loop for b across payload do (vector-push-extend b body))))
+               (when (and (= sid 1)
+                          (member type (list woo.http2.constants:+frame-headers+
+                                             woo.http2.constants:+frame-data+))
+                          (logtest flags woo.http2.constants:+flag-end-stream+))
+                 (return))
+               (when (= type woo.http2.constants:+frame-goaway+)
+                 (return))))
+    (values first-type headers (map 'string #'code-char body))))
+
+(defun http1-get (stream)
+  "Send an HTTP/1.1 request and return the status line."
+  (write-sequence (trivial-utf-8:string-to-utf-8-bytes
+                   (format nil "GET / HTTP/1.1~C~CHost: localhost~C~CConnection: close~C~C~C~C"
+                           #\Return #\Newline #\Return #\Newline #\Return #\Newline
+                           #\Return #\Newline))
+                  stream)
+  (force-output stream)
+  (let ((line (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)))
+    (loop for b = (read-byte stream nil nil)
+          while (and b (/= b 10) (< (length line) 200))
+          do (unless (= b 13) (vector-push-extend (code-char b) line)))
+    (coerce line 'simple-string)))
+
+(defun read-http1-body-slowly (stream)
+  "Read a close-delimited HTTP/1 response in small pieces.
+This intentionally yields between reads so a TLS writer must survive a slow peer."
+  (write-sequence (trivial-utf-8:string-to-utf-8-bytes
+                   (format nil "GET / HTTP/1.1~C~CHost: localhost~C~CConnection: close~C~C~C~C"
+                           #\Return #\Newline #\Return #\Newline
+                           #\Return #\Newline #\Return #\Newline)) stream)
+  (force-output stream)
+  (let ((line (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+        (headers nil))
+    (labels ((read-line-bytes ()
+               (setf (fill-pointer line) 0)
+               (loop for b = (read-byte stream nil nil)
+                     while (and b (/= b 10))
+                     do (unless (= b 13) (vector-push-extend (code-char b) line)))
+               (coerce line 'simple-string)))
+      (read-line-bytes)
+      (loop for h = (read-line-bytes)
+            until (zerop (length h))
+            do (let ((split (position #\: h)))
+                 (when split
+                   (push (cons (string-downcase (subseq h 0 split))
+                               (string-trim '(#\Space #\Tab) (subseq h (1+ split))))
+                         headers))))
+      (let* ((length (parse-integer (or (cdr (assoc "content-length" headers :test #'string=)) "0")))
+             (body (make-array length :element-type '(unsigned-byte 8))))
+        ;; cl+ssl's stream-read-sequence is unreliable when repeatedly
+        ;; reading into different offsets of one destination vector: after
+        ;; the first TLS record it can report a zero-length read while the
+        ;; peer is still delivering data. Read each bounded piece at offset
+        ;; zero, then copy it into the response buffer.
+        (let ((chunk (make-array 1024 :element-type '(unsigned-byte 8))))
+          (loop with offset = 0
+                while (< offset length)
+                do (let* ((want (min 1024 (- length offset)))
+                          (n (read-sequence chunk stream :start 0 :end want)))
+                     (when (zerop n) (error "TLS peer closed at ~D/~D" offset length))
+                     (replace body chunk :start1 offset :end1 (+ offset n) :end2 n)
+                     (incf offset n)
+                     (sleep 0.001))))
+        body))))
+
+(deftest test-tls-slow-reader-preserves-exact-body
+  (testing "a slow TLS reader receives every response byte in order"
+    (let* ((body (make-string (* 256 1024) :initial-element #\x))
+           (clack.test:*clack-test-handler* :woo)
+           (clack.test:*clackup-additional-args*
+             (list :ssl-cert-file (cert-path "localhost.crt")
+                   :ssl-key-file (cert-path "localhost.key"))))
+      (clack.test:testing-app "TLS slow reader"
+          (lambda (env)
+            (declare (ignore env))
+            `(200 (:content-type "text/plain" :content-length ,(length body)) (,body)))
+        (let ((port clack.test:*clack-test-port*))
+          (multiple-value-bind (received-size exact-p)
+              (call-with-deadline
+               15
+               (lambda ()
+                 (call-with-tls port '("http/1.1")
+                   (lambda (tls proto)
+                     (declare (ignore proto))
+                     (let ((received (read-http1-body-slowly tls)))
+                       (values (length received)
+                               (every (lambda (b) (= b (char-code #\x))) received)))))))
+            (ok (= received-size (length body)))
+            (ok exact-p)))))))
+
+(deftest test-fullchain-context-loads
+  (testing "a listener context accepts a leaf followed by an intermediate"
+    (let ((chain (merge-pathnames
+                  (format nil "woo-test-fullchain-~D.pem" (random 1000000))
+                  (uiop:temporary-directory)))
+          (ctx nil))
+      (unwind-protect
+           (progn
+             (with-open-file (out chain :direction :output :if-exists :supersede)
+               (dolist (name '("chain-leaf.crt" "chain-intermediate.crt"))
+                 (with-open-file (in (cert-path name))
+                   (loop for line = (read-line in nil nil)
+                         while line do (write-line line out)))))
+             (setf ctx (woo.ssl:create-context chain (cert-path "chain-leaf.key") nil))
+             (ok ctx))
+        (when ctx (woo.ssl:free-context ctx))
+        (when (probe-file chain) (delete-file chain))))))
+
+(deftest test-listener-alpn-setup-failure-releases-context
+  (testing "a failure after installing ALPN releases the listener context"
+    (let ((create (symbol-function 'woo.ssl:create-context))
+          (configure (symbol-function 'woo.ssl:configure-context-alpn))
+          (free (symbol-function 'woo.ssl:free-context))
+          (context nil)
+          (configured nil)
+          (freed 0)
+          (baseline (hash-table-count woo.ssl.alpn::*alpn-ctx-args*)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'woo.ssl:create-context)
+                   (lambda (&rest args)
+                     (setf context (apply create args)))
+                   (symbol-function 'woo.ssl:configure-context-alpn)
+                   (lambda (&rest args)
+                     (apply configure args)
+                     (setf configured t)
+                     (error "Injected ALPN setup failure"))
+                   (symbol-function 'woo.ssl:free-context)
+                   (lambda (ctx)
+                     (funcall free ctx)
+                     (incf freed)
+                     (setf context nil)))
+             (ok (signals
+                   (woo:run (lambda (env) (declare (ignore env)) '(200 nil ("ok")))
+                            :debug nil :worker-num nil :handle-signals nil
+                            :ssl-cert-file (cert-path "localhost.crt")
+                            :ssl-key-file (cert-path "localhost.key"))
+                   'error))
+             (ok configured)
+             (ok (= freed 1))
+             (ok (= baseline (hash-table-count woo.ssl.alpn::*alpn-ctx-args*))))
+        (setf (symbol-function 'woo.ssl:create-context) create
+              (symbol-function 'woo.ssl:configure-context-alpn) configure
+              (symbol-function 'woo.ssl:free-context) free)
+        (when context (funcall free context))))))
+
+(deftest test-chain-trust-and-missing-intermediate
+  (testing "OpenSSL trusts the complete chain and rejects a leaf without its intermediate"
+    (let* ((root (cert-path "chain-root.crt"))
+           (intermediate (cert-path "chain-intermediate.crt"))
+           (leaf (cert-path "chain-leaf.crt"))
+           (ok (uiop:run-program (list "openssl" "verify" "-CAfile"
+                                       (namestring root) "-untrusted"
+                                       (namestring intermediate) (namestring leaf))
+                                 :ignore-error-status t :output :string))
+           (missing (uiop:run-program (list "openssl" "verify" "-CAfile"
+                                            (namestring root) (namestring leaf))
+                                      :ignore-error-status t :output :string)))
+      (ok (search "OK" ok) ok)
+      (ok (not (search "OK" missing)) missing))))
+
+(deftest test-two-listener-contexts-keep-alpn-local
+  (testing "two listener contexts can carry different ALPN lists concurrently"
+    (let ((one (woo.ssl:create-context (cert-path "localhost.crt")
+                                      (cert-path "localhost.key") nil))
+          (two (woo.ssl:create-context (cert-path "chain-leaf.crt")
+                                       (cert-path "chain-leaf.key") nil)))
+      (unwind-protect
+           (progn
+             (woo.ssl:configure-context-alpn one '("h2" "http/1.1"))
+             (woo.ssl:configure-context-alpn two '("http/1.1"))
+             (ok one)
+             (ok two)
+             (ok (equal woo.ssl:*alpn-protocols* '("http/1.1"))))
+        (woo.ssl:free-context one)
+        (woo.ssl:free-context two)))))
+
+(deftest test-tls-listener-restarts-cleanly
+  (testing "the same TLS listener port can be started and stopped repeatedly"
+    (let ((port (+ 55000 (random 500))))
+      (dotimes (iteration 2)
+        (declare (ignore iteration))
+        (let ((thread nil))
+        (unwind-protect
+             (progn
+               (setf thread (bt2:make-thread
+                             (lambda ()
+                               (woo:run (lambda (env) (declare (ignore env))
+                                          '(200 () ("ok")))
+                                        :port port :debug nil
+                                        :ssl-cert-file (cert-path "localhost.crt")
+                                        :ssl-key-file (cert-path "localhost.key")))
+                             :name "woo-tls-restart-test"))
+               (loop repeat 500 until (gethash thread woo::*stop-controls*) do (sleep 0.01))
+               (ok (gethash thread woo::*stop-controls*))
+               (ok (woo:stop-gracefully thread))
+               (loop repeat 1500 while (bt2:thread-alive-p thread) do (sleep 0.01))
+               (ok (not (bt2:thread-alive-p thread))))
+            (when (and thread (bt2:thread-alive-p thread))
+              (bt2:destroy-thread thread))))))))
+
+(deftest test-alpn-negotiates-h2-over-tls
+  (testing "a TLS client offering h2 gets h2 and an HTTP/2 response; http/1.1 gets HTTP/1"
+    (let ((clack.test:*clack-test-handler* :woo)
+          (clack.test:*clackup-additional-args*
+            (list :ssl-cert-file (cert-path "localhost.crt")
+                  :ssl-key-file (cert-path "localhost.key")))
+          ;; The server runs in its own thread; make it advertise h2 there.
+          (bt2:*default-special-bindings*
+            (acons 'woo.ssl:*alpn-protocols* ''("h2" "http/1.1")
+                   bt2:*default-special-bindings*)))
+      (clack.test:testing-app "ALPN over TLS"
+          (lambda (env)
+            (declare (ignore env))
+            '(200 (:content-type "text/plain") ("alpn-ok")))
+        (let ((port clack.test:*clack-test-port*))
+          (multiple-value-bind (proto first-type headers body)
+              (call-with-deadline
+               20 (lambda ()
+                    (call-with-tls port '("h2" "http/1.1")
+                                   (lambda (tls proto)
+                                     (multiple-value-bind (first-type headers body)
+                                         (if (equal proto "h2")
+                                             (h2-get tls)
+                                             (values nil nil nil))
+                                       (values proto first-type headers body))))))
+            (ok (equal proto "h2") (format nil "server selected ~S for h2 offer" proto))
+            (ok (eql first-type woo.http2.constants:+frame-settings+)
+                "server's first HTTP/2 frame is SETTINGS")
+            (ok (equal (cdr (assoc ":status" headers :test #'string=)) "200")
+                (format nil "HTTP/2 response headers ~S" headers))
+            (ok (equal body "alpn-ok") (format nil "HTTP/2 body ~S" body)))
+          (multiple-value-bind (proto status-line)
+              (call-with-deadline
+               20 (lambda ()
+                    (call-with-tls port '("http/1.1")
+                                   (lambda (tls proto)
+                                     (values proto (http1-get tls))))))
+            (ok (equal proto "http/1.1")
+                (format nil "server selected ~S for http/1.1 offer" proto))
+            (ok (and (>= (length status-line) 12)
+                     (string= (subseq status-line 0 12) "HTTP/1.1 200"))
+                (format nil "HTTP/1 status line ~S" status-line))))))))

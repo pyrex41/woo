@@ -1,6 +1,7 @@
 (defsystem "woo-test"
   :depends-on ("woo"
                "clack-test"
+               "lack-request"
                "rove")
   :components
   ((:file "t/test-support")
@@ -24,6 +25,9 @@
    (:file "t/hpack")
    (:file "t/http2-frames")
    (:file "t/http2-stream")
-   (:file "t/http2-connection"))
+   (:file "t/http2-connection")
+   (:file "t/http2-clack")
+   (:file "t/http2-e2e")
+   (:file "t/http2-detection"))
   :perform (test-op (op c) (unless (symbol-call '#:rove '#:run c)
                (error "Woo test gate failed"))))

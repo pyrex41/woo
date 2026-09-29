@@ -21,7 +21,15 @@
                 :socket-remote-port
                 :with-sockaddr)
   #-woo-no-ssl
-  (:import-from :woo.ssl)
+  (:import-from :woo.ssl
+                :get-negotiated-protocol
+                :*alpn-protocols*
+                :configure-alpn)
+  (:import-from :woo.http2.clack
+                :make-http2-app-handler)
+  (:import-from :woo.http2.constants
+                :+connection-preface+
+                :+connection-preface-length+)
   (:import-from :woo.util
                 :integer-string-p)
   (:import-from :quri
@@ -34,6 +42,9 @@
                 :http-method
                 :http-resource
                 :http-headers
+                :http-upgrade-p
+                :http-chunked-p
+                :http-content-length
                 :http-major-version
                 :http-minor-version
                 :parsing-error
@@ -42,6 +53,7 @@
                 :make-smart-buffer
                 :write-to-buffer
                 :finalize-buffer
+                :buffer-on-memory-p
                 :delete-stream-file
                 :*default-disk-limit*
                 :buffer-limit-exceeded)
@@ -54,12 +66,17 @@
                 :copy-stream
                 :if-let)
   (:export :run
-           :stop-gracefully
            :stop
+           :stop-gracefully
            :*buffer-size*
            :*connection-timeout*
            :*default-backlog-size*
-           :*default-worker-num*))
+           :*default-worker-num*
+           ;; SSL/ALPN exports
+           #-woo-no-ssl :*alpn-protocols*
+           #-woo-no-ssl :configure-alpn
+           :http2-connection-preface-match
+           :looks-like-http2-preface))
 (in-package :woo)
 
 (defvar *default-backlog-size* 128)
@@ -133,6 +150,29 @@ SERVER may be the listener or the thread running WOO:RUN."
         (lev:ev-async-send (stop-control-evloop control) (stop-control-async control))
         t))))
 
+(defun http2-connection-preface-match (data start end)
+  "Return T if DATA[START:END] contains a complete HTTP/2 connection preface."
+  (and (>= (- end start) +connection-preface-length+)
+       (loop for i from 0 below +connection-preface-length+
+             always (= (aref data (+ start i))
+                       (aref +connection-preface+ i)))))
+
+(defun looks-like-http2-preface (data start end)
+  "Classify bytes as :http2, :http1, or :need-more (h2c PRI preface)."
+  (let ((n (- end start)))
+    (cond
+      ((zerop n) :need-more)
+      ((>= n +connection-preface-length+)
+       (if (http2-connection-preface-match data start end)
+           :http2
+           :http1))
+      (t
+       (if (loop for i from 0 below n
+                 always (= (aref data (+ start i))
+                           (aref +connection-preface+ i)))
+           :need-more
+           :http1)))))
+
 (defun run (app &key (debug t)
                      (port 5000) (address "127.0.0.1")
                      listen ;; UNIX domain socket
@@ -144,7 +184,7 @@ SERVER may be the listener or the thread running WOO:RUN."
   (declare (ignorable ssl-key-password))
   (assert (and (integerp backlog)
                (plusp backlog)
-               (<= backlog 128)))
+               (<= backlog 65535)))
   (assert (or (and (integerp worker-num)
                    (< 0 worker-num))
               (null worker-num)))
@@ -156,8 +196,27 @@ SERVER may be the listener or the thread running WOO:RUN."
         (*debug* debug)
         (*listener* nil)
         (ssl (or ssl-key-file ssl-cert-file))
+        (http2-handler nil)
         (ssl-context nil))
-    (labels ((start-socket (socket)
+    (labels ((ensure-http2-handler ()
+               (unless http2-handler
+                 (setf http2-handler (make-http2-app-handler *app*)))
+               http2-handler)
+             (close-listener ()
+               ;; Listener cleanup runs on its owning event-loop thread,
+               ;; before WITH-EVENT-LOOP destroys libev. Clear the binding
+               ;; first so the outer unwind-protect remains idempotent.
+               (let ((listener *listener*))
+                 (setf *listener* nil)
+                 (when listener
+                   (wev:close-tcp-server listener))))
+             (install-detected-protocol (socket use-http2)
+               (if use-http2
+                   (funcall (ensure-http2-handler) socket)
+                   (setup-parser socket)))
+             (start-socket (socket)
+               ;; Do not query ALPN here: the TLS handshake has not run yet.
+               ;; Handshake completes on the first successful ssl-read in tcp-read-cb.
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
@@ -166,18 +225,58 @@ SERVER may be the listener or the thread running WOO:RUN."
                                           ssl-key-file
                                           ssl-key-password))
                (when on-connection (funcall on-connection socket))
-               (setup-parser socket)
-               (woo.ev.tcp:start-listening-socket socket))
+               (let ((pending (make-array 0 :element-type '(unsigned-byte 8)
+                                          :adjustable t :fill-pointer 0))
+                     (detected nil))
+                 (setf (wev:socket-data socket)
+                       (lambda (data &key (start 0) (end (length data)))
+                         (if detected
+                             (funcall (wev:socket-data socket) data :start start :end end)
+                             (let ((n (- end start)))
+                               (when (plusp n)
+                                 (let ((old (length pending)))
+                                   (adjust-array pending (+ old n) :fill-pointer (+ old n))
+                                   (replace pending data :start1 old :start2 start :end2 end)))
+                               (let ((use-h2 nil)
+                                     (ready nil))
+                                 #-woo-no-ssl
+                                 (when ssl
+                                   (let ((proto (get-negotiated-protocol socket)))
+                                     (cond
+                                       ((and proto (string= proto "h2"))
+                                        (setf use-h2 t ready t))
+                                       (proto
+                                        (setf use-h2 nil ready t)))))
+                                 (unless ready
+                                   (ecase (looks-like-http2-preface pending 0 (length pending))
+                                     (:http2 (setf use-h2 t ready t))
+                                     (:http1 (setf use-h2 nil ready t))
+                                     (:need-more nil)))
+                                 (when ready
+                                   (setf detected t)
+                                   (install-detected-protocol socket use-h2)
+                                   ;; Parsers declare simple octet vectors, so
+                                   ;; replay a simple copy, not the adjustable buffer.
+                                   (when (plusp (length pending))
+                                     (let ((replay (coerce pending '(simple-array (unsigned-byte 8) (*)))))
+                                       (funcall (wev:socket-data socket) replay
+                                                :start 0 :end (length replay))))))))))
+                 (woo.ev.tcp:start-listening-socket socket)))
              (start-multithread-server ()
                (unless (getf vom::*config* :woo.signal)
                  (vom:config :woo.signal :info))
                (let ((*cluster* (woo.worker:make-cluster worker-num #'start-socket))
-                     (signal-watchers (make-signal-watchers)))
+                     (signal-watchers (and handle-signals (make-signal-watchers)))
+                     (stop-control nil))
                  (wev:with-sockaddr
                    (unwind-protect
-                        (wev:with-event-loop (:cleanup-fn
+                          (wev:with-event-loop (:cleanup-fn
                                               (lambda ()
-                                                (stop-signal-watchers *evloop* signal-watchers)))
+                                                (unwind-protect
+                                                     (close-listener)
+                                                  (unwind-protect
+                                                       (stop-signal-watchers *evloop* signal-watchers)
+                                                    (unregister-stop-control stop-control)))))
                           (when handle-signals (start-signal-watchers *evloop* signal-watchers))
                           (setq *listener*
                                 (wev:tcp-server (or listen
@@ -189,19 +288,22 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                 :backlog backlog
                                                 :fd fd
                                                 :sockopt wsock:+SO-REUSEADDR+))
-                          (let ((control (register-stop-control *listener* *cluster*)))
-                            (push (lambda () (unregister-stop-control control))
-                                  woo.ev.event-loop:*evloop-exit-hooks*)
-                            (when on-ready (funcall on-ready control))))
-                     (wev:close-tcp-server *listener*)
+                          (setf stop-control (register-stop-control *listener* *cluster*))
+                          (when on-ready (funcall on-ready stop-control)))
+                     (close-listener)
                      (woo.worker:stop-cluster *cluster*)))))
              (start-singlethread-server ()
-               (let ((signal-watchers (make-signal-watchers)))
+               (let ((signal-watchers (and handle-signals (make-signal-watchers)))
+                     (stop-control nil))
                  (wev:with-sockaddr
                    (unwind-protect
-                        (wev:with-event-loop (:cleanup-fn
+                          (wev:with-event-loop (:cleanup-fn
                                               (lambda ()
-                                                (stop-signal-watchers *evloop* signal-watchers)))
+                                                (unwind-protect
+                                                     (close-listener)
+                                                  (unwind-protect
+                                                       (stop-signal-watchers *evloop* signal-watchers)
+                                                    (unregister-stop-control stop-control)))))
                           (when handle-signals (start-signal-watchers *evloop* signal-watchers))
                           (setq *listener*
                                 (wev:tcp-server (or listen
@@ -211,13 +313,11 @@ SERVER may be the listener or the thread running WOO:RUN."
                                                 :backlog backlog
                                                 :fd fd
                                                 :sockopt wsock:+SO-REUSEADDR+))
-                          (let ((control (register-stop-control *listener* nil)))
-                            (push (lambda () (unregister-stop-control control))
-                                  woo.ev.event-loop:*evloop-exit-hooks*)
-                            (when on-ready (funcall on-ready control))))
-                     (wev:close-tcp-server *listener*))))))
-      ;; Context ownership starts at allocation. Keep validation, ALPN setup,
-      ;; and server startup in one cleanup scope so setup failures free it.
+                          (setf stop-control (register-stop-control *listener* nil))
+                          (when on-ready (funcall on-ready stop-control)))
+                     (close-listener))))))
+      ;; Context ownership begins with allocation, so setup failures must
+      ;; run the same cleanup as a listener that started successfully.
       (unwind-protect
            (progn
              (when ssl
@@ -225,7 +325,6 @@ SERVER may be the listener or the thread running WOO:RUN."
                (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
                #-woo-no-ssl
                (progn
-                 (cl+ssl::ensure-initialized)
                  (when ssl-key-file
                    (setf ssl-key-file
                          (uiop:native-namestring
@@ -235,19 +334,16 @@ SERVER may be the listener or the thread running WOO:RUN."
                    (setf ssl-cert-file
                          (uiop:native-namestring
                           (or (probe-file ssl-cert-file)
-                              (error "SSL certificate '~A' does not exist." ssl-cert-file)))))))
-             #-woo-no-ssl
-             (when ssl
-               (setf ssl-context
-                     (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
-               ;; Keep ALPN configuration owned by this listener context.
-               (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*))
+                              (error "SSL certificate '~A' does not exist." ssl-cert-file)))))
+                 (setf ssl-context
+                       (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
+                 ;; The callback storage lives until this context is freed.
+                 (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*)))
              (if worker-num
                  (start-multithread-server)
                  (start-singlethread-server)))
         #-woo-no-ssl
-        (when ssl-context
-          (woo.ssl:free-context ssl-context))))))
+        (when ssl-context (woo.ssl:free-context ssl-context))))))
 
 (defun respond-and-close (socket status message &optional head-p)
   (setf (wev:socket-data socket)
@@ -367,27 +463,7 @@ SERVER may be the listener or the thread running WOO:RUN."
 ;; Handling requests
 
 (defun parse-host-header (host)
-  (declare (type simple-string host)
-           (optimize (speed 3) (safety 0)))
-  (let ((pos (position #\: host :from-end t)))
-    (unless pos
-      (return-from parse-host-header
-        (values host nil)))
-
-    (locally (declare (type fixnum pos))
-      (let ((port (loop with port of-type fixnum = 0
-                        for i from (1+ pos) to (1- (length host))
-                        for char = (aref host i)
-                        do (if (digit-char-p char)
-                               (setq port (+ (* 10 port)
-                                             (- (char-code char) (char-code #\0))))
-                               (return nil))
-                        finally
-                           (return port))))
-        (if port
-            (values (subseq host 0 pos)
-                    port)
-            (values host nil))))))
+  (woo.http2.clack::split-authority host))
 
 (defun handle-request (http socket)
   (let ((host (gethash "host" (http-headers http)))

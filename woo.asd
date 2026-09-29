@@ -24,7 +24,7 @@
                (:feature (:not :woo-no-ssl) "cl+ssl"))
   :components ((:module "src"
                 :components
-                ((:file "woo" :depends-on ("ev" "response" "worker" "ssl" "signal" "specials" "util"))
+                ((:file "woo" :depends-on ("ev" "response" "worker" "ssl" "signal" "specials" "util" "http2" "dispatch"))
                  (:file "response" :depends-on ("ev"))
                  (:file "ev" :depends-on ("ev-packages"))
                  (:file "worker" :depends-on ("ev" "queue" "specials"))
@@ -50,7 +50,8 @@
                                (:file "hpack" :depends-on ("constants"))
                                (:file "frames" :depends-on ("constants"))
                                (:file "stream" :depends-on ("constants"))
-                               (:file "connection" :depends-on ("constants" "frames" "hpack" "stream"))))
+                               (:file "connection" :depends-on ("constants" "frames" "hpack" "stream"))
+                               (:file "clack" :depends-on ("constants" "frames" "hpack" "stream" "connection"))))
                  (:module "llsocket"
                   :depends-on ("syscall")
                   :serial t
