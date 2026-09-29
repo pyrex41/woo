@@ -262,6 +262,22 @@
       (lev:ev-io-stop *evloop* (socket-read-watcher socket))))
   socket)
 
+(defun arm-tls-shutdown-timer (socket &optional continuation-delay)
+  "Arm a continuation or the original deadline without extending shutdown."
+  (let ((deadline (socket-tls-shutdown-deadline socket)))
+    (when (and deadline (socket-open-p socket))
+      (let ((timer (socket-shutdown-timer socket))
+            (remaining (max 0.0d0 (- deadline (lev:ev-now *evloop*)))))
+        (lev:ev-timer-stop *evloop* timer)
+        (lev:ev-timer-init timer 'tls-shutdown-cb
+                           (if continuation-delay
+                               (min continuation-delay remaining)
+                               remaining)
+                           0.0d0)
+        (setf (cffi:foreign-slot-value timer '(:struct lev:ev-timer) 'lev::data)
+              (socket-read-watcher socket))
+        (lev:ev-timer-start *evloop* timer)))))
+
 (defun tls-shutdown-step (socket)
   "Advance a nonblocking TLS close_notify, or abort at its deadline."
   (unless (socket-tls-shutdown-p socket)
@@ -272,6 +288,8 @@
                      (socket-tls-shutdown-deadline socket))))
     (close-socket socket :abort t)
     (return-from tls-shutdown-step t))
+  (when (socket-tls-shutdown-recv-p socket)
+    (return-from tls-shutdown-step (tls-shutdown-read-step socket)))
   #+woo-no-ssl
   (progn (close-socket socket :abort t) t)
   #-woo-no-ssl
@@ -279,6 +297,7 @@
     (unless handle
       (close-socket socket :abort t)
       (return-from tls-shutdown-step t))
+    (arm-tls-shutdown-timer socket)
     (let ((result (ignore-errors (funcall *ssl-shutdown-function* handle))))
       (cond
         ((eql result 1)
@@ -287,40 +306,30 @@
         ((null result)
          (close-socket socket :abort t)
          t)
-        ((zerop result)
-         ;; SSL_shutdown returned 0: close_notify was sent and we are
-         ;; waiting for the peer's close_notify on the readable side.
-         (let ((errno (funcall *ssl-error-function* handle result)))
+        (t
+         (let ((errno (ignore-errors (funcall *ssl-error-function* handle result))))
+           (setf (socket-tls-shutdown-read-wait-write-p socket) nil)
            (cond
-             ((= errno cl+ssl::+ssl-error-want-write+)
+             ((eql errno cl+ssl::+ssl-error-want-write+)
+              ;; The local alert has not finished writing yet.
               (setf (socket-tls-shutdown-recv-p socket) nil)
               (lev:ev-io-stop *evloop* (socket-read-watcher socket))
-              (lev:ev-io-start *evloop* (socket-write-watcher socket)))
-             ((= errno cl+ssl::+ssl-error-want-read+)
+              (lev:ev-io-start *evloop* (socket-write-watcher socket))
+              nil)
+             ((or (eql errno cl+ssl::+ssl-error-want-read+) (zerop result))
+              ;; Older OpenSSL versions return 0 for a sent alert without
+              ;; reporting WANT_READ. Newer versions can report WANT_WRITE
+              ;; with 0, handled above. Drain input before another shutdown.
               (setf (socket-tls-shutdown-recv-p socket) t)
               (lev:ev-io-stop *evloop* (socket-write-watcher socket))
-              (lev:ev-io-start *evloop* (socket-read-watcher socket)))
+              (lev:ev-io-start *evloop* (socket-read-watcher socket))
+              ;; A previous SSL_read may already have buffered peer records.
+              ;; Continue after the HTTP parser's current stack unwinds.
+              (arm-tls-shutdown-timer socket 0.001d0)
+              nil)
              (t
-              (setf (socket-tls-shutdown-recv-p socket) t)
-              (lev:ev-io-stop *evloop* (socket-write-watcher socket))
-              (lev:ev-io-start *evloop* (socket-read-watcher socket))))
-           nil))
-        ((member (ignore-errors (funcall *ssl-error-function* handle result))
-                 (list cl+ssl::+ssl-error-want-read+
-                       cl+ssl::+ssl-error-want-write+)
-                 :test #'eql)
-         (let ((errno (funcall *ssl-error-function* handle result)))
-           (if (= errno cl+ssl::+ssl-error-want-read+)
-               (progn (setf (socket-tls-shutdown-recv-p socket) t)
-                      (lev:ev-io-stop *evloop* (socket-write-watcher socket))
-                      (lev:ev-io-start *evloop* (socket-read-watcher socket)))
-               (progn (setf (socket-tls-shutdown-recv-p socket) nil)
-                      (lev:ev-io-stop *evloop* (socket-read-watcher socket))
-                      (lev:ev-io-start *evloop* (socket-write-watcher socket))))
-           nil))
-        (t
-         (close-socket socket :abort t)
-         t)))))
+              (close-socket socket :abort t)
+              t))))))))
 
 (defun tls-shutdown-read-step (socket)
   "Discard bounded application input while waiting for peer close_notify."
@@ -334,11 +343,14 @@
     (close-socket socket :abort t)
     (return-from tls-shutdown-read-step t))
   #+woo-no-ssl
-  (return-from tls-shutdown-read-step (tls-shutdown-step socket))
+  (return-from tls-shutdown-read-step (close-socket socket :abort t))
   #-woo-no-ssl
   (let ((handle (socket-ssl-handle socket)))
     (unless handle
-      (return-from tls-shutdown-read-step (tls-shutdown-step socket)))
+      (return-from tls-shutdown-read-step (close-socket socket :abort t)))
+    ;; A continuation timer is one-shot. Restore the absolute deadline even
+    ;; when this retry reaches WANT_READ/WRITE and no further I/O arrives.
+    (arm-tls-shutdown-timer socket)
     (setf (socket-tls-shutdown-read-wait-write-p socket) nil)
     ;; Four reads at the current 16 KiB input-buffer size keep each callback
     ;; bounded to at most 64 KiB; the absolute shutdown deadline remains the
@@ -353,21 +365,6 @@
                (cond
                  ((plusp n)
                   (setf (socket-last-activity socket) (lev:ev-now *evloop*)))
-                 ((zerop n)
-                  (let ((errno (funcall *ssl-error-function* handle n)))
-                    (cond
-                      ((= errno cl+ssl::+ssl-error-zero-return+)
-                       (setf (socket-tls-shutdown-recv-p socket) nil)
-                       (tls-shutdown-step socket))
-                      ((= errno cl+ssl::+ssl-error-want-read+)
-                       (lev:ev-io-stop *evloop* (socket-write-watcher socket))
-                       (lev:ev-io-start *evloop* (socket-read-watcher socket)))
-                      ((= errno cl+ssl::+ssl-error-want-write+)
-                       (setf (socket-tls-shutdown-read-wait-write-p socket) t)
-                       (lev:ev-io-stop *evloop* (socket-read-watcher socket))
-                       (lev:ev-io-start *evloop* (socket-write-watcher socket)))
-                      (t (close-socket socket :abort t))))
-                  (return-from tls-shutdown-read-step t))
                  (t
                   (let ((errno (funcall *ssl-error-function* handle n)))
                     (cond
@@ -393,18 +390,7 @@
       (lev:ev-io-start *evloop* (socket-read-watcher socket))
       ;; Continue bounded draining even when OpenSSL consumed records from
       ;; its internal buffer without another kernel readability edge.
-      (let ((deadline (socket-tls-shutdown-deadline socket)))
-        (when deadline
-          (let ((remaining (- deadline (lev:ev-now *evloop*))))
-            (when (plusp remaining)
-              (let ((timer (socket-shutdown-timer socket)))
-                (lev:ev-timer-stop *evloop* timer)
-                (lev:ev-timer-init timer 'tls-shutdown-cb
-                                   (min 0.001d0 remaining) 0.0d0)
-                (setf (cffi:foreign-slot-value timer '(:struct lev:ev-timer)
-                                               'lev::data)
-                      (socket-read-watcher socket))
-                (lev:ev-timer-start *evloop* timer)))))))
+      (arm-tls-shutdown-timer socket 0.001d0))
     t))
 
 (define-c-callback tls-shutdown-cb :void
