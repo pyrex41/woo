@@ -56,7 +56,9 @@
         (old-memory smart-buffer::*default-memory-limit*)
         (old-disk smart-buffer::*default-disk-limit*)
         (saw-spill nil)
-        (keepalive-seen nil))
+        (keepalive-seen nil)
+        (spill-stream nil)
+        (spill-path nil))
     (unwind-protect
          (progn
            ;; These are global defaults because the request parser runs in a
@@ -71,8 +73,10 @@
                  (if (string= (getf env :path-info) "/next")
                      (progn (setf keepalive-seen t) '(200 nil ("next")))
                      (let ((stream (getf env :raw-body)))
-                       (setf saw-spill (and (streamp stream)
-                                            (probe-file (pathname stream))))
+                       (setf spill-stream stream
+                             spill-path (and (streamp stream)
+                                             (probe-file (pathname stream)))
+                             saw-spill (not (null spill-path)))
                        '(200 nil ("ok")))))
              (sb-ext:with-timeout 5
                (let ((client (usocket:socket-connect
@@ -102,7 +106,15 @@
                                         do (write-char (code-char byte) line)))
                             until (string= line ""))
                       (dotimes (i 2) (read-byte stream nil nil))
-                      (ok (null (directory (merge-pathnames "*" dir))))
+                      (ok (and spill-path
+                               (search (string (car (last (pathname-directory dir))))
+                                       (namestring spill-path))))
+                      (loop repeat 100
+                            until (and (not (open-stream-p spill-stream))
+                                       (not (probe-file spill-path)))
+                            do (sleep 0.01))
+                      (ok (not (open-stream-p spill-stream)))
+                      (ok (not (probe-file spill-path)))
                       (write-sequence
                        (trivial-utf-8:string-to-utf-8-bytes
                         (woo-test::crlf-lines "GET /next HTTP/1.1"
@@ -114,17 +126,19 @@
                    (ignore-errors (usocket:socket-close client))))))
            (ok saw-spill)
            (ok keepalive-seen)
-           (ok (null (directory (merge-pathnames "*" dir))))
+           (ok (null (uiop:directory-files dir)))
            (let ((response (make-string (* 1024 1024) :initial-element #\x))
                  (abort-seen nil)
-                 (abort-body-path nil))
+                 (abort-body-path nil)
+                 (abort-body-stream nil))
              (clack.test:testing-app "Remove spilled request body after abort"
                  (lambda (env)
                    (if (string= (getf env :path-info) "/health")
                        '(200 nil ("healthy"))
                        (progn
                          (let ((stream (getf env :raw-body)))
-                           (setf abort-body-path (and (streamp stream)
+                           (setf abort-body-stream stream
+                                 abort-body-path (and (streamp stream)
                                                       (probe-file (pathname stream)))
                                  abort-seen (not (null abort-body-path))))
                          (sleep 0.2)
@@ -150,15 +164,18 @@
                         (ok abort-body-path))
                    (usocket:socket-close client)))
                (loop repeat 100
-                     while (directory (merge-pathnames "*" dir))
+                     until (and (not (open-stream-p abort-body-stream))
+                                (not (probe-file abort-body-path)))
                      do (sleep 0.01))
-               (ok (null (directory (merge-pathnames "*" dir))))
+               (ok (not (open-stream-p abort-body-stream)))
+               (ok (not (probe-file abort-body-path)))
+               (ok (null (uiop:directory-files dir)))
                (ok (search "HTTP/1.1 200 OK"
                            (woo-test::raw-exchange
                             clack.test:*clack-test-port*
                             (woo-test::crlf-lines "GET /health HTTP/1.1"
                                                   "Host: localhost" "Connection: close" "")))))
-           (ok (null (directory (merge-pathnames "*" dir)))))
+           (ok (null (uiop:directory-files dir))))
       (setf (symbol-value 'smart-buffer::*default-memory-limit*) old-memory
             (symbol-value 'smart-buffer::*default-disk-limit*) old-disk
             (symbol-value 'smart-buffer::*temporary-directory*) old-directory)
