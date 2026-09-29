@@ -34,7 +34,10 @@
                    (list 200 '(:content-type "text/plain")
                          (list (write-to-string (getf (dbi:fetch (dbi:execute (dbi:prepare conn "SELECT 42 AS n"))) :|n|))))))))
        (initialized (dbi:do-sql database "CREATE TABLE sessions (id TEXT PRIMARY KEY, session_data TEXT)"))
-       (shutdown nil)
+       ;; The plain listener can accept the readiness probe before the TLS
+       ;; listener and shutdown callback have been installed. Keep readiness
+       ;; false until both listeners and the drain trigger are complete.
+       (shutdown nil) (ready nil)
        (app
          (lack:builder :woo-backtrace :woo-deflater
            (:static :path "/static/" :root #p"t/compat/")
@@ -43,7 +46,10 @@
            (lambda (env)
              (let ((path (getf env :path-info)))
                (cond
-                 ((equal path "/.woo-test-ready") (list 200 '(:content-type "text/plain") (list nonce)))
+                 ((equal path "/.woo-test-ready")
+                  (if ready
+                      (list 200 '(:content-type "text/plain") (list nonce))
+                      (list 503 '(:content-type "text/plain") (list "starting"))))
                  ((equal path "/env")
                   (list 200 '(:content-type "text/plain")
                         (list (format nil "~A|~A|~A|~A" (getf env :url-scheme) (getf env :server-name)
@@ -107,5 +113,6 @@
                             (let ((owned handler))
                               (bt2:make-thread (lambda () (sleep 0.05) (clack:stop owned))
                                                :name "Woo fixture shutdown")))))
+         (setf ready t)
          (loop (sleep 1)))
     (when plain (clack:stop plain)) (when tls (clack:stop tls)) (dbi:disconnect database)))
