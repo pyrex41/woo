@@ -19,6 +19,7 @@
                 :socket-timeout-timer
                 :socket-last-activity
                 :socket-tls-shutdown-p
+                :tls-shutdown-read-step
                 :socket-input-rejected-p
                 :socket-read-wait-write-p
                 :tls-shutdown-step
@@ -108,7 +109,13 @@
          (read-cb (socket-read-cb socket))
          (ssl-handle (socket-ssl-handle socket)))
     (when (socket-tls-shutdown-p socket)
-      (tls-shutdown-step socket)
+      ;; SSL_shutdown waits for the peer's close_notify. A rejected request
+      ;; can leave application records in flight after our close_notify; read
+      ;; and discard a bounded amount so OpenSSL can reach the peer alert
+      ;; instead of treating post-shutdown application data as a fatal error.
+      ;; The shutdown deadline remains the final bound if the peer never
+      ;; closes.
+      (tls-shutdown-read-step socket)
       (return-from tcp-read-cb))
     (loop
       ;; SSL_write can return WANT_READ. Service that exact pending write
