@@ -49,23 +49,31 @@ def process_group_stats(pgid):
     rss = sum((int(line.split()[2]) for line in rows.splitlines()
                if len(line.split()) == 3 and int(line.split()[0]) == pgid), 0) * 1024
     fds = 0
+    details = []
     for pid in pids:
         proc_fds = Path('/proc') / pid / 'fd'
+        pid_fd_count = None
         if proc_fds.is_dir():
             try:
-                fds += sum(1 for _ in proc_fds.iterdir())
+                pid_fd_count = sum(1 for _ in proc_fds.iterdir())
+                fds += pid_fd_count
             except OSError:
                 if process_pid_running(pid):
                     raise RuntimeError('cannot collect FD samples for live process ' + pid)
         else:
             try:
-                fds += process_pid_fd_count(pid)
+                pid_fd_count = process_pid_fd_count(pid)
+                fds += pid_fd_count
             except (OSError, subprocess.SubprocessError):
                 if process_pid_running(pid):
                     raise RuntimeError('cannot collect FD samples for live process ' + pid)
+        details.append({'pid': int(pid), 'rss_bytes': next(int(line.split()[2]) for line in rows.splitlines()
+                                                            if len(line.split()) == 3 and line.split()[1] == pid) * 1024,
+                        'fd_count': pid_fd_count})
     if rss <= 0 or fds <= 0:
         raise RuntimeError('resource sampler produced no positive evidence')
-    return rss, fds
+    # Keep the aggregate gate unchanged while recording per-process attribution.
+    return rss, fds, details
 
 def process_pid_fd_count(pid):
     # Numeric descriptors only: exclude mapped files, cwd and executable
@@ -129,7 +137,7 @@ def run(command, env, log, timeout, sample_resources=True):
                 if log.stat().st_size > MAX_LOG: raise RuntimeError('qualification log exceeds 8 MiB')
                 if sample_resources and time.monotonic() - last_sample >= 1.0:
                     try:
-                        rss, fds = process_group_stats(process.pid)
+                        rss, fds, details = process_group_stats(process.pid)
                     except RuntimeError:
                         if process.poll() is not None:
                             break
@@ -153,7 +161,7 @@ def run(command, env, log, timeout, sample_resources=True):
                         phase = 'post-soak'
                     marker_buffer = marker_buffer[-64:]
                     samples.append({'phase': phase, 'elapsed_seconds': time.monotonic() - started,
-                                    'rss_bytes': rss, 'fd_count': fds})
+                                    'rss_bytes': rss, 'fd_count': fds, 'processes': details})
                     peak_rss = max(peak_rss, rss)
                     last_sample = time.monotonic()
                 time.sleep(.2)
@@ -310,6 +318,7 @@ def main():
                WOO_LEGACY_STATIC_FILE=str(fixture), WOO_LEGACY_SOAK_SECONDS=str(args.soak_seconds),
                WOO_LEGACY_RESULT=str(result), WOO_LEGACY_STOP_RESULT=str(stop_result),
                WOO_LEGACY_SPOOL_ROOT=str(spool_root),
+               WOO_LEGACY_MEMORY_LOG=str(args.artifacts/'memory.log'),
                WOO_RUN_LEGACY_QUALIFICATION='1', WOO_HEGEL_LISP=shutil.which(args.lisp) or args.lisp,
                WOO_COMPAT_FIXTURE_GROUP='owned-stage')
     started = time.monotonic(); receipt = {'status':'UNKNOWN', 'head': subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT, text=True).strip(),
@@ -326,8 +335,9 @@ def main():
                                                'duration_seconds': ((soak_samples[-1].get('elapsed_seconds', 0) -
                                                                      soak_samples[0].get('elapsed_seconds', 0))
                                                                     if len(soak_samples) >= 2 else 0)}}
-        if args.soak_seconds == 1800 and not resource_phase_ok(receipt):
-            raise RuntimeError('full receipt lacks bounded phase-bound soak resource evidence')
+        resource_evidence_ok = resource_phase_ok(receipt)
+        if args.soak_seconds == 1800 and not resource_evidence_ok:
+            receipt['resource_failure'] = 'full receipt lacks bounded phase-bound soak resource evidence'
         receipt['gates']['legacy_http_https_static_upload_disconnect'] = 'PASS'
         if not result.exists(): raise RuntimeError('qualification result is missing')
         result_data = json.loads(result.read_text())
@@ -341,6 +351,8 @@ def main():
         receipt['process_group_cleanup'] = 'PASS'
         receipt['socket_cleanup'] = 'PASS'
         receipt['spool_cleanup'] = 'PASS'
+        if args.soak_seconds == 1800 and not resource_evidence_ok:
+            raise RuntimeError(receipt['resource_failure'])
         receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
         succeeded = True
     except Exception as error:

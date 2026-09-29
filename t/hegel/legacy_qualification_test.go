@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,27 @@ import (
 )
 
 var legacyPIDs sync.Map
+
+var legacyMemoryMetricCount int
+
+func emitLegacyMemoryMetric(label string) {
+	if os.Getenv("WOO_LEGACY_MEMORY_DIAGNOSTIC") != "1" || legacyMemoryMetricCount >= 64 {
+		return
+	}
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	metric := map[string]any{
+		"label": label, "heap_alloc": stats.HeapAlloc, "heap_inuse": stats.HeapInuse,
+		"heap_sys": stats.HeapSys, "heap_idle": stats.HeapIdle, "heap_released": stats.HeapReleased,
+		"stack_inuse": stats.StackInuse, "mallocs": stats.Mallocs, "frees": stats.Frees,
+		"num_gc": stats.NumGC, "pause_total_ns": stats.PauseTotalNs, "gc_cpu_fraction": stats.GCCPUFraction,
+	}
+	data, err := json.Marshal(metric)
+	if err == nil {
+		fmt.Fprintf(os.Stdout, "LEGACY_METRIC go %s\n", data)
+		legacyMemoryMetricCount++
+	}
+}
 
 func startLegacy(t *testing.T) (string, string) {
 	t.Helper()
@@ -297,6 +319,8 @@ func TestLegacyQualification(t *testing.T) {
 	cycles := 0
 	started := time.Now()
 	fmt.Fprintln(os.Stdout, "LEGACY_PHASE soak-start")
+	lastMemoryMetric := started
+	emitLegacyMemoryMetric("soak-start")
 	for time.Now().Before(deadline) {
 		for name, client := range clients {
 			base := "http://" + plain
@@ -337,12 +361,25 @@ func TestLegacyQualification(t *testing.T) {
 			}
 		}
 		cycles++
+		if time.Since(lastMemoryMetric) >= 30*time.Second {
+			emitLegacyMemoryMetric("soak")
+			lastMemoryMetric = time.Now()
+		}
 	}
 	soakElapsed := time.Since(started).Seconds()
+	emitLegacyMemoryMetric("soak-end")
 	fmt.Fprintln(os.Stdout, "LEGACY_PHASE soak-end")
 	assertSpoolEmpty(t)
 	stopLegacy(t, plain)
-	for i := 0; i < 30; i++ {
+	lifecycleCycles := 30
+	if raw := os.Getenv("WOO_LEGACY_LIFECYCLE_CYCLES"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 30 {
+			t.Fatal("invalid WOO_LEGACY_LIFECYCLE_CYCLES")
+		}
+		lifecycleCycles = parsed
+	}
+	for i := 0; i < lifecycleCycles; i++ {
 		cyclePlain, _ := startLegacy(t)
 		client := &http.Client{Timeout: 3 * time.Second}
 		resp, err := client.Get("http://" + cyclePlain + "/.woo-test-ready")
@@ -354,7 +391,7 @@ func TestLegacyQualification(t *testing.T) {
 	}
 	resultPath := os.Getenv("WOO_LEGACY_RESULT")
 	if resultPath != "" {
-		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": 30, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": soakElapsed, "spool_cleanup": "PASS"})
+		data, _ := json.Marshal(map[string]any{"cycles": cycles, "lifecycle_cycles": lifecycleCycles, "duration_seconds": time.Since(started).Seconds(), "soak_elapsed_seconds": soakElapsed, "spool_cleanup": "PASS"})
 		if err := os.WriteFile(resultPath, append(data, '\n'), 0600); err != nil {
 			t.Fatal(err)
 		}

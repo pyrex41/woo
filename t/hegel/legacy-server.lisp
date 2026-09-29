@@ -28,6 +28,22 @@
 (ql:quickload :lack-request :silent t)
 (ql:quickload :clack-handler-woo :silent t)
 
+(defparameter *legacy-memory-metric-count* 0)
+(defun emit-legacy-memory-metric (label)
+  (when (and (string= (or (uiop:getenv "WOO_LEGACY_MEMORY_DIAGNOSTIC") "") "1")
+             (< *legacy-memory-metric-count* 64))
+    (format t "LEGACY_METRIC sbcl label=~A gc_run_time=~A gc_real_time=~A bytes_consED=~A bytes_between_gcs=~A gen0_gcs=~A gen1_gcs=~A gen2_gcs=~A gen0_bytes=~A gen1_bytes=~A gen2_bytes=~A~%"
+            label sb-ext:*gc-run-time* sb-ext:*gc-real-time*
+            (sb-ext:get-bytes-consed) (sb-ext:bytes-consed-between-gcs)
+            (sb-ext:generation-number-of-gcs 0)
+            (sb-ext:generation-number-of-gcs 1)
+            (sb-ext:generation-number-of-gcs 2)
+            (sb-ext:generation-bytes-allocated 0)
+            (sb-ext:generation-bytes-allocated 1)
+            (sb-ext:generation-bytes-allocated 2))
+    (finish-output)
+    (incf *legacy-memory-metric-count*)))
+
 (let* ((port (parse-integer (or (uiop:getenv "WOO_HEGEL_PORT")
                                (error "WOO_HEGEL_PORT is required"))))
        (tls-port (1+ port))
@@ -94,6 +110,10 @@
                                     :address "127.0.0.1" :port port
                                     :on-connection limit-body
                                     :handle-signals nil))
-         (loop (sleep 1)))
+         (emit-legacy-memory-metric "server-start")
+         (loop for seconds from 1 do
+           (sleep 1)
+           (when (zerop (mod seconds 30))
+             (emit-legacy-memory-metric "server-soak"))))
     (when plain (ignore-errors (clack:stop plain)))
     (when tls (ignore-errors (clack:stop tls)))))
