@@ -202,6 +202,10 @@ upload/disconnect gates. A shorter `--soak-seconds` run is diagnostic and
 cannot produce a qualification `PASS`. No receipt means the legacy gate is
 UNKNOWN.
 
+Resource growth is measured during the live soak, after fixture setup;
+the whole owned process group remains subject to peak memory and descriptor
+limits. The writer and verifier require the same acceptance evidence.
+
 Run the managed transport, middleware, lifecycle and service matrix through
 the [compatibility runner](docs/lack-compatibility.md#required-validation).
 It supplies the required pinned dependencies, SQLite/Redis fixtures and full

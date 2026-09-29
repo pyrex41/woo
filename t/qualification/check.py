@@ -199,7 +199,15 @@ def resource_phase_ok(receipt):
 
 def receipt_qualifies(receipt, current, expected):
     samples = receipt.get('resource_samples')
-    phases = [sample.get('phase') for sample in samples] if isinstance(samples, list) else []
+    if not isinstance(samples, list) or not all(isinstance(sample, dict) for sample in samples):
+        return False
+    times = [sample.get('elapsed_seconds') for sample in samples]
+    if not all(isinstance(value, (int, float)) and not isinstance(value, bool)
+               and 0 <= value <= receipt.get('elapsed_seconds', 0) for value in times):
+        return False
+    if times != sorted(times):
+        return False
+    phases = [sample.get('phase') for sample in samples]
     phase_rank = {'bootstrap': 0, 'soak': 1, 'post-soak': 2}
     return (receipt.get('status') == 'PASS' and receipt.get('head') == current
             and receipt.get('source_digest') == source_digest()
@@ -348,7 +356,7 @@ def main():
             receipt['cleanup'] = 'UNKNOWN'
             receipt['status'] = 'UNKNOWN'
             receipt['failure'] = 'private dependency cleanup failed: ' + str(cleanup_error)
-        if succeeded and receipt['cleanup'] == 'PASS':
+        if succeeded and receipt['cleanup'] == 'PASS' and not receipt.get('source_changed'):
             receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
             if args.soak_seconds == 1800:
                 expected = json.loads((ROOT / 't/compat/dependencies.json').read_text())

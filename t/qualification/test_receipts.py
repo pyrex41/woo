@@ -65,6 +65,7 @@ class ReceiptTests(unittest.TestCase):
                            {'gates':{}}, {'source_changed':True},
                            {'resource_phases':{}},
                            {'resource_phases':{'soak': []}},
+                           {'resource_samples':[None]},
                            {'resource_phases':{'soak':{'sample_count':2,
                                                        'baseline':{'rss_bytes':1024,'fd_count':3},
                                                        'final':{'rss_bytes':100 * 1024 * 1024,'fd_count':3}}}},
@@ -82,6 +83,19 @@ class ReceiptTests(unittest.TestCase):
             growth['resource_samples'][soak_indexes[-1]]['rss_bytes'] += 65 * 1024 * 1024
             growth['resource_phases']['soak']['final'] = growth['resource_samples'][soak_indexes[-1]]
             path.write_text(json.dumps(growth))
+            with patch.object(check, 'source_digest', return_value='current'), \
+                 patch.object(check.subprocess, 'check_output', return_value='current\n'):
+                with self.assertRaises(RuntimeError): check.verify_receipt(path)
+            for value in (None, True, float('nan'), float('inf'), -1, 1802):
+                candidate = copy.deepcopy(receipt)
+                candidate['resource_samples'][2]['elapsed_seconds'] = value
+                path.write_text(json.dumps(candidate))
+                with patch.object(check, 'source_digest', return_value='current'), \
+                     patch.object(check.subprocess, 'check_output', return_value='current\n'):
+                    with self.assertRaises(RuntimeError): check.verify_receipt(path)
+            candidate = copy.deepcopy(receipt)
+            candidate['resource_samples'][2]['elapsed_seconds'] = 0
+            path.write_text(json.dumps(candidate))
             with patch.object(check, 'source_digest', return_value='current'), \
                  patch.object(check.subprocess, 'check_output', return_value='current\n'):
                 with self.assertRaises(RuntimeError): check.verify_receipt(path)
