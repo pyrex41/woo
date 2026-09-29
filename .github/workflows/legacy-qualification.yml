@@ -24,6 +24,8 @@ jobs:
             sbcl --non-interactive --load "$HOME/quicklisp/setup.lisp" --eval "(ql-dist:install-dist \"http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt\" :prompt nil :replace t)"
           '
       - name: Run bounded legacy qualification
+        env:
+          WOO_LEGACY_MEMORY_DIAGNOSTIC: "1"
         run: |
           nix develop --command python3 t/qualification/check.py \
             --dependencies "$RUNNER_TEMP/woo-legacy-deps" \
