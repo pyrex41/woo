@@ -391,8 +391,20 @@ def main():
                                                                      soak_samples[0].get('elapsed_seconds', 0))
                                                                     if len(soak_samples) >= 2 else 0)}}
         resource_evidence_ok = resource_phase_ok(receipt)
+        if len(soak_samples) >= 2:
+            rss_growth = soak_samples[-1]['rss_bytes'] - soak_samples[0]['rss_bytes']
+            fd_growth = soak_samples[-1]['fd_count'] - soak_samples[0]['fd_count']
+            receipt['resource_growth'] = {'rss_bytes': rss_growth, 'rss_limit_bytes': 64 * 1024 * 1024,
+                                          'fd_count': fd_growth, 'fd_limit': 64}
         if args.soak_seconds == 1800 and not resource_evidence_ok:
-            receipt['resource_failure'] = 'full receipt lacks bounded phase-bound soak resource evidence'
+            violations = []
+            if len(soak_samples) >= 2:
+                if rss_growth > 64 * 1024 * 1024:
+                    violations.append(f'soak RSS growth {rss_growth} bytes exceeds 67108864 bytes')
+                if fd_growth > 64:
+                    violations.append(f'soak FD growth {fd_growth} exceeds 64')
+            receipt['resource_failure'] = ('; '.join(violations) if violations else
+                                          'full receipt lacks bounded phase-bound soak resource evidence')
         receipt['gates']['legacy_http_https_static_upload_disconnect'] = 'PASS'
         if not result.exists(): raise RuntimeError('qualification result is missing')
         result_data = json.loads(result.read_text())
