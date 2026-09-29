@@ -171,7 +171,7 @@
         (when ssl-context
           (woo.ssl:free-context ssl-context))))))
 
-(defun respond-and-close (socket status message)
+(defun respond-and-close (socket status message &optional head-p)
   (setf (wev:socket-data socket)
         (lambda (data &key start end)
           (declare (ignore data start end))))
@@ -179,8 +179,9 @@
     (wev:with-async-writing (socket :write-cb #'wev:graceful-close-socket)
       (write-response-headers socket status
                               (list :connection "close"
-                                    :content-length (length body)))
-      (wev:write-socket-data socket body))))
+                                    :content-length (if head-p 0 (length body))))
+      (unless head-p
+        (wev:write-socket-data socket body)))))
 
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
@@ -477,7 +478,8 @@
                               (case status
                                 (403 "403 Forbidden")
                                 (404 "404 Not Found")
-                                (otherwise "500 Internal Server Error"))))
+                                (otherwise "500 Internal Server Error"))
+                              head-p))
          (path-length-matches-p (headers size)
            (let ((declared (getf headers :content-length)))
              (or (null declared)

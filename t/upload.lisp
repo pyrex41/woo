@@ -74,11 +74,12 @@
                        (setf saw-spill (and (streamp stream)
                                             (probe-file (pathname stream))))
                        '(200 nil ("ok")))))
-             (let ((client (usocket:socket-connect
+             (sb-ext:with-timeout 5
+               (let ((client (usocket:socket-connect
                             "127.0.0.1" clack.test:*clack-test-port*
                             :element-type '(unsigned-byte 8))))
-               (unwind-protect
-                    (let ((stream (usocket:socket-stream client)))
+                 (unwind-protect
+                      (let ((stream (usocket:socket-stream client)))
                       ;; Keep the connection open while the first response is
                       ;; consumed.  This makes the assertion below sensitive
                       ;; to response completion cleanup rather than the socket
@@ -109,8 +110,8 @@
                                               "Connection: close" ""))
                        stream)
                       (force-output stream)
-                      (loop while (read-byte stream nil nil)))
-                 (ignore-errors (usocket:socket-close client)))))
+                        (loop while (read-byte stream nil nil)))
+                   (ignore-errors (usocket:socket-close client))))))
            (ok saw-spill)
            (ok keepalive-seen)
            (ok (null (directory (merge-pathnames "*" dir))))
