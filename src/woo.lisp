@@ -444,6 +444,19 @@
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
+(defun static-preparation-status (pathname &optional errno)
+  (cond ((and (integerp errno) (or (= errno wsys:EACCES) (= errno wsys:EISDIR))) 403)
+        ((and (integerp errno) (or (= errno wsys:ENOENT) (= errno wsys:ENOTDIR))) 404)
+        ((uiop:directory-exists-p pathname) 403)
+        ((probe-file pathname) 500)
+        (t 404)))
+
+(defun response-write-callback (socket close body-cleanup)
+  (when (or close body-cleanup)
+    (lambda (socket)
+      (when close (wev:graceful-close-socket socket))
+      (when body-cleanup (funcall body-cleanup)))))
+
 (defun handle-normal-response (http socket clack-res &optional body-cleanup head-p)
   (flet ((send-error-response (status)
            ;; File preparation happens before headers are committed.  Close
@@ -488,34 +501,98 @@
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
         (pathname
-         (cond
-           ((woo.ev.socket:socket-ssl-handle socket)
-            (with-open-file (in body :element-type '(unsigned-byte 8))
-              (let ((size (file-length in)))
-                (unless (getf headers :content-length)
-                  (setf (getf headers :content-length) size))
-                (unless (getf headers :content-type)
-                  (setf (getf headers :content-type) (mimes:mime body)))
-                (wev:with-async-writing (socket :write-cb (and close
-                                                               (lambda (socket)
-                                                                 (wev:close-socket socket))))
-                  (write-response-headers socket status headers (not close))
-                  ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
-                  (wev:write-socket-stream socket in)))))
-           (t
-            (let* ((fd (wsys:open body))
-                   (size #+lispworks (sys:file-size body)
-                         #+(or sbcl ccl) (fd-file-size fd)
-                         #-(or sbcl ccl lispworks) (file-size body)))
-              (unless (getf headers :content-length)
-                (setf (getf headers :content-length) size))
-              (unless (getf headers :content-type)
-                (setf (getf headers :content-type) (mimes:mime body)))
-              (wev:with-async-writing (socket :write-cb (and close
-                                                             (lambda (socket)
-                                                               (wev:close-socket socket))))
-                (write-response-headers socket status headers (not close))
-                (woo.ev.socket:send-static-file socket fd size))))))
+        (let ((preflight-status (cond ((uiop:directory-exists-p body) 403)
+                                      ;; Avoid relying on the errno exposed by
+                                      ;; the SSL stream's OPEN method.  Some
+                                      ;; implementations signal FILE-ERROR
+                                      ;; after clearing it, while pathname
+                                      ;; existence remains reliable here.
+                                      ((not (probe-file body)) 404))))
+           (cond
+             (preflight-status
+             (send-error-response preflight-status))
+             ((woo.ev.socket:socket-ssl-handle socket)
+              (let ((headers-committed nil) (in nil))
+                (unwind-protect
+                     (handler-case
+                         (progn
+                           (setf in (open body :element-type '(unsigned-byte 8)))
+                           (let ((size (file-length in)))
+                             (unless (path-length-matches-p headers size)
+                               (send-error-response 500)
+                               (return-from handle-normal-response))
+                             (unless (getf headers :content-length)
+                               (setf (getf headers :content-length) size))
+                             (unless (getf headers :content-type)
+                               (setf (getf headers :content-type) (mimes:mime body)))
+                             (wev:with-async-writing (socket :write-cb
+                                                       (response-write-callback socket close body-cleanup))
+                               (setf headers-committed t)
+                               (write-response-headers socket status headers (not close))
+                               (if head-p
+                                   (when body-cleanup (funcall body-cleanup))
+                                   (progn
+                                     (wev:start-static-stream socket in size)
+                                     (setf in nil))))))
+                       (file-error (e)
+                         (if headers-committed (error e)
+                             (let ((errno (or (ignore-errors (wsys:errno))
+                                              ;; OPEN may signal a FILE-ERROR
+                                              ;; without leaving the errno
+                                              ;; visible through the FFI.  The
+                                              ;; pathname is still enough to
+                                              ;; distinguish the public cases
+                                              ;; we promise to report.
+                                              (cond ((uiop:directory-exists-p body) wsys:EISDIR)
+                                                    ((probe-file body) wsys:EACCES)
+                                                    (t wsys:ENOENT)))))
+                               (send-error-response
+                                (static-preparation-status body errno)))))
+                       (error (e)
+                         (if headers-committed (error e) (send-error-response 500))))
+                  (when in (ignore-errors (close in :abort t))))))
+             (t
+              (let ((fd (wsys:open body)))
+                (if (< fd 0)
+                    (send-error-response
+                     (let ((errno (wsys:errno)))
+                       (static-preparation-status body errno)))
+                    (let ((headers-committed nil))
+                      (unwind-protect
+                           (handler-case
+                               (let ((size (progn
+                                             #+lispworks (sys:file-size body)
+                                             #+(or sbcl ccl) (fd-file-size fd)
+                                             #-(or sbcl ccl lispworks) (file-size body))))
+                                 (unless (path-length-matches-p headers size)
+                                   (send-error-response 500)
+                                   (return-from handle-normal-response))
+                                 (unless (getf headers :content-length)
+                                   (setf (getf headers :content-length) size))
+                                 (unless (getf headers :content-type)
+                                   (setf (getf headers :content-type) (mimes:mime body)))
+                                 (wev:with-async-writing (socket :write-cb
+                                                        (response-write-callback socket close body-cleanup))
+                                   (setf headers-committed t)
+                                   (write-response-headers socket status headers (not close))
+                                   ;; SEND-STATIC-FILE takes ownership and closes
+                                   ;; FD after the transfer completes.
+                                   (if head-p
+                                       (when body-cleanup (funcall body-cleanup))
+                                       (progn
+                                         (woo.ev.socket:send-static-file socket fd size)
+                                         (setf fd nil)))))
+                             (file-error (e)
+                               (if headers-committed
+                                   (error e)
+                                   (send-error-response 500)))
+                             (error (e)
+                               (if headers-committed
+                                   (error e)
+                                   (send-error-response 500))))
+                        (when fd (wsys:close fd))))))))))
+
+
 
 
         (list
