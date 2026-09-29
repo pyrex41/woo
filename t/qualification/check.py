@@ -277,7 +277,7 @@ def receipt_qualifies(receipt, current, expected):
             and receipt.get('dependencies') == expected
             and receipt.get('clack_patch_sha256') == hashlib.sha256(PATCH.read_bytes()).hexdigest()
             and receipt.get('peak_rss_bytes', 0) > 0
-            and receipt.get('resource_samples_complete', True) is not False
+            and receipt.get('resource_samples_complete', True) is True
             and receipt.get('gates', {}).get('legacy_http_https_static_upload_disconnect') == 'PASS'
             and receipt.get('process_group_cleanup') == 'PASS'
             and receipt.get('socket_cleanup') == 'PASS'

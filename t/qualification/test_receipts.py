@@ -196,6 +196,8 @@ class ReceiptTests(unittest.TestCase):
                            {'lifecycle_cycles':0}, {'resource_samples':[]}, {'dependencies':{}},
                            {'gates':{}}, {'source_changed':True},
                            {'resource_samples_complete':False},
+                           {'resource_samples_complete':0}, {'resource_samples_complete':None},
+                           {'resource_samples_complete':'true'},
                            {'resource_phases':{}},
                            {'resource_phases':{'soak': []}},
                            {'resource_samples':[None]},
