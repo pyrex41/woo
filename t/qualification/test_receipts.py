@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import copy, hashlib, json, os, sys, tempfile, time, unittest
+import copy, hashlib, io, json, os, sys, tempfile, time, unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 import check
@@ -61,9 +62,50 @@ class ReceiptTests(unittest.TestCase):
         with patch.object(check.Path, 'is_dir', return_value=False), \
              patch.object(check.subprocess, 'check_output',
                           side_effect=[ps, 'p456\n'] * 3) as sample:
-            with self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+            diagnostic = io.StringIO()
+            with redirect_stderr(diagnostic), self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
                 check.process_group_stats(123)
             self.assertEqual(sample.call_count, 6)
+        self.assertEqual(diagnostic.getvalue(),
+                         'WOO_FD_SAMPLE_FAILURE reason=no-f-records rss_bytes=10240 fd_count=0\n')
+        self.assertNotIn('456', diagnostic.getvalue())
+        self.assertNotIn('lsof', diagnostic.getvalue())
+
+    def test_group_sampler_reports_permission_failure_without_process_details(self):
+        ps = '123 456 10\n'
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=([ps, PermissionError('denied')] * 3)):
+            diagnostic = io.StringIO()
+            with redirect_stderr(diagnostic), self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+        self.assertEqual(diagnostic.getvalue(), 'WOO_FD_SAMPLE_FAILURE reason=permission-error\n')
+        self.assertNotIn('456', diagnostic.getvalue())
+
+    def test_group_sampler_reports_lsof_exit_status_without_process_details(self):
+        ps = '123 456 10\n'
+        failure = check.subprocess.CalledProcessError(1, ['lsof'], output='')
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=([ps, failure] * 3)):
+            diagnostic = io.StringIO()
+            with redirect_stderr(diagnostic), self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+        self.assertEqual(diagnostic.getvalue(),
+                         'WOO_FD_SAMPLE_FAILURE reason=pid-transition-or-lsof-exit lsof_status=1\n')
+        self.assertNotIn('456', diagnostic.getvalue())
+
+    def test_group_sampler_reports_rss_zero_separately_from_fd_zero(self):
+        ps = '123 456 0\n'
+        with patch.object(check, 'FD_SAMPLE_MAX_ATTEMPTS', 3), \
+             patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=[ps, 'p456\nf0\n'] * 3):
+            diagnostic = io.StringIO()
+            with redirect_stderr(diagnostic), self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+        self.assertEqual(diagnostic.getvalue(),
+                         'WOO_FD_SAMPLE_FAILURE reason=rss-zero rss_bytes=0 fd_count=1\n')
 
     def test_group_sampler_accepts_zero_fd_child_with_positive_group_total(self):
         ps = '123 456 10\n123 789 10\n'
