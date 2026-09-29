@@ -48,14 +48,14 @@ jobs:
             pids=$(ps -eo pid=,ppid=,pgid=,stat= | awk -v g="$group_id" '$3 == g && $4 !~ /^Z/ {print $1}' | head -n 64)
             for pid in $pids; do
               remaining=$((30 - (SECONDS - capture_start)))
-              [ "$remaining" -gt 0 ] || break
-              gdb_budget=$remaining
-              [ "$gdb_budget" -gt 10 ] && gdb_budget=10
+              [ "$remaining" -gt 1 ] || break
+              gdb_budget=$((remaining - 1))
+              [ "$gdb_budget" -gt 9 ] && gdb_budget=9
               {
                 echo "--- owned pid=$pid ---"
                 ps -o pid=,ppid=,pgid=,stat=,wchan= -p "$pid" || true
                 if [ -r "/proc/$pid/wchan" ]; then cat "/proc/$pid/wchan" || true; fi
-                timeout "${gdb_budget}s" gdb -batch -q -p "$pid" \
+                timeout --kill-after=1s "${gdb_budget}s" gdb -batch -q -p "$pid" \
                   -ex 'set print frame-arguments none' \
                   -ex 'thread apply all bt' -ex detach -ex quit 2>&1 | head -c 65536 || true
               } >> "$report"
