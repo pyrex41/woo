@@ -48,7 +48,11 @@
 (deftest spilled-body-files-are-removed-after-response-and-abort
   (let ((clack.test:*clack-test-handler* :woo)
         (clack.test:*enable-debug* nil)
-        (dir smart-buffer::*temporary-directory*)
+        (dir (uiop:ensure-directory-pathname
+              (merge-pathnames
+               (format nil "woo-upload-~36R/" (random (expt 36 8)))
+               (uiop:temporary-directory))))
+        (old-directory smart-buffer::*temporary-directory*)
         (old-memory smart-buffer::*default-memory-limit*)
         (old-disk smart-buffer::*default-disk-limit*)
         (saw-spill nil))
@@ -58,7 +62,9 @@
            ;; worker thread; lexical bindings in this test thread do not cross
            ;; that boundary.
            (setf (symbol-value 'smart-buffer::*default-memory-limit*) 1
-                 (symbol-value 'smart-buffer::*default-disk-limit*) 64)
+                 (symbol-value 'smart-buffer::*default-disk-limit*) 64
+                 (symbol-value 'smart-buffer::*temporary-directory*) dir)
+           (ensure-directories-exist dir)
            (clack.test:testing-app "Remove spilled request body after response"
                (lambda (env)
                  (let ((stream (getf env :raw-body)))
@@ -72,15 +78,36 @@
               "data"))
            (ok saw-spill)
            (ok (null (directory (merge-pathnames "*" dir))))
-           (clack.test:testing-app "Remove spilled request body after abort"
-               (lambda (env)
-                 (declare (ignore env))
-                 '(200 nil ("unexpected")))
-             (woo-test::raw-exchange
-              clack.test:*clack-test-port*
-              (woo-test::crlf-lines "POST /abort HTTP/1.1" "Host: localhost"
-                                    "Content-Length: 8" "")
-              "data"))
+           (let ((response (make-string (* 1024 1024) :initial-element #\x)))
+             (clack.test:testing-app "Remove spilled request body after abort"
+                 (lambda (env)
+                   (if (string= (getf env :path-info) "/health")
+                       '(200 nil ("healthy"))
+                       (progn
+                         (sleep 0.2)
+                         (list 200 nil (list response)))))
+               (let ((client (usocket:socket-connect
+                              "127.0.0.1" clack.test:*clack-test-port*
+                              :element-type '(unsigned-byte 8))))
+                 (unwind-protect
+                      (let ((stream (usocket:socket-stream client)))
+                        (write-sequence
+                         (trivial-utf-8:string-to-utf-8-bytes
+                          (concatenate 'string
+                                       (woo-test::crlf-lines
+                                        "POST /abort HTTP/1.1" "Host: localhost"
+                                        "Content-Length: 4" "")
+                                       "data"))
+                         stream)
+                        (force-output stream))
+                   (usocket:socket-close client))))
+             (ok (search "HTTP/1.1 200 OK"
+                         (woo-test::raw-exchange
+                          clack.test:*clack-test-port*
+                          (woo-test::crlf-lines "GET /health HTTP/1.1"
+                                                "Host: localhost" "Connection: close" ""))))))
            (ok (null (directory (merge-pathnames "*" dir)))))
       (setf (symbol-value 'smart-buffer::*default-memory-limit*) old-memory
-            (symbol-value 'smart-buffer::*default-disk-limit*) old-disk))))
+            (symbol-value 'smart-buffer::*default-disk-limit*) old-disk
+            (symbol-value 'smart-buffer::*temporary-directory*) old-directory)
+      (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore)))

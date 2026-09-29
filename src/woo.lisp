@@ -247,9 +247,23 @@
                                           (return-from result (handle-response http socket '(500 nil nil)))))))
                                  (let ((env (nconc (list :raw-body raw-body)
                                                    (handle-request http socket))))
-                                   (main env (lambda ()
-                                               (ignore-errors (close raw-body))
-                                               (ignore-errors (delete-stream-file raw-body))))))))))))))
+                                   (let ((body raw-body)
+                                         (cleaned nil))
+                                     (labels ((cleanup-body ()
+                                                (unless cleaned
+                                                  (setf cleaned t)
+                                                  (when body
+                                                    (ignore-errors (close body))
+                                                    (ignore-errors (delete-stream-file body))
+                                                    (setf body nil)))))
+                                       ;; A peer abort can close the socket
+                                       ;; before an async response callback runs.
+                                       ;; Keep this hook idempotent and clear
+                                       ;; BODY after cleanup so keep-alive
+                                       ;; connections do not retain streams.
+                                       (push #'cleanup-body
+                                             (woo.ev.socket::socket-close-hooks socket))
+                                       (main env #'cleanup-body)))))))))))))
 
 (defun stop (server)
   (wev:close-tcp-server server))
@@ -372,7 +386,8 @@
                                                                    body-cleanup)
                                          (wev:socket-closed ()))))))
     (wev:tcp-error (e)
-      (vom:error (princ-to-string e)))))
+      (vom:error (princ-to-string e))
+      (when body-cleanup (funcall body-cleanup)))))
 
 #+sbcl
 (defun fd-file-size (fd)
