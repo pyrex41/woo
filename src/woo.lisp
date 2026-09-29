@@ -916,8 +916,11 @@ SERVER may be the listener or the thread running WOO:RUN."
     (if (/= generation (woo.ev.socket::socket-response-generation socket))
         (wev:close-socket socket)
         (progn
+          ;; The response may already have flushed before this callback is
+          ;; installed. Ask the socket to drain immediately so both buffered
+          ;; and already-flushed responses reach TLS close_notify.
           (handle-normal-response http socket '(500 (:connection "close") nil))
-          (setf (woo.ev.socket::socket-write-cb socket) #'wev:graceful-close-socket)))))
+          (wev:graceful-close-socket socket)))))
 
 (defun handle-response (http socket clack-res &optional env body-cleanup head-p)
 
