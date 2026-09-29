@@ -44,6 +44,14 @@ class Receipts(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     self.verify(receipt)
 
+    def test_each_required_gate_must_be_present(self):
+        for gate in check.REQUIRED_GATES:
+            with self.subTest(gate=gate):
+                receipt = copy.deepcopy(self.receipt)
+                del receipt['gates'][gate]
+                with self.assertRaises(RuntimeError):
+                    self.verify(receipt)
+
 class StageCleanup(unittest.TestCase):
     def test_exited_leader_does_not_leave_child(self):
         with tempfile.TemporaryDirectory() as directory:

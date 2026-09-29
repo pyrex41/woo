@@ -29,6 +29,7 @@ def source_digest():
     return h.hexdigest()
 
 REQUIRED_GATES = {'receipt_validator', 'lisp_contract_lifecycle_middleware_services',
+                  'transport_matrix_budget_cancellation_drain',
                   'http1_https_h2c_h2tls_websocket_soak'}
 
 def verify_receipt(path):
@@ -156,6 +157,7 @@ def main():
                 receipt['gates']['lisp_contract_lifecycle_middleware_services']='PASS'
                 run(['go','-C','t/hegel','test','-v','-count=1','-run','^TestManaged',
                      '-skip','^TestManagedSoak$','-timeout','5m'],env,args.artifacts/'transports.log',300)
+                receipt['gates']['transport_matrix_budget_cancellation_drain']='PASS'
                 soak_started=time.monotonic()
                 run(['go','-C','t/hegel','test','-v','-count=1','-run','^TestManagedSoak$','-timeout','35m'],
                     env,args.artifacts/'soak.log',args.soak_seconds+300)
