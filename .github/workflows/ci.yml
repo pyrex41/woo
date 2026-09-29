@@ -33,7 +33,10 @@ jobs:
           ulimit -n 256
           PATH="$HOME/.roswell/bin:$PATH"
           export PATH
-          rove woo-test.asd
+          ros dynamic-space-size=4096 \
+            -e '(push (truename "./") asdf:*central-registry*)' \
+            -s woo-test \
+            -e '(unless (rove:run :woo-test) (uiop:quit 1))'
       - name: Check conformance launcher identity and report handling
         timeout-minutes: 5
         run: python3 t/conformance/test_autobahn_runner.py
