@@ -79,7 +79,12 @@
                       (woo.compat:call-on-connection (getf env :clack.io)
                         (lambda () (websocket-driver:start-connection ws))))))
                  ((equal path "/drain")
-                  (funcall shutdown)
+                  (handler-bind ((undefined-function
+                                  (lambda (condition)
+                                    (format *error-output*
+                                            "WOO_DRAIN_UNDEFINED_FUNCTION ~A~%"
+                                            (cell-error-name condition)))))
+                    (funcall shutdown))
                   '(200 (:content-type "text/plain") ("draining")))
                  ((equal path "/drain-slow")
                   (lambda (respond)
