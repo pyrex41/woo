@@ -220,7 +220,7 @@
                                                                       (vom:error (princ-to-string error))
                                                                       nil)))
                                                              res
-                                                             '(500 nil nil))
+                                                             '(500 nil nil)))
                                                  cleanup)))
                          (lambda ()
                            (block result
@@ -231,12 +231,14 @@
                                       (lambda (e)
                                         (unless *debug*
                                           (vom:crit (princ-to-string e))
+                                          (ignore-errors (close raw-body))
+                                          (ignore-errors (delete-stream-file raw-body))
                                           (return-from result (handle-response http socket '(500 nil nil)))))))
                                  (let ((env (nconc (list :raw-body raw-body)
                                                    (handle-request http socket))))
                                    (main env (lambda ()
                                                (ignore-errors (close raw-body))
-                                               (ignore-errors (delete-stream-file raw-body)))))))))))))))
+                                               (ignore-errors (delete-stream-file raw-body))))))))))))))
 
 (defun stop (server)
   (wev:close-tcp-server server))
