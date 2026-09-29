@@ -169,7 +169,13 @@ func TestManagedHTTPSOversizeConcurrentWire413(t *testing.T) {
 			}
 			t.Fatalf("read body attempt %d: %v", attempt, readErr)
 		}
-		writeErr := <-writeDone
+		var writeErr error
+		select {
+		case writeErr = <-writeDone:
+		case <-time.After(5 * time.Second):
+			conn.Close()
+			t.Fatal("writer did not stop after successful response read")
+		}
 		conn.Close()
 		t.Logf("concurrent attempt %d: status=%d write_error=%v", attempt, response.StatusCode, writeErr)
 		if response.StatusCode != http.StatusRequestEntityTooLarge || string(body) != "413 Request Entity Too Large" {
@@ -185,6 +191,7 @@ func TestManagedHTTPSOversizeConcurrentWire413(t *testing.T) {
 func assertManagedHTTPSHealthy(t *testing.T, addr string) {
 	t.Helper()
 	lane := managedClients(t, addr)["https"]
+	awaitManagedBaseline(t, lane.client, lane.base)
 	response, body := managedRequest(t, lane.client, "GET", lane.base+"/", nil, nil)
 	if response.StatusCode != http.StatusOK || string(body) != "こんにちは λ" {
 		t.Fatalf("HTTPS service unhealthy after rejection: status=%d body=%q", response.StatusCode, body)
