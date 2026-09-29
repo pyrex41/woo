@@ -83,11 +83,13 @@
   (let ((*app* app)
         (*debug* debug)
         (*listener* nil)
-        (ssl (or ssl-key-file ssl-cert-file)))
+        (ssl (or ssl-key-file ssl-cert-file))
+        (ssl-context nil))
     (labels ((start-socket (socket)
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
+                                          ssl-context
                                           ssl-cert-file
                                           ssl-key-file
                                           ssl-key-password))
@@ -133,25 +135,38 @@
                                                 :fd fd
                                                 :sockopt wsock:+SO-REUSEADDR+)))
                      (wev:close-tcp-server *listener*))))))
-      (when ssl
-        #+woo-no-ssl
-        (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
+      ;; Context ownership starts at allocation. Keep validation, ALPN setup,
+      ;; and server startup in one cleanup scope so setup failures free it.
+      (unwind-protect
+           (progn
+             (when ssl
+               #+woo-no-ssl
+               (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
+               #-woo-no-ssl
+               (progn
+                 (cl+ssl::ensure-initialized)
+                 (when ssl-key-file
+                   (setf ssl-key-file
+                         (uiop:native-namestring
+                          (or (probe-file ssl-key-file)
+                              (error "SSL private key file '~A' does not exist." ssl-key-file)))))
+                 (when ssl-cert-file
+                   (setf ssl-cert-file
+                         (uiop:native-namestring
+                          (or (probe-file ssl-cert-file)
+                              (error "SSL certificate '~A' does not exist." ssl-cert-file)))))))
+             #-woo-no-ssl
+             (when ssl
+               (setf ssl-context
+                     (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
+               ;; Keep ALPN configuration owned by this listener context.
+               (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*))
+             (if worker-num
+                 (start-multithread-server)
+                 (start-singlethread-server)))
         #-woo-no-ssl
-        (progn
-          (cl+ssl::ensure-initialized)
-          (when ssl-key-file
-            (setf ssl-key-file
-                  (uiop:native-namestring
-                   (or (probe-file ssl-key-file)
-                       (error "SSL private key file '~A' does not exist." ssl-key-file)))))
-          (when ssl-cert-file
-            (setf ssl-cert-file
-                  (uiop:native-namestring
-                   (or (probe-file ssl-cert-file)
-                       (error "SSL certificate '~A' does not exist." ssl-cert-file)))))))
-      (if worker-num
-          (start-multithread-server)
-          (start-singlethread-server)))))
+        (when ssl-context
+          (woo.ssl:free-context ssl-context))))))
 
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))

@@ -38,8 +38,10 @@
                    (:file "tcp" :depends-on ("event-loop" "socket" "util" "condition"))
                    (:file "condition")
                    (:file "util")))
+                 (:file "ssl-alpn" :depends-on ("ev-packages")
+                  :if-feature (:not :woo-no-ssl))
                  (:file "ssl"
-                  :depends-on ("ev-packages")
+                  :depends-on ("ev-packages" "ssl-alpn")
                   :if-feature (:not :woo-no-ssl))
                  (:module "llsocket"
                   :depends-on ("syscall")
