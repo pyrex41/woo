@@ -29,6 +29,8 @@ type fixtureSpec struct {
 type boundedLog struct {
 	mu sync.Mutex
 	b  bytes.Buffer
+	file *os.File
+	fileBytes int
 }
 
 func (l *boundedLog) Write(p []byte) (int, error) {
@@ -36,6 +38,11 @@ func (l *boundedLog) Write(p []byte) (int, error) {
 	defer l.mu.Unlock()
 	if remaining := 32*1024 - l.b.Len(); remaining > 0 {
 		l.b.Write(p[:min(len(p), remaining)])
+	}
+	if l.file != nil && l.fileBytes < 256*1024 {
+		remaining := min(len(p), 256*1024-l.fileBytes)
+		_, _ = l.file.Write(p[:remaining])
+		l.fileBytes += remaining
 	}
 	return len(p), nil
 }
@@ -106,7 +113,14 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 	// also removes fixtures. Standalone Hegel keeps its per-fixture groups.
 	ownGroup := os.Getenv("WOO_COMPAT_FIXTURE_GROUP") != "owned-stage"
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: ownGroup}
-	log := &boundedLog{}
+	var metricLog *os.File
+	if path := os.Getenv("WOO_LEGACY_MEMORY_LOG"); path != "" {
+		metricLog, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err != nil {
+			return "", fmt.Errorf("open bounded memory diagnostic log: %w", err)
+		}
+	}
+	log := &boundedLog{file: metricLog}
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start %s: %w", spec.name, err)
@@ -121,6 +135,10 @@ func startFixture(t *testing.T, spec fixtureSpec, requestedPort string) (string,
 		close(exited)
 	}()
 	cleanup := func() {
+		if metricLog != nil {
+			_ = metricLog.Close()
+			metricLog = nil
+		}
 		if cmd.Process != nil {
 			if ownGroup {
 				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
