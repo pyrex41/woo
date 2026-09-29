@@ -41,7 +41,10 @@
   (:import-from :smart-buffer
                 :make-smart-buffer
                 :write-to-buffer
-                :finalize-buffer)
+                :finalize-buffer
+                :delete-stream-file
+                :*default-disk-limit*
+                :buffer-limit-exceeded)
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes
                 :utf-8-bytes-to-string
@@ -168,19 +171,31 @@
         (when ssl-context
           (woo.ssl:free-context ssl-context))))))
 
+(defun respond-and-close (socket status message &optional head-p)
+  (setf (wev:socket-data socket)
+        (lambda (data &key start end)
+          (declare (ignore data start end))))
+  (let ((body (string-to-utf-8-bytes message)))
+    (wev:with-async-writing (socket :write-cb #'wev:graceful-close-socket)
+      (write-response-headers socket status
+                              (list :connection "close"
+                                    :content-length (if head-p 0 (length body))))
+      (unless head-p
+        (wev:write-socket-data socket body)))))
+
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
-    (handler-case (funcall parser data :start start :end end)
-      (fast-http:parsing-error (e)
-        (vom:error "HTTP parse error: ~A" e)
-        (let ((body #.(map '(simple-array (unsigned-byte 8) (*))
-                           #'char-code
-                           "400 Bad Request")))
-          (wev:with-async-writing (socket :write-cb #'wev:close-socket)
-            (write-response-headers socket 400
-                                    (list :connection "close"
-                                          :content-length (length body)))
-            (wev:write-socket-data socket body)))))))
+    (block read
+      (handler-bind (((or fast-http:cb-headers-complete fast-http:cb-body)
+                      (lambda (condition)
+                        (let ((cause (slot-value condition 'error)))
+                          (when (typep cause 'buffer-limit-exceeded)
+                            (respond-and-close socket 413 "413 Request Entity Too Large")
+                            (return-from read nil))))))
+        (handler-case (funcall parser data :start start :end end)
+          (fast-http:parsing-error (e)
+            (vom:error "HTTP parse error: ~A" e)
+            (respond-and-close socket 400 "400 Bad Request")))))))
 
 (define-condition woo-error (simple-error) ())
 (define-condition invalid-http-version (woo-error) ())
@@ -201,8 +216,21 @@
 (defun setup-parser (socket)
   (let ((http (make-http-request))
         (body-buffer (make-smart-buffer)))
+    (push (lambda ()
+            (unless (smart-buffer::buffer-on-memory-p body-buffer)
+              (ignore-errors
+                (let ((raw-body (finalize-buffer body-buffer)))
+                  (ignore-errors (close raw-body))
+                  (ignore-errors (delete-stream-file raw-body))))))
+          (woo.ev.socket::socket-close-hooks socket))
     (setf (wev:socket-data socket)
           (make-parser http
+                       :header-callback
+                       (lambda (headers)
+                         (let ((length (gethash "content-length" headers)))
+                           (when (and length (integer-string-p length)
+                                      (> (parse-integer length) *default-disk-limit*))
+                             (error 'buffer-limit-exceeded))))
                        :body-callback
                        (lambda (data start end)
                          (declare (type (simple-array (unsigned-byte 8) (*)) data))
@@ -210,7 +238,7 @@
                              (write-to-buffer body-buffer (subseq data start end) 0 (- end start))
                              (write-to-buffer body-buffer data start end)))
                        :finish-callback
-                       (flet ((main (env)
+                       (flet ((main (env cleanup)
                                 (handle-response http socket
                                                  (if *debug*
                                                      (funcall *app* env)
@@ -220,7 +248,7 @@
                                                                       nil)))
                                                              res
                                                              '(500 nil nil)))
-                                                 nil (eq (http-method http) :head))))
+                                                 cleanup (eq (http-method http) :head))))
                          (lambda ()
                            (block result
                              (let ((raw-body (finalize-buffer body-buffer)))
@@ -230,10 +258,28 @@
                                       (lambda (e)
                                         (unless *debug*
                                           (vom:crit (princ-to-string e))
+                                          (ignore-errors (close raw-body))
+                                          (ignore-errors (delete-stream-file raw-body))
                                           (return-from result (handle-response http socket '(500 nil nil)))))))
                                  (let ((env (nconc (list :raw-body raw-body)
                                                    (handle-request http socket))))
-                                   (main env)))))))))))
+                                   (let ((body raw-body)
+                                         (cleaned nil))
+                                     (labels ((cleanup-body ()
+                                                (unless cleaned
+                                                  (setf cleaned t)
+                                                  (when body
+                                                    (ignore-errors (close body))
+                                                    (ignore-errors (delete-stream-file body))
+                                                    (setf body nil)))))
+                                       ;; A peer abort can close the socket
+                                       ;; before an async response callback runs.
+                                       ;; Keep this hook idempotent and clear
+                                       ;; BODY after cleanup so keep-alive
+                                       ;; connections do not retain streams.
+                                       (push #'cleanup-body
+                                             (woo.ev.socket::socket-close-hooks socket))
+                                       (main env #'cleanup-body)))))))))))))
 
 (defun stop (server)
   (wev:close-tcp-server server))
@@ -494,9 +540,7 @@
 
       (etypecase body
         (null
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:graceful-close-socket socket))))
+         (wev:with-async-writing (socket :write-cb (response-write-callback socket close body-cleanup))
            (unless (or head-p (member status '(204 304)))
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
@@ -596,9 +640,7 @@
 
 
         (list
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:graceful-close-socket socket))))
+         (wev:with-async-writing (socket :write-cb (response-write-callback socket close body-cleanup))
            (cond
              (head-p
               (unless (getf headers :content-length)
@@ -652,9 +694,7 @@
                        when data
                          do (wev:write-socket-data socket data))))))))
         ((vector (unsigned-byte 8))
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:graceful-close-socket socket))))
+         (wev:with-async-writing (socket :write-cb (response-write-callback socket close body-cleanup))
            (response-headers-bytes socket status headers (not close))
            (unless (getf headers :content-length)
              (wev:write-socket-data socket #.(string-to-utf-8-bytes "Content-Length: "))
