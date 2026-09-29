@@ -19,6 +19,7 @@
                 :socket-timeout-timer
                 :socket-last-activity
                 :socket-tls-shutdown-p
+                :socket-tls-shutdown-recv-p
                 :tls-shutdown-read-step
                 :socket-input-rejected-p
                 :socket-read-wait-write-p
@@ -115,7 +116,9 @@
       ;; instead of treating post-shutdown application data as a fatal error.
       ;; The shutdown deadline remains the final bound if the peer never
       ;; closes.
-      (tls-shutdown-read-step socket)
+      (if (socket-tls-shutdown-recv-p socket)
+          (tls-shutdown-read-step socket)
+          (tls-shutdown-step socket))
       (return-from tcp-read-cb))
     (loop
       ;; SSL_write can return WANT_READ. Service that exact pending write

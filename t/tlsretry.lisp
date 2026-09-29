@@ -228,4 +228,57 @@
         (when socket
           (setf (woo.ev.socket::socket-ssl-handle socket) nil)
           (ignore-errors (woo.ev.socket:close-socket socket)))
-        (ignore-errors (sb-posix:close read-fd))))))
+          (ignore-errors (sb-posix:close read-fd))))))
+
+#+sbcl
+(deftest tls-shutdown-receive-phase-drains-before-second-shutdown
+  (testing "peer application records are drained before the second SSL_shutdown"
+    (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+      (let ((socket nil)
+            (shutdown-calls 0)
+            (reads '(1 -1 -1 0))
+            (errors '(:want-read :want-write :zero)))
+        (unwind-protect
+             (woo.ev.event-loop:with-event-loop ()
+               (setf socket (woo.ev.socket:make-socket
+                             :fd write-fd :tcp-read-cb 'woo.ev.tcp::tcp-read-cb))
+               (setf (woo.ev.event-loop:deref-data-from-pointer write-fd) socket
+                     (woo.ev.socket::socket-ssl-handle socket) (cffi:null-pointer)
+                     (woo.ev.socket::socket-tls-shutdown-p socket) t
+                     (woo.ev.socket::socket-tls-shutdown-recv-p socket) t
+                     (woo.ev.socket::socket-tls-shutdown-deadline socket)
+                     (+ (lev:ev-now woo.ev:*evloop*) 10.0d0))
+               (let ((woo.ev.socket::*ssl-read-function*
+                       (lambda (handle pointer length)
+                         (declare (ignore handle pointer length))
+                         (pop reads)))
+                     (woo.ev.socket::*ssl-error-function*
+                       (lambda (handle result)
+                         (declare (ignore handle))
+                         (ecase result
+                           (-1 (ecase (pop errors)
+                                 (:want-read cl+ssl::+ssl-error-want-read+)
+                                 (:want-write cl+ssl::+ssl-error-want-write+)
+                                 (:zero cl+ssl::+ssl-error-zero-return+)))
+                           (0 cl+ssl::+ssl-error-zero-return+))))
+                     (woo.ev.socket::*ssl-shutdown-function*
+                       (lambda (handle)
+                         (declare (ignore handle))
+                         (incf shutdown-calls)
+                         1)))
+                 (woo.ev.socket:tls-shutdown-read-step socket)
+                 (ok (zerop shutdown-calls))
+                 (ok (woo.ev.socket::socket-tls-shutdown-recv-p socket))
+                 (woo.ev.socket:tls-shutdown-read-step socket)
+                 (ok (zerop shutdown-calls))
+                 (ok (plusp (lev:ev-is-active
+                             (woo.ev.socket:socket-write-watcher socket))))
+                 (woo.ev.socket:tls-shutdown-read-step socket)
+                 (ok (= shutdown-calls 1))
+                 (ok (not (woo.ev.socket:socket-open-p socket))))
+               (setf socket nil)
+               (lev:ev-break woo.ev:*evloop* lev:+EVBREAK-ALL+))
+          (when socket
+            (setf (woo.ev.socket::socket-ssl-handle socket) nil)
+            (ignore-errors (woo.ev.socket:close-socket socket)))
+          (ignore-errors (sb-posix:close read-fd)))))))
