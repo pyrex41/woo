@@ -184,6 +184,12 @@
       (write-int-to-date sec 23)))
   *date-header*)
 
+(defun canonical-header-name (key)
+  (or (find (string key) '(:content-length :content-type :transfer-encoding
+                          :connection :content-encoding :vary :set-cookie)
+            :test #'string-equal :key #'string)
+      key))
+
 (defun response-headers-bytes (socket status headers &optional keep-alive-p)
   (incf (woo.ev.socket::socket-response-generation socket))
   (wev:write-socket-data socket
