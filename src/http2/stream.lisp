@@ -1,0 +1,214 @@
+(in-package :cl-user)
+(defpackage woo.http2.stream
+  (:use :cl :woo.http2.constants)
+  (:export :http2-stream
+           :make-http2-stream
+           :http2-stream-id
+           :http2-stream-state
+           :http2-stream-headers
+           :http2-stream-body-buffer
+           :stream-append-body
+           :http2-stream-window-size
+           :http2-stream-recv-window-size
+           :http2-stream-content-length
+           :http2-stream-bytes-received
+           :http2-stream-header-buffer
+           :http2-stream-awaiting-continuation
+           :http2-stream-pending-end-stream
+           :http2-stream-continuation-frames
+           :http2-stream-refused
+           :http2-stream-trailers
+           :http2-stream-trailers-received
+           :stream-transition
+           :stream-state-error
+           :stream-state-error-stream
+           :stream-state-error-event
+           :stream-state-error-state
+           :stream-state-error-code
+           :stream-state-error-connection-error-p
+           :stream-open-p
+           :stream-half-closed-remote-p
+           :stream-closed-p
+           :+state-idle+
+           :+state-reserved-local+
+           :+state-reserved-remote+
+           :+state-open+
+           :+state-half-closed-local+
+           :+state-half-closed-remote+
+           :+state-closed+))
+(in-package :woo.http2.stream)
+
+;; Stream states (RFC 9113 Section 5.1)
+(defconstant +state-idle+ 0)
+(defconstant +state-reserved-local+ 1)
+(defconstant +state-reserved-remote+ 2)
+(defconstant +state-open+ 3)
+(defconstant +state-half-closed-local+ 4)
+(defconstant +state-half-closed-remote+ 5)
+(defconstant +state-closed+ 6)
+
+(defstruct http2-stream
+  "HTTP/2 stream state."
+  (id 0 :type (unsigned-byte 32))
+  (state +state-idle+ :type (unsigned-byte 8))
+  (headers nil :type list)
+  (body-buffer (make-array 0 :element-type '(unsigned-byte 8)
+                           :adjustable t :fill-pointer 0))
+  (window-size +default-initial-window-size+ :type integer)
+  (recv-window-size +default-initial-window-size+ :type integer)
+  (content-length nil :type (or null integer))
+  (bytes-received 0 :type integer)
+  ;; For tracking header continuation
+  (header-buffer nil)
+  (awaiting-continuation nil :type boolean)
+  (pending-end-stream nil :type boolean)
+  ;; CONTINUATION frames received for the pending header block.
+  (continuation-frames 0 :type fixnum)
+  ;; Set when the stream id is consumed but the request is refused.
+  ;; The header block is still decoded; :recv-headers is not run.
+  (refused nil :type boolean)
+  ;; Trailer section (RFC 9113 §8.1). HEADERS keeps the request headers.
+  (trailers nil :type list)
+  (trailers-received nil :type boolean))
+
+;; Smallest capacity allocated for a non-empty body buffer.
+(defconstant +min-body-buffer-capacity+ 1024)
+
+(defun stream-append-body (stream data &optional limit)
+  "Append the octets in DATA to the stream's body buffer. Capacity at least
+   doubles when it runs out, so N appends copy O(N) octets in total rather
+   than O(N^2). LIMIT, when non-NIL, caps the capacity; the caller must not
+   append past it. Returns the buffer."
+  (let* ((buf (http2-stream-body-buffer stream))
+         (old-len (fill-pointer buf))
+         (new-len (+ old-len (length data)))
+         (capacity (array-total-size buf)))
+    (when (> new-len capacity)
+      (let ((grown (max new-len (* 2 capacity) +min-body-buffer-capacity+)))
+        (when limit
+          (setf grown (max new-len (min grown limit))))
+        (setf buf (adjust-array buf grown)
+              (http2-stream-body-buffer stream) buf)))
+    (setf (fill-pointer buf) new-len)
+    (replace buf data :start1 old-len)
+    buf))
+
+(defun stream-open-p (stream)
+  "Check if stream is in open state."
+  (= (http2-stream-state stream) +state-open+))
+
+(defun stream-half-closed-remote-p (stream)
+  "Check if stream is half-closed (remote)."
+  (= (http2-stream-state stream) +state-half-closed-remote+))
+
+(defun stream-closed-p (stream)
+  "Check if stream is closed."
+  (= (http2-stream-state stream) +state-closed+))
+
+(defun state-name (state)
+  "Return human-readable name for stream state."
+  (case state
+    (#.+state-idle+ "idle")
+    (#.+state-reserved-local+ "reserved (local)")
+    (#.+state-reserved-remote+ "reserved (remote)")
+    (#.+state-open+ "open")
+    (#.+state-half-closed-local+ "half-closed (local)")
+    (#.+state-half-closed-remote+ "half-closed (remote)")
+    (#.+state-closed+ "closed")
+    (t "unknown")))
+
+(define-condition stream-state-error (error)
+  ((stream :initarg :stream :reader stream-state-error-stream)
+   (event :initarg :event :reader stream-state-error-event)
+   (state :initarg :state :reader stream-state-error-state)
+   (error-code :initarg :error-code :reader stream-state-error-code)
+   (connection-error-p :initarg :connection-error-p
+                       :reader stream-state-error-connection-error-p))
+  (:report (lambda (condition out)
+             (format out "Cannot ~A in state ~A"
+                     (stream-state-error-event condition)
+                     (state-name (stream-state-error-state condition))))))
+
+(defun signal-stream-state-error (stream event old-state)
+  "Signal an illegal transition. Does not return.
+   Half-closed (remote) peer frames are a stream error (RST STREAM_CLOSED).
+   Closed is a connection error (GOAWAY STREAM_CLOSED). Other illegal
+   transitions are connection errors (GOAWAY PROTOCOL_ERROR)."
+  (multiple-value-bind (code connection-error-p)
+      (cond
+        ((and (= old-state +state-half-closed-remote+)
+              (member event '(:recv-headers :recv-end-stream :recv-push-promise)))
+         (values +stream-closed+ nil))
+        ((= old-state +state-closed+)
+         (values +stream-closed+ t))
+        (t
+         (values +protocol-error+ t)))
+    (error 'stream-state-error
+           :stream stream
+           :event event
+           :state old-state
+           :error-code code
+           :connection-error-p connection-error-p)))
+
+(defun stream-transition (stream event)
+  "Transition stream state based on event.
+   Returns the new state, or signals stream-state-error for invalid transitions.
+   END_STREAM is a separate event from the frame that carries it (RFC 9113 §5.1).
+
+   Events:
+   - :send-headers - Sending HEADERS frame
+   - :recv-headers - Receiving HEADERS frame
+   - :send-end-stream - Sending END_STREAM flag
+   - :recv-end-stream - Receiving END_STREAM flag
+   - :send-push-promise - Sending PUSH_PROMISE
+   - :recv-push-promise - Receiving PUSH_PROMISE
+   - :send-rst - Sending RST_STREAM
+   - :recv-rst - Receiving RST_STREAM"
+  (let* ((old-state (http2-stream-state stream))
+         (new-state
+           (case event
+             (:send-headers
+              (case old-state
+                (#.+state-idle+ +state-open+)
+                (#.+state-reserved-local+ +state-half-closed-remote+)
+                (t (signal-stream-state-error stream event old-state))))
+
+             (:recv-headers
+              (case old-state
+                (#.+state-idle+ +state-open+)
+                (#.+state-reserved-remote+ +state-half-closed-local+)
+                ;; Trailers. END_STREAM, if set, is :recv-end-stream.
+                ((#.+state-open+ #.+state-half-closed-local+) old-state)
+                (t (signal-stream-state-error stream event old-state))))
+
+             (:send-end-stream
+              (case old-state
+                (#.+state-open+ +state-half-closed-local+)
+                (#.+state-half-closed-remote+ +state-closed+)
+                (t (signal-stream-state-error stream event old-state))))
+
+             (:recv-end-stream
+              (case old-state
+                (#.+state-open+ +state-half-closed-remote+)
+                (#.+state-half-closed-local+ +state-closed+)
+                (t (signal-stream-state-error stream event old-state))))
+
+             (:send-push-promise
+              (case old-state
+                (#.+state-idle+ +state-reserved-local+)
+                (t (signal-stream-state-error stream event old-state))))
+
+             (:recv-push-promise
+              (case old-state
+                (#.+state-idle+ +state-reserved-remote+)
+                (t (signal-stream-state-error stream event old-state))))
+
+             (:send-rst
+              +state-closed+)
+
+             (:recv-rst
+              +state-closed+)
+
+             (t (error "Unknown stream event: ~A" event)))))
+    (setf (http2-stream-state stream) new-state)
+    new-state))
