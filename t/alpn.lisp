@@ -646,7 +646,10 @@ This intentionally yields between reads so a TLS writer must survive a slow peer
       (ok (= (third ok) 0) ok)
       (ok (search "OK" (first ok)) ok)
       (ok (= (third missing) 2) missing)
-      (ok (search "unable to get local issuer certificate" (second missing))
+      ;; OpenSSL reports verification errors on stderr; macOS LibreSSL may
+      ;; report the same failure on stdout. Both streams are captured.
+      (ok (search "unable to get local issuer certificate"
+                  (concatenate 'string (first missing) (second missing)))
           missing))))
 
 (deftest test-two-listener-contexts-keep-alpn-local
