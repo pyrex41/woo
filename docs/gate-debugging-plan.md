@@ -57,3 +57,22 @@ A separate controlled full-GC experiment gathers memory attribution evidence;
 it is diagnostic evidence, regardless of the experiment's default receipt
 status, and is not production qualification. Historical OpenSSL stalls remain
 unexplained despite successful original-default and pinned reruns.
+
+At candidate `1df477f`, hosted native/conformance/parity/Hegel CI passed, but
+macOS managed concurrent HTTPS rejection still lost a response to a reset.
+HTTP/2 drain passed in that run. The macOS legacy sampler failed before the
+workload after retaining three valid bootstrap samples; its generic error
+did not identify whether RSS or FD collection failed. The follow-up classifies
+those failures and keeps bounded retries and positive-sample requirements.
+
+The TLS follow-up must drain peer application records with `SSL_read` after
+the local close alert, before calling `SSL_shutdown` again. Its acceptance
+checks cover mutually exclusive readiness watchers, callback routing, bounded
+continuation when OpenSSL buffers input, fatal EOF and the unchanged absolute
+deadline. Local tests do not clear the observed hosted macOS reset.
+
+The controlled Linux experiment reclaimed 340.375 MiB of SBCL RSS after full
+GC. Most excess RSS was reclaimable; a smaller retained-object leak is still
+unexcluded without matching full-GC startup and end snapshots. That experiment
+and the matched-baseline follow-up remain diagnostic only. No production GC
+endpoint, default heap increase, or relaxed RSS allowance is accepted here.
