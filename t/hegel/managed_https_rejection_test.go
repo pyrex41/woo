@@ -75,7 +75,11 @@ func TestManagedHTTPSOversizeWire413(t *testing.T) {
 		if string(body) != "413 Request Entity Too Large" {
 			t.Fatalf("attempt %d: body=%q", attempt, body)
 		}
+		if response.ContentLength != int64(len(body)) {
+			t.Fatalf("attempt %d: content-length=%d body-length=%d", attempt, response.ContentLength, len(body))
+		}
 	}
+	assertManagedHTTPSHealthy(t, addr)
 }
 
 // TestManagedHTTPSOversizeConcurrentWire413 keeps the request upload in flight
@@ -128,30 +132,61 @@ func TestManagedHTTPSOversizeConcurrentWire413(t *testing.T) {
 				if end > len(body) {
 					end = len(body)
 				}
-				_, writeErr := conn.Write(body[offset:end])
+				start := offset
+				n, writeErr := conn.Write(body[start:end])
+				if n > 0 {
+					offset += n
+				}
 				if writeErr != nil {
 					writeDone <- writeErr
 					return
 				}
-				offset = end
+				if n != end-start {
+					writeDone <- io.ErrShortWrite
+					return
+				}
 			}
 			writeDone <- nil
 		}()
 		response, err := http.ReadResponse(bufio.NewReader(conn), nil)
 		if err != nil {
 			conn.Close()
+			select {
+			case <-writeDone:
+			case <-time.After(5 * time.Second):
+				t.Fatal("writer did not stop after response read failure")
+			}
 			t.Fatalf("read response attempt %d: %v", attempt, err)
 		}
 		body, readErr := io.ReadAll(io.LimitReader(response.Body, 4096))
 		response.Body.Close()
-		writeErr := <-writeDone
-		conn.Close()
 		if readErr != nil {
+			conn.Close()
+			select {
+			case <-writeDone:
+			case <-time.After(5 * time.Second):
+				t.Fatal("writer did not stop after response body read failure")
+			}
 			t.Fatalf("read body attempt %d: %v", attempt, readErr)
 		}
+		writeErr := <-writeDone
+		conn.Close()
 		t.Logf("concurrent attempt %d: status=%d write_error=%v", attempt, response.StatusCode, writeErr)
 		if response.StatusCode != http.StatusRequestEntityTooLarge || string(body) != "413 Request Entity Too Large" {
 			t.Fatalf("attempt %d: status=%d body=%q write_error=%v", attempt, response.StatusCode, body, writeErr)
 		}
+		if response.ContentLength != int64(len(body)) {
+			t.Fatalf("attempt %d: content-length=%d body-length=%d write_error=%v", attempt, response.ContentLength, len(body), writeErr)
+		}
+	}
+	assertManagedHTTPSHealthy(t, addr)
+}
+
+func assertManagedHTTPSHealthy(t *testing.T, addr string) {
+	t.Helper()
+	lane := managedClients(t, addr)["https"]
+	response, body := managedRequest(t, lane.client, "GET", lane.base+"/", nil, nil)
+	if response.StatusCode != http.StatusOK || string(body) != "こんにちは λ" {
+		t.Fatalf("HTTPS service unhealthy after rejection: status=%d body=%q", response.StatusCode, body)
 	}
 }
