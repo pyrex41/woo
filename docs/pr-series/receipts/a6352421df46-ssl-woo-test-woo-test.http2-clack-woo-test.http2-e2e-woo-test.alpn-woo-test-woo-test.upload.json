@@ -1,0 +1,43 @@
+{
+  "head": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+  "worktree": "<HOME>/projects/woo-pr-series/11-h2-server",
+  "system": "woo-test",
+  "suites": [
+    "woo-test.http2-clack",
+    "woo-test.http2-e2e",
+    "woo-test.alpn",
+    "woo-test",
+    "woo-test.upload"
+  ],
+  "no_ssl": false,
+  "load_only": false,
+  "command": [
+    "/tmp/woo-sbcl-runtime/bin/sbcl",
+    "--dynamic-space-size",
+    "4096",
+    "--noinform",
+    "--non-interactive",
+    "--load",
+    "<HOME>/projects/woo-pr-series-evidence/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.lisp"
+  ],
+  "elapsed_seconds": 80.9,
+  "exit_code": 0,
+  "result": "PASS",
+  "source_tree": "d24c7d58bcd1c211847aa972a03fda814f031635",
+  "current_head": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+  "source_changed": false,
+  "runner_sha256": "4e5e835154f22fa9350efde8a70732cbff45ab49224a6dee8fc0fd1d1de075fa",
+  "log": "<HOME>/projects/woo-pr-series-evidence/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.log",
+  "raw_artifact_sha256": {
+    "a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.log": "3fe941df77b70d6db62e354b1f12db9b4ec4f9b4bc6ae53556d6b51e12b7b17d",
+    "a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.lisp": "5ab216602e09ca67c289f5ae6c33dd540847381240ca946c6ee3a37f8e62b2b6"
+  },
+  "published_log": "docs/pr-series/receipts/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.log",
+  "published_script": "docs/pr-series/receipts/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.lisp",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "97343c99dd9238347dfd6a5a8db44f73e333af2f68ac5cbc5cc88efadc10d397"
+  }
+}

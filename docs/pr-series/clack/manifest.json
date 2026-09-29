@@ -1,0 +1,15 @@
+{
+  "repository": "fukamachi/clack",
+  "base": "9435762a8fc139edde8c682502a037332b0655f8",
+  "head": "3fbf148681d559a5aea62f1b184516441fc336f6",
+  "branch": "codex/threaded-stop",
+  "path": "/tmp/clack-pr-threaded-stop",
+  "push": "PASS: exact branch head read back from pyrex41/clack",
+  "tests": {
+    "focused": "2 PASS",
+    "live_woo": "12 cycles PASS"
+  },
+  "woo_source": "4d005a686a4a5287acd77050e927cc42a6f07665",
+  "remote": "git@github.com:pyrex41/clack.git",
+  "compare_url": "https://github.com/pyrex41/clack/compare/9435762a8fc139edde8c682502a037332b0655f8...3fbf148681d559a5aea62f1b184516441fc336f6"
+}

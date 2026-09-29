@@ -1,0 +1,417 @@
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/08-lifecycle/src/llsocket/grovel__grovel.grovel-tmp.lisp
+
+;; testing 'woo-test'
+[37mwoo-server-tests[0m
+
+;; testing 'clack.test.suite'
+[37mresponse-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlist[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (plain/text)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "This is a text for test." BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (binary)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/png") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 12155) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbigger file[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/jpeg") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 139616) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (response)[0m
+    [32m✓ [0m[90mExpect (SCAN "foo,\\s*bar,\\s*baz" (GET-HEADER HEADERS :X-FOO)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mno entity headers on 304[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 304) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP BODY #()) to be true.[0m
+    [32m✓ [0m[90mNo Content-Type[0m
+    [32m✓ [0m[90mNo Content-Length[0m
+    [32m✓ [0m[90mNo Transfer-Encoding[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mCRLF output[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :FOO)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "Foo: Bar~A~A~A~AHello World" #\Return #\Newline
+                            #\Return #\Newline)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mtest 404[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 404) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Not Found") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mContent-Length 0 is not set Transfer-Encoding[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-TRANSFER-ENCODING)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "") to be true.[0m
+[37menv-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME[0m
+    [32m✓ [0m[90mExpect (MEMBER (DEXADOR:GET (LOCALHOST)) '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37murl-scheme[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "http") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle HTTP-Header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~A~%~}"
+                            `("REQUEST-METHOD::GET" "PATH-INFO:\"/foo/\""
+                              "QUERY-STRING:\"ediweitz=weitzedi\""
+                              "SERVER-NAME:\"127.0.0.1\""
+                              ,(FORMAT NIL "SERVER-PORT:~D"
+                                       *CLACK-TEST-ACCESS-PORT*)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env (must be integer)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~{~A:~A~%~}~}"
+                            `((:SERVER-PORT T) (:REMOTE-PORT T) (:CONTENT-LENGTH T)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%2cbaz")) "/foo/bar,baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% double encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%252cbaz")) "/foo/bar%2cbaz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO (outside of URI characters)[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo%E3%81%82"))
+                    (FORMAT NIL "/foo~A"
+                            (OCTETS-TO-STRING #(227 129 130) :EXTERNAL-FORMAT
+                                              :UTF-8))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mInvalid UTF-8 encoded PATH-INFO[0m
+    [32m✓ [0m[90mExpect (SCAN (FORMAT NIL "/あ~A" #\REPLACEMENT_CHARACTER)
+                   (DEXADOR:GET (LOCALHOST "/%E3%81%82%BF%27%22%28"))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSERVER-PROTOCOL is required[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "^:HTTP/1\\.[01]$" BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME should not be nil[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/?ediweitz=weitzedi")) (STRING T)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mDo not set COOKIE[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-COOKIE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "foo=bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mREQUEST-URI is set[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%20baz%73?x=a"))
+                    "/foo/bar%20baz%73?x=a") to be true.[0m
+[37mrequest-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mGET[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=fukamachi") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mPOST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) "11") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-TYPE)
+                    "application/x-www-form-urlencoded") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=eitaro") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) (PRINC-TO-STRING LEN)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST (chunked)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (request)[0m
+    [32m✓ [0m[90mExpect (SCAN "^bar,\\s*baz$"
+                   (DEXADOR:GET (LOCALHOST) :HEADERS
+                                '(("Foo" . "bar") ("Foo" . "baz")))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma big header value > 128 bytes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY CHUNK) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrequest -> input seekable[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:POST (LOCALHOST) :CONTENT "body") "body") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle Authorization header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :X-AUTHORIZATION) (STRING T)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Basic XXXX") to be true.[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-AUTHORIZATION)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER BODY '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrepeated slashes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "/foo///bar/baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mfile upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "This is a text for test.
+      ") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlarge file upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "ok") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mstreaming[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY (FORMAT NIL "0~%1~%2~%")) to be true.[0m
+[37mdebug-tests[0m
+  [37mDo not crash when the app dies[0m
+ <ERROR> [23:14:43] woo - #<FLEXI-STREAMS::VECTOR-INPUT-STREAM {80155E02D3}> cannot be printed readably.
+    [32m✓ [0m[90m500 Internal Server Error[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+[37mwoo-ssl-server-tests[0m
+
+;; testing 'clack.test.suite'
+[37mresponse-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlist[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (plain/text)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "This is a text for test." BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (binary)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/png") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 12155) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbigger file[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/jpeg") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 139616) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (response)[0m
+    [32m✓ [0m[90mExpect (SCAN "foo,\\s*bar,\\s*baz" (GET-HEADER HEADERS :X-FOO)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mno entity headers on 304[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 304) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP BODY #()) to be true.[0m
+    [32m✓ [0m[90mNo Content-Type[0m
+    [32m✓ [0m[90mNo Content-Length[0m
+    [32m✓ [0m[90mNo Transfer-Encoding[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mCRLF output[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :FOO)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "Foo: Bar~A~A~A~AHello World" #\Return #\Newline
+                            #\Return #\Newline)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mtest 404[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 404) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Not Found") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mContent-Length 0 is not set Transfer-Encoding[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-TRANSFER-ENCODING)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "") to be true.[0m
+[37menv-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME[0m
+    [32m✓ [0m[90mExpect (MEMBER (DEXADOR:GET (LOCALHOST)) '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37murl-scheme[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "http") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle HTTP-Header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~A~%~}"
+                            `("REQUEST-METHOD::GET" "PATH-INFO:\"/foo/\""
+                              "QUERY-STRING:\"ediweitz=weitzedi\""
+                              "SERVER-NAME:\"127.0.0.1\""
+                              ,(FORMAT NIL "SERVER-PORT:~D"
+                                       *CLACK-TEST-ACCESS-PORT*)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env (must be integer)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~{~A:~A~%~}~}"
+                            `((:SERVER-PORT T) (:REMOTE-PORT T) (:CONTENT-LENGTH T)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%2cbaz")) "/foo/bar,baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% double encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%252cbaz")) "/foo/bar%2cbaz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO (outside of URI characters)[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo%E3%81%82"))
+                    (FORMAT NIL "/foo~A"
+                            (OCTETS-TO-STRING #(227 129 130) :EXTERNAL-FORMAT
+                                              :UTF-8))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mInvalid UTF-8 encoded PATH-INFO[0m
+    [32m✓ [0m[90mExpect (SCAN (FORMAT NIL "/あ~A" #\REPLACEMENT_CHARACTER)
+                   (DEXADOR:GET (LOCALHOST "/%E3%81%82%BF%27%22%28"))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSERVER-PROTOCOL is required[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "^:HTTP/1\\.[01]$" BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME should not be nil[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/?ediweitz=weitzedi")) (STRING T)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mDo not set COOKIE[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-COOKIE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "foo=bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mREQUEST-URI is set[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%20baz%73?x=a"))
+                    "/foo/bar%20baz%73?x=a") to be true.[0m
+[37mrequest-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mGET[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=fukamachi") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mPOST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) "11") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-TYPE)
+                    "application/x-www-form-urlencoded") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=eitaro") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) (PRINC-TO-STRING LEN)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST (chunked)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (request)[0m
+    [32m✓ [0m[90mExpect (SCAN "^bar,\\s*baz$"
+                   (DEXADOR:GET (LOCALHOST) :HEADERS
+                                '(("Foo" . "bar") ("Foo" . "baz")))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma big header value > 128 bytes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY CHUNK) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrequest -> input seekable[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:POST (LOCALHOST) :CONTENT "body") "body") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle Authorization header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :X-AUTHORIZATION) (STRING T)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Basic XXXX") to be true.[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-AUTHORIZATION)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER BODY '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrepeated slashes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "/foo///bar/baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mfile upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "This is a text for test.
+      ") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlarge file upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "ok") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mstreaming[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY (FORMAT NIL "0~%1~%2~%")) to be true.[0m
+[37mdebug-tests[0m
+  [37mDo not crash when the app dies[0m
+ <ERROR> [23:15:08] woo - #<FLEXI-STREAMS::VECTOR-INPUT-STREAM {800E5E02D3}> cannot be printed readably.
+    [32m✓ [0m[90m500 Internal Server Error[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+[37mgraceful-stop-by-server-thread[0m
+  [32m✓ [0m[90mthe running server is addressable by its thread[0m
+  [32m✓ [0m[90mthe thread stop request is accepted[0m
+  [32m✓ [0m[90mthe server thread exits within five seconds[0m
+  [32m✓ [0m[90mthe accepted socket closes on stop[0m
+  [32m✓ [0m[90mthe thread control is removed after cleanup[0m
+[37mgraceful-stop-closes-worker-sockets[0m
+  [32m✓ [0m[90mclustered server registers a graceful stop control[0m
+  [32m✓ [0m[90mclustered stop request is accepted[0m
+  [32m✓ [0m[90mclustered server exits within twelve seconds[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+[37mevent-loop-backend-descriptors-close[0m
+  [32m✓ [0m[90mdescriptors before=77 after=77[0m
+
+[32m✓ 5 tests completed[0m
+
+Summary:
+  All 5 tests passed.

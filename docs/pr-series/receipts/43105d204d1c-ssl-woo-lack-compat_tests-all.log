@@ -1,0 +1,1007 @@
+
+Testing System woo-lack-compat/tests
+
+;; testing 'woo.compat.tests'
+[37mcontract-over-real-http1[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52358.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "こんにちは λ") to be true.[0m[31m (99ms)[0m
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT "/stream") "こんにちは λ") to be true.[0m
+  [32m✓ [0m[90mExpect (= STATUS 204) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP (LENGTH BODY)) to be true.[0m
+  [32m✓ [0m[90mExpect (= STATUS 200) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (GETHASH "content-length" HEADERS) "18") to be true.[0m
+  [32m✓ [0m[90mExpect (EQUALP BODY
+                   (DEXADOR:POST (FORMAT NIL "http://127.0.0.1:~D/echo" PORT)
+                                 :CONTENT BODY :HEADERS
+                                 '(("content-type" . "application/octet-stream"))
+                                 :FORCE-BINARY T :KEEP-ALIVE NIL)) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP
+            (GETF (AWAIT-STATE HANDLER (LAMBDA (S) (ZEROP (GETF S :REQUESTS))))
+                  :INPUT-BYTES)) to be true.[0m
+[37mmanaged-static-path-errors[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52365.
+  [32m✓ [0m[90mExpect (= STATUS 404) to be true.[0m
+  [32m✓ [0m[90mExpect (= STATUS 403) to be true.[0m
+  [32m✓ [0m[90mExpect (= STATUS 500) to be true.[0m
+  [32m✓ [0m[90mExpect (AWAIT-CLOSED-STREAM CAPTURED) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP (WOO.SYSCALL:CHMOD (NAMESTRING FILE) 0)) to be true.[0m
+  [32m✓ [0m[90mExpect (= STATUS 403) to be true.[0m
+[37mmanaged-static-uses-prepared-open-stream[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52371.
+  [32m✓ [0m[90mExpect (= STATUS 200) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP (LENGTH BODY)) to be true.[0m
+  [32m✓ [0m[90mExpect (STRING= (GETHASH "content-length" HEADERS) "8") to be true.[0m
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "original") to be true.[0m
+  [32m✓ [0m[90mExpect HOOK-RAN to be true.[0m
+  [32m✓ [0m[90mExpect (AWAIT-CLOSED-STREAM CAPTURED-STREAM) to be true.[0m
+[37mhunchentoot-baseline[0m
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "こんにちは λ") to be true.[0m[33m (66ms)[0m
+[37mapplication-runs-off-network-loop[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52378.
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+[37mstreaming-response-exactly-once[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52381.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (NULL SECOND) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL LATE) to be true.[0m
+[37mrequest-body-limit-and-disconnect-cancellation[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52384.
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (FUNCALL (GETF OBSERVED :WOO.REQUEST-CANCELLED-P)) to be true.[0m
+[37mmanaged-producer-retains-body-after-disconnect[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52386.
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (FUNCALL (GETF OBSERVED-ENV :WOO.REQUEST-CANCELLED-P)) to be true.[0m
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE PRODUCER-DONE :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect STREAM-OPEN-BEFORE-READ to be true.[0m
+  [32m✓ [0m[90mExpect (EQUALP OBSERVED-BYTES BODY) to be true.[0m
+  [32m✓ [0m[90mExpect BODY-FILE to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (PATHNAME-DIRECTORY BODY-FILE)
+                  (PATHNAME-DIRECTORY TEMPORARY-DIRECTORY)) to be true.[0m
+  [32m✓ [0m[90mExpect (LOOP REPEAT 400
+                 WHEN (AND OBSERVED-STREAM BODY-FILE
+                           (NOT (OPEN-STREAM-P OBSERVED-STREAM))
+                           (NOT (PROBE-FILE BODY-FILE))) RETURN T
+                 DO (SLEEP 0.05)) to be true.[0m[33m (55ms)[0m
+[37mheaders-and-framing-rejected-before-write[0m
+  [32m✓ [0m[90mExpect (WOO.COMPAT::RESPONSE-HEADERS
+            (LIST :X (FORMAT NIL "good~C~Cbad" #\Return #\Newline))) to signal ERROR.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52389.
+  [32m✓ [0m[90mExpect (GET-BODY PORT) to signal HTTP-REQUEST-INTERNAL-SERVER-ERROR.[0m
+[37mbody-and-queue-admission[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52392.
+ <ERROR> [23:19:16] woo - Buffer exceeded the limit: 8
+  [32m✓ [0m[90mExpect (DEXADOR:POST (FORMAT NIL "http://127.0.0.1:~D/echo" PORT) :CONTENT
+                         "123456789" :KEEP-ALIVE NIL :READ-TIMEOUT 5) to signal HTTP-REQUEST-PAYLOAD-TOO-LARGE.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52396.
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (GET-BODY PORT) to signal HTTP-REQUEST-SERVICE-UNAVAILABLE.[0m
+  [32m✓ [0m[90mExpect (EQUAL (BT2:JOIN-THREAD CLIENT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (BT2:JOIN-THREAD CLIENT) "ok") to be true.[0m
+[37mcompletion-registration-after-cancellation[0m
+  [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+[37mexpired-dispatch-does-not-run-later[0m
+  [32m✓ [0m[90mExpect (WOO.COMPAT:CALL-ON-CONNECTION CONNECTION (LAMBDA () (SETF CALLED T))) to signal CONNECTION-CLOSED.[0m[31m (102ms)[0m
+  [32m✓ [0m[90mExpect (NULL CALLED) to be true.[0m
+[37mapplication-error-before-and-after-headers[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52401.
+  [32m✓ [0m[90mExpect (GET-BODY PORT) to signal HTTP-REQUEST-INTERNAL-SERVER-ERROR.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52405.
+  [32m✓ [0m[90mExpect (GET-BODY PORT) to signal HTTP-REQUEST-INTERNAL-SERVER-ERROR.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52408.
+  [32m✓ [0m[90mExpect (FUNCALL (GETF OBSERVED :WOO.REQUEST-CANCELLED-P)) to be true.[0m
+[37msocket-budget-refusal-keeps-server-alive[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52410.
+  [32m✓ [0m[90mHTTP/2 SETTINGS budget refusal closes the connection[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :RUNNING) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP (GETF STATE :OUTPUT-BYTES)) to be true.[0m
+  [32m✓ [0m[90mExpect (GET-BODY PORT) to signal ERROR.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF (WOO.COMPAT:SERVER-STATE HANDLER) :STATE) :RUNNING) to be true.[0m
+[37mapplication-worker-random-states-are-private[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52414.
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (= 4 (LENGTH (REMOVE-DUPLICATES STATES :TEST #'EQ))) to be true.[0m
+  [32m✓ [0m[90mExpect (MEMBER *RANDOM-STATE* STATES :TEST #'EQ) to be false.[0m
+[37mmanaged-clack-stop-repeatedly[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52420.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52423.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52425.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52429.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52432.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52436.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52440.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52445.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52448.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52450.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52454.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52459.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52461.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52464.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52468.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52470.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52473.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52478.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52484.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52487.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52491.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52495.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52497.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52504.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52506.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52509.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52511.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52513.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52516.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52520.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52523.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52525.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52528.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52530.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52532.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52535.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52537.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52540.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52542.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52544.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52548.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52550.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52552.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52555.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52557.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52561.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52564.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52566.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52568.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52572.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52574.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52576.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52580.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52583.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52585.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52590.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52593.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52595.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52597.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52602.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52604.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52609.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52611.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52628.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52648.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52668.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52673.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52679.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52699.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52723.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52742.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52753.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52762.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52778.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52798.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52815.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52856.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52873.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52896.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52917.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:52938.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53093.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53116.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53146.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53177.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53201.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53226.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53250.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53341.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53362.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53390.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53415.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53422.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53435.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53466.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53492.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53519.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53527.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53535.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53555.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "ok") to be true.[0m
+  [32m✓ [0m[90mExpect (EQ (GETF STATE :STATE) :STOPPED) to be true.[0m
+  [32m✓ [0m[90mExpect (EVERY #'ZEROP
+                  (MAPCAR (LAMBDA (K) (GETF STATE K))
+                          '(:QUEUED :RUNNING :REQUESTS :CONNECTIONS :INPUT-BYTES
+                            :OUTPUT-BYTES :LIVE-WORKERS))) to be true.[0m
+  [32m✓ [0m[90mfile descriptors return to baseline[0m[31m (172ms)[0m
+[37moccupied-port-startup-cleans-workers[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53584.
+  [32m✓ [0m[90mExpect (WOO.COMPAT:CLACKUP #'CONTRACT-APP :ADDRESS "127.0.0.1" :PORT
+                               (USOCKET:GET-LOCAL-PORT LISTENER) :STARTUP-TIMEOUT 1) to signal ERROR.[0m[31m (495ms)[0m
+[37mshutdown-reports-uncooperative-worker[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53600.
+  [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE ENTERED :TIMEOUT 5) to be true.[0m
+  [32m✓ [0m[90mExpect (CLACK.HANDLER:STOP HANDLER) to signal SHUTDOWN-TIMEOUT.[0m[31m (335ms)[0m
+  [32m✓ [0m[90mExpect (= (GETF (WOO.COMPAT:SERVER-STATE HANDLER) :LIVE-WORKERS) 1) to be true.[0m
+[37mexplicit-mount-preserves-parent[0m
+  [32m✓ [0m[90mExpect (= (CAR (FUNCALL APP ORIGINAL)) 200) to be true.[0m
+  [32m✓ [0m[90mExpect (STRING= (GETF ORIGINAL :PATH-INFO) "/api/item") to be true.[0m
+  [32m✓ [0m[90mExpect (STRING= (GETF SEEN :SCRIPT-NAME) "/api") to be true.[0m
+  [32m✓ [0m[90mExpect (STRING= (GETF SEEN :PATH-INFO) "/item") to be true.[0m
+[37mdeflater-qualities-and-delayed-body[0m
+  [32m✓ [0m[90mExpect (= (WOO.COMPAT::ENCODING-QUALITY "gzip;q=0, zstd;q=0.2" "gzip") 0) to be true.[0m
+  [32m✓ [0m[90mExpect (= (WOO.COMPAT::ENCODING-QUALITY "gzip;q=0, *;q=1" "gzip") 0) to be true.[0m
+  [32m✓ [0m[90mExpect (= (WOO.COMPAT::ENCODING-QUALITY "gzip;q=#.(error 1)" "gzip") 0) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (GETF HEADERS :CONTENT-LENGTH)) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (GETF HEADERS :CONTENT-ENCODING) ALGORITHM) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUALP PLAIN (TRIVIAL-UTF-8:STRING-TO-UTF-8-BYTES "こんにちは λ")) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (GETF HEADERS :CONTENT-LENGTH)) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (GETF HEADERS :CONTENT-ENCODING) ALGORITHM) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUALP PLAIN (TRIVIAL-UTF-8:STRING-TO-UTF-8-BYTES "こんにちは λ")) to be true.[0m
+[37mbacktrace-redacts-delayed-error[0m
+  [32m✓ [0m[90mExpect (= (CAR R) 500) to be true.[0m
+  [32m✓ [0m[90mExpect LOGS to be true.[0m
+  [32m✓ [0m[90mExpect (SEARCH "secret-token" (PRIN1-TO-STRING LOGS)) to be false.[0m
+[37msession-delayed-finalization-and-cancellation[0m
+  [32m✓ [0m[90mExpect (=
+            (GETHASH :COUNT
+                     (LACK/MIDDLEWARE/SESSION/STORE:FETCH-SESSION STORE SID))
+            1) to be true.[0m
+  [32m✓ [0m[90mExpect (=
+            (GETHASH :COUNT
+                     (LACK/MIDDLEWARE/SESSION/STORE:FETCH-SESSION STORE SID))
+            1) to be true.[0m
+[37mcompressed-close-refusal-is-safe[0m
+  [32m✓ [0m[90mExpect (NULL (FUNCALL WRITER NIL :CLOSE T)) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (FUNCALL WRITER NIL :CLOSE T)) to be true.[0m
+  [32m✓ [0m[90mExpect (= CALLS BEFORE) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP CLOSED) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (FUNCALL WRITER NIL :CLOSE T)) to be true.[0m
+  [32m✓ [0m[90mExpect (NULL (FUNCALL WRITER NIL :CLOSE T)) to be true.[0m
+  [32m✓ [0m[90mExpect (= CALLS BEFORE) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP CLOSED) to be true.[0m
+[37mcancelled-session-does-not-mutate-nested-store-values[0m
+  [32m✓ [0m[90mExpect (EQUAL
+            (GETHASH :ITEMS
+                     (GETHASH :NESTED
+                              (LACK/MIDDLEWARE/SESSION/STORE:FETCH-SESSION STORE
+                                                                           SID)))
+            '("unchanged")) to be true.[0m
+[37msession-snapshot-preserves-cycles-and-array-shape[0m
+  [32m✓ [0m[90mExpect (EQ CYCLE (GETHASH :CYCLE COPY)) to be false.[0m
+  [32m✓ [0m[90mExpect (EQ (GETHASH :CYCLE COPY) (CDR (GETHASH :CYCLE COPY))) to be true.[0m
+  [32m✓ [0m[90mExpect (= (FILL-POINTER (GETHASH :ARRAY COPY)) 2) to be true.[0m
+  [32m✓ [0m[90mExpect (= (ARRAY-TOTAL-SIZE (GETHASH :ARRAY COPY)) 4) to be true.[0m
+[37mcompression-drops-representation-metadata[0m
+  [32m✓ [0m[90mExpect (EVERY (LAMBDA (KEY) (NULL (GETF HEADERS KEY)))
+                  '(:ETAG :CONTENT-MD5 :DIGEST :ACCEPT-RANGES)) to be true.[0m
+  [32m✓ [0m[90mExpect (EQUAL (GETF HEADERS :VARY) "Accept-Encoding") to be true.[0m
+[37msqlite-session-and-pool[0m
+  [32m✓ [0m[90mExpect (=
+            (GETHASH :COUNT
+                     (LACK/MIDDLEWARE/SESSION/STORE:FETCH-SESSION STORE SID))
+            12) to be true.[0m
+Woo-Managed server is going to start.
+Listening on 127.0.0.1:53621.
+  [32m✓ [0m[90mExpect (STRING= (GET-BODY PORT) "42") to be true.[0m
+[37mredis-session[0m
+  [32m✓ [0m[90mExpect (=
+            (GETHASH :COUNT
+                     (LACK/MIDDLEWARE/SESSION/STORE:FETCH-SESSION STORE SID))
+            12) to be true.[0m
+
+[32m✓ 1 test completed[0m
+
+Summary:
+  All 1 test passed.

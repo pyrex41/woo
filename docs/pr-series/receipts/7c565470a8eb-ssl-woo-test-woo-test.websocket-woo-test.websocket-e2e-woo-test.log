@@ -1,0 +1,1273 @@
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/12-websocket/src/llsocket/grovel__grovel.grovel-tmp.lisp
+
+;; testing 'woo-test.websocket'
+[37mtest-compute-accept-key[0m
+  [37mRFC 6455 test vector[0m
+    [32m✓ [0m[90mShould produce correct accept key for RFC test vector[0m
+  [37mAdditional test vectors[0m
+    [32m✓ [0m[90mShould handle another valid WebSocket key[0m
+  [37mAnother test vector[0m
+    [32m✓ [0m[90mShould return non-empty result for any input[0m
+    [32m✓ [0m[90mResult should not contain spaces[0m
+  [37mEmpty and edge cases[0m
+    [32m✓ [0m[90mShould handle empty string without error[0m
+    [32m✓ [0m[90mEmpty key should still produce a hash[0m
+[37mtest-opcode-constants[0m
+  [37mOpcode values match RFC 6455 Section 5.2[0m
+    [32m✓ [0m[90mContinuation opcode should be 0x0[0m
+    [32m✓ [0m[90mText opcode should be 0x1[0m
+    [32m✓ [0m[90mBinary opcode should be 0x2[0m
+    [32m✓ [0m[90mClose opcode should be 0x8[0m
+    [32m✓ [0m[90mPing opcode should be 0x9[0m
+    [32m✓ [0m[90mPong opcode should be 0xA[0m
+[37mtest-websocket-p[0m
+  [37mValid WebSocket upgrade request[0m
+    [32m✓ [0m[90mShould detect valid WebSocket upgrade request[0m
+  [37mValid with mixed-case connection header[0m
+    [32m✓ [0m[90mShould handle 'upgrade' in connection header with other values[0m
+  [37mValid when Upgrade and Connection contain token lists[0m
+    [32m✓ [0m[90mshould match whole case-insensitive header tokens[0m
+  [37mInvalid: missing upgrade header[0m
+    [32m✓ [0m[90mShould reject request without upgrade header[0m
+  [37mInvalid: missing connection header[0m
+    [32m✓ [0m[90mShould reject request without connection header[0m
+  [37mInvalid: missing sec-websocket-key[0m
+    [32m✓ [0m[90mShould reject request without WebSocket key[0m
+  [37mInvalid: wrong WebSocket version[0m
+    [32m✓ [0m[90mShould reject request with wrong WebSocket version[0m
+  [37mInvalid: wrong HTTP method[0m
+    [32m✓ [0m[90mShould reject non-GET requests[0m
+  [37mInvalid: wrong upgrade value[0m
+    [32m✓ [0m[90mShould reject non-websocket upgrade[0m
+  [37mInvalid: connection only contains upgrade as a substring[0m
+    [32m✓ [0m[90mShould reject a non-token connection value[0m
+  [37mInvalid: key is not a canonical 16-byte nonce[0m
+    [32m✓ [0m[90mShould reject invalid key "not-base64"[0m
+    [32m✓ [0m[90mShould reject invalid key "dGVzdA=="[0m
+    [32m✓ [0m[90mShould reject invalid key "dGhlIHNhbXBsZSBub25jZQ"[0m
+[37mtest-make-frame-small-payload[0m
+  [37mText frame with small payload (<126 bytes)[0m
+    [32m✓ [0m[90mFrame should have 2-byte header + 5-byte payload[0m
+    [32m✓ [0m[90mFirst byte should be 0x81 (FIN=1, opcode=text)[0m
+    [32m✓ [0m[90mSecond byte should be 5 (unmasked, length=5)[0m
+    [32m✓ [0m[90mPayload should match original data[0m
+  [37mBinary frame with small payload[0m
+    [32m✓ [0m[90mFrame should be 2 + 10 bytes[0m
+    [32m✓ [0m[90mFirst byte should be 0x82 (FIN=1, opcode=binary)[0m
+    [32m✓ [0m[90mSecond byte should be 10[0m
+    [32m✓ [0m[90mBinary payload should match[0m
+  [37mFrame without FIN bit[0m
+    [32m✓ [0m[90mFirst byte should be 0x01 (FIN=0, opcode=text)[0m
+    [32m✓ [0m[90mPayload length should be 8[0m
+[37mtest-make-frame-medium-payload[0m
+  [37mText frame with medium payload (126-65535 bytes)[0m
+    [32m✓ [0m[90mFrame should have 4-byte header + 200-byte payload[0m
+    [32m✓ [0m[90mFirst byte should be 0x81[0m
+    [32m✓ [0m[90mSecond byte should be 126 (extended length indicator)[0m
+    [32m✓ [0m[90mExtended length high byte should be 0[0m
+    [32m✓ [0m[90mExtended length low byte should be 200[0m
+    [32m✓ [0m[90mPayload should match[0m
+  [37mEdge case: payload length exactly 126[0m
+    [32m✓ [0m[90mShould use extended length for exactly 126 bytes[0m
+    [32m✓ [0m[90mTotal frame length should be 130[0m
+  [37mMaximum medium frame: 65535 bytes[0m
+    [32m✓ [0m[90mShould use 16-bit extended length[0m
+    [32m✓ [0m[90mHigh byte should be 255[0m
+    [32m✓ [0m[90mLow byte should be 255[0m
+    [32m✓ [0m[90mTotal frame length correct[0m
+[37mtest-make-frame-large-payload[0m
+  [37mLarge frame (>65535 bytes) uses 64-bit length[0m
+    [32m✓ [0m[90mSecond byte should be 127 (64-bit length indicator)[0m
+    [32m✓ [0m[90mFrame should have 10-byte header + payload[0m
+    [32m✓ [0m[90mDecoded 64-bit length should match payload size[0m
+[37mtest-make-frame-control-frames[0m
+  [37mPing frame[0m
+    [32m✓ [0m[90mFirst byte should be 0x89 (FIN=1, opcode=ping)[0m
+    [32m✓ [0m[90mPayload length should be 4[0m
+  [37mPong frame[0m
+    [32m✓ [0m[90mFirst byte should be 0x8A (FIN=1, opcode=pong)[0m
+  [37mClose frame with status code[0m
+    [32m✓ [0m[90mFirst byte should be 0x88 (FIN=1, opcode=close)[0m
+    [32m✓ [0m[90mPayload length should be 2[0m
+    [32m✓ [0m[90mStatus code high byte[0m
+    [32m✓ [0m[90mStatus code low byte[0m
+  [37mEmpty close frame[0m
+    [32m✓ [0m[90mEmpty close frame should be 2 bytes[0m
+    [32m✓ [0m[90mShould have close opcode[0m
+    [32m✓ [0m[90mPayload length should be 0[0m
+[37mtest-make-frame-masking[0m
+  [37mClient frame with masking[0m
+    [32m✓ [0m[90mMasked frame should have header + mask key + payload[0m
+    [32m✓ [0m[90mMASK bit should be set in second byte[0m
+    [32m✓ [0m[90mFrame should contain masking key[0m
+    [32m✓ [0m[90mMasked payload should differ from original[0m
+[37mtest-ws-state-creation[0m
+  [37mCreate ws-state with defaults[0m
+    [32m✓ [0m[90mShould create valid ws-state[0m
+    [32m✓ [0m[90mBuffer should be a vector[0m
+    [32m✓ [0m[90mBuffer should start empty[0m
+    [32m✓ [0m[90mFragment opcode should be nil[0m
+    [32m✓ [0m[90mFragment buffer should be a vector[0m
+    [32m✓ [0m[90mSocket should be nil by default[0m
+  [37mCreate ws-state with callbacks[0m
+    [32m✓ [0m[90mon-message should be a function[0m
+    [32m✓ [0m[90mon-ping should be a function[0m
+    [32m✓ [0m[90mShould be able to invoke on-message callback[0m
+    [32m✓ [0m[90mShould be able to invoke on-ping callback[0m
+[37mtest-close-frame-construction[0m
+  [37mClose frame with status code 1000 and reason[0m
+    [32m✓ [0m[90mPayload should be status code + reason[0m
+    [32m✓ [0m[90mHigh byte of 1000 should be 3[0m
+    [32m✓ [0m[90mLow byte of 1000 should be 232 (0xE8)[0m
+    [32m✓ [0m[90mShould be able to extract reason from payload[0m
+  [37mClose frame with different status codes[0m
+    [32m✓ [0m[90mShould correctly encode status code 1001[0m
+    [32m✓ [0m[90mShould correctly encode status code 1002[0m
+    [32m✓ [0m[90mShould correctly encode status code 1003[0m
+    [32m✓ [0m[90mShould correctly encode status code 1006[0m
+    [32m✓ [0m[90mShould correctly encode status code 1008[0m
+    [32m✓ [0m[90mShould correctly encode status code 1011[0m
+  [37mClose frame with empty reason[0m
+    [32m✓ [0m[90mClose frame with no reason should be 2 bytes[0m
+    [32m✓ [0m[90mShould correctly encode status code[0m
+[37mtest-frame-edge-cases[0m
+  [37mEmpty payload frame[0m
+    [32m✓ [0m[90mEmpty frame should be 2 bytes (just header)[0m
+    [32m✓ [0m[90mShould have text opcode with FIN[0m
+    [32m✓ [0m[90mPayload length should be 0[0m
+  [37mSingle byte payload[0m
+    [32m✓ [0m[90mSingle byte frame should be 3 bytes[0m
+    [32m✓ [0m[90mPayload length should be 1[0m
+    [32m✓ [0m[90mPayload byte should be preserved[0m
+  [37mPayload at boundary: 125 bytes[0m
+    [32m✓ [0m[90m125 bytes should use single-byte length[0m
+    [32m✓ [0m[90mShould not use extended length[0m
+  [37mPayload at boundary: 65536 bytes[0m
+    [32m✓ [0m[90m65536 bytes should use 64-bit length[0m
+    [32m✓ [0m[90mShould use 64-bit extended length[0m
+[37mtest-utf8-handling[0m
+  [37mASCII text in frames[0m
+    [32m✓ [0m[90mASCII text should round-trip correctly[0m
+  [37mUnicode text in frames[0m
+    [32m✓ [0m[90mUTF-8 encoding should use multiple bytes for Unicode[0m
+    [32m✓ [0m[90mUnicode text should round-trip correctly[0m
+  [37mEmpty string[0m
+    [32m✓ [0m[90mEmpty string should produce empty payload[0m
+    [32m✓ [0m[90mEmpty text frame should be 2 bytes[0m
+[37mtest-opcode-values[0m
+  [37mAll opcodes produce valid frames[0m
+    [32m✓ [0m[90mFrame should have correct opcode 0[0m
+    [32m✓ [0m[90mFrame should have correct opcode 1[0m
+    [32m✓ [0m[90mFrame should have correct opcode 2[0m
+    [32m✓ [0m[90mFrame should have correct opcode 8[0m
+    [32m✓ [0m[90mFrame should have correct opcode 9[0m
+    [32m✓ [0m[90mFrame should have correct opcode A[0m
+[37mtest-reject-unmasked-client-frames[0m
+  [37munmasked client frames are protocol errors[0m
+    [32m✓ [0m[90mExpect (EQ RESULT :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect ERR to be an instance of WEBSOCKET-PROTOCOL-ERROR.[0m
+[37mtest-reject-rsv-bits[0m
+  [37mRSV bits must be zero[0m
+    [32m✓ [0m[90mExpect (EQ RESULT :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect ERR to be an instance of WEBSOCKET-PROTOCOL-ERROR.[0m
+[37mtest-reject-fragmented-control[0m
+  [37mcontrol frames cannot be fragmented[0m
+    [32m✓ [0m[90mExpect (EQ RESULT :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect ERR to be an instance of WEBSOCKET-PROTOCOL-ERROR.[0m
+[37mtest-reject-oversize-control[0m
+  [37mcontrol payload > 125 is rejected before 16-bit length[0m
+    [32m✓ [0m[90mExpect (EQ RESULT :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect ERR to be an instance of WEBSOCKET-PROTOCOL-ERROR.[0m
+[37mtest-reject-huge-127-payload[0m
+  [37mopcode 127 with huge length does not allocate[0m
+    [32m✓ [0m[90mExpect (EQ RESULT :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect ERR to be an instance of WEBSOCKET-PROTOCOL-ERROR.[0m
+[37mtest-masked-text-accepted[0m
+  [37mmasked client text frame parses[0m
+    [32m✓ [0m[90mExpect (EQ RESULT T) to be true.[0m
+    [32m✓ [0m[90mExpect GOT to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SECOND GOT) PAYLOAD) to be true.[0m
+[37mtest-opcode-values-low-nibble[0m
+  [37mOpcode in first byte low nibble[0m
+    [32m✓ [0m[90mOpcode should be in low 4 bits of first byte[0m
+    [32m✓ [0m[90mFIN bit should be in high bit of first byte[0m
+[37mtest-rejected-frame-is-not-success-on-retry[0m
+  [37munmasked client frame[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+  [37mreserved opcode[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+  [37mone-octet close body[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+[37mtest-setup-websocket-stops-on-rejected-frame[0m
+  [37mreader returns, closes the socket, and does not parse again[0m
+    [32m✓ [0m[90msetup-websocket stops after a rejected frame[0m
+    [32m✓ [0m[90mExpect (= ERRORS 1) to be true.[0m
+    [32m✓ [0m[90msocket was closed[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mrejected frame is not a message[0m
+    [32m✓ [0m[90mlater bytes are not parsed onto the rejected frame[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET::WS-STATE-FAILED STATE) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) T) to be false.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+  [37mT still consumes every complete frame, NIL waits[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SECOND (FIRST MESSAGES)) (STRING-TO-UTF-8-BYTES "Hello")) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.WEBSOCKET::WS-STATE-FAILED STATE)) to be true.[0m
+  [37ma good frame followed by a rejected one stops before the next frame[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SECOND (FIRST MESSAGES)) (STRING-TO-UTF-8-BYTES "A")) to be true.[0m
+    [32m✓ [0m[90mExpect CLOSED to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET::WS-STATE-FAILED STATE) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) T) to be false.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+[37mtest-ws-data-fragment-state-machine[0m
+  [37mfragmented text reassembles and keeps the original opcode[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-TEXT+ (STRING-TO-UTF-8-BYTES "He") :FIN
+                                     NIL))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-CONTINUATION+
+                                     (STRING-TO-UTF-8-BYTES "l") :FIN NIL))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-CONTINUATION+
+                                     (STRING-TO-UTF-8-BYTES "lo")))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FIRST (FIRST MESSAGES)) +OPCODE-TEXT+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SECOND (FIRST MESSAGES)) (STRING-TO-UTF-8-BYTES "Hello")) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.WEBSOCKET::WS-STATE-FRAGMENT-OPCODE STATE)) to be true.[0m
+  [37mbinary fragments keep the binary opcode[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE (MASKED-FRAME +OPCODE-BINARY+ (WS-OCTETS 1 2) :FIN NIL))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CONTINUATION+ (WS-OCTETS 3))) T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FIRST MESSAGES) (LIST +OPCODE-BINARY+ (WS-OCTETS 1 2 3))) to be true.[0m
+  [37mcontinuation with no open fragment fails the connection[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+  [37ma new data opcode while fragmented fails the connection[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-TEXT+ (STRING-TO-UTF-8-BYTES "aa") :FIN
+                                     NIL))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BAD) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BAD) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) T) to be false.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+  [37mcontrol frames may arrive between fragments[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-TEXT+ (STRING-TO-UTF-8-BYTES "AB") :FIN
+                                     NIL))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-PING+ (STRING-TO-UTF-8-BYTES "Z")))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-CONTINUATION+
+                                     (STRING-TO-UTF-8-BYTES "CD")))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FIRST PINGS) (STRING-TO-UTF-8-BYTES "Z")) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FIRST MESSAGES)
+                     (LIST +OPCODE-TEXT+ (STRING-TO-UTF-8-BYTES "ABCD"))) to be true.[0m
+[37mtest-ws-reserved-opcodes[0m
+  [37mnon-control and control reserved opcodes fail[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+  [37mfragmented reserved control opcode is still reserved[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE BYTES) :ERROR) to be true.[0m
+    [32m✓ [0m[90mrejected frame is not consumed[0m
+    [32m✓ [0m[90mretrying the same buffer must not succeed[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) BUFFERED) to be true.[0m
+    [32m✓ [0m[90ma failed connection is not parsed again[0m
+[37mtest-ws-close-body-length[0m
+  [37mempty close is status 1000[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-CLOSE+
+                                     (MAKE-ARRAY 0 :ELEMENT-TYPE
+                                                 '(UNSIGNED-BYTE 8))))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL GOT '(1000 "")) to be true.[0m
+  [37mtwo-octet close keeps the status and reason[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CLOSE+ PAYLOAD)) T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL GOT '(1000 "Bye")) to be true.[0m
+  [37mone-octet close body fails and does not call on-close[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CLOSE+ (WS-OCTETS 9))) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) T) to be false.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+[37mtest-ws-fragment-buffer-cap[0m
+  [37maccumulated fragments may reach +max-ws-payload+ but not pass it[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CONTINUATION+ (WS-OCTETS 7))) T) to be true.[0m[31m (251ms)[0m
+    [32m✓ [0m[90mExpect (= DELIVERED MAX) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.WEBSOCKET::WS-STATE-FAILED STATE)) to be true.[0m
+  [37mone octet past the cap fails without growing or succeeding on retry[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CONTINUATION+ (WS-OCTETS 1)))
+                 :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (WOO.WEBSOCKET::WS-STATE-FRAGMENT-BUFFER STATE)) BEFORE) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) T) to be false.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) :ERROR) to be true.[0m
+[37mtest-ws-invalid-utf-8-close-reason[0m
+  [37mclose reason FF FE fails with 1007 once and is not re-processed[0m
+    [32m✓ [0m[90mon-close is not called with an undecodable reason[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mon-error runs exactly once[0m
+    [32m✓ [0m[90mExpect E to be an instance of WEBSOCKET-PROTOCOL-ERROR.[0m
+    [32m✓ [0m[90mExpect (AND (TYPEP E 'WOO.WEBSOCKET:WEBSOCKET-PROTOCOL-ERROR)
+                  (= (WOO.WEBSOCKET:WEBSOCKET-PROTOCOL-ERROR-CODE E) 1007)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET::WS-STATE-FAILED STATE) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+    [32m✓ [0m[90mclose frame carries 1007[0m
+[37mtest-ws-callback-error-does-not-redeliver[0m
+  [37man on-message error fails with 1011 and the frame is not redelivered[0m
+    [32m✓ [0m[90mthe failing message is delivered once[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FUNCALL ERRORS)) 1) to be true.[0m
+    [32m✓ [0m[90mon-error receives the callback's own error[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET::WS-STATE-FAILED STATE) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1011) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (MAPCAR #'SECOND SENT) '(1011)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (WOO.WEBSOCKET::PARSE-FRAME STATE) T) to be false.[0m
+  [37man on-close error is not re-run on later reads[0m
+    [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FUNCALL ERRORS)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1011) to be true.[0m
+[37mtest-ws-text-utf-8-validation[0m
+  [37msingle-frame text with invalid UTF-8 fails with 1007[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ BAD)) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ BAD)) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ BAD)) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ BAD)) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ BAD)) :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+  [37mbinary frames are not UTF-8 checked[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-BINARY+ (WS-OCTETS 255 254))) T) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 1) to be true.[0m
+  [37ma code point split across fragments is valid once reassembled[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ (SUBSEQ EURO 0 1) :FIN NIL))
+              T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CONTINUATION+ (SUBSEQ EURO 1)))
+                 T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SECOND (FIRST MESSAGES)) EURO) to be true.[0m
+  [37mreassembled text that is invalid fails with 1007[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-TEXT+ (WS-OCTETS 97) :FIN NIL))
+                 T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ
+              (FEED-WS STATE
+                       (MASKED-FRAME +OPCODE-CONTINUATION+ (WS-OCTETS 226 130)))
+              :ERROR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL MESSAGES) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1007) to be true.[0m
+[37mtest-ws-fragmented-message-is-a-fresh-copy[0m
+  [37ma retained reassembled payload is not truncated or overwritten[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 2) to be true.[0m
+    [32m✓ [0m[90mfirst message is intact after the next one[0m
+    [32m✓ [0m[90mExpect (EQUALP (FIRST MESSAGES) (STRING-TO-UTF-8-BYTES "XYZ")) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FIRST MESSAGES) (SECOND MESSAGES)) to be false.[0m
+[37mtest-ws-close-code-validation[0m
+  [37mreserved, local-only, and unassigned close codes fail with 1002[0m
+    [32m✓ [0m[90mclose code 0 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 999 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 1004 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 1005 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 1006 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 1015 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 1016 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 2000 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 2999 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 5000 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+    [32m✓ [0m[90mclose code 65535 is rejected[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (WOO.WEBSOCKET::WS-STATE-CLOSE-CODE STATE) 1002) to be true.[0m
+  [37mdefined and private-use close codes are accepted[0m
+    [32m✓ [0m[90mclose code 1000 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1001 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1002 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1003 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1007 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1008 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1009 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1010 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1011 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1012 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1013 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 1014 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 3000 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+    [32m✓ [0m[90mclose code 4999 is accepted[0m
+    [32m✓ [0m[90mExpect (EQL CLOSED CODE) to be true.[0m
+[37mtest-ws-default-close-echo[0m
+  [37mthe default on-close echoes a valid code[0m
+    [32m✓ [0m[90mExpect (EQUAL (MAPCAR #'SECOND SENT) '(1001)) to be true.[0m
+  [37man empty close is echoed as 1000[0m
+    [32m✓ [0m[90mExpect (EQUAL (MAPCAR #'SECOND SENT) '(1000)) to be true.[0m
+  [37mthe default on-close never sends 1005, 1006, or 1015[0m
+    [32m✓ [0m[90m1005 is replaced by 1000[0m
+    [32m✓ [0m[90m1006 is replaced by 1000[0m
+    [32m✓ [0m[90m1015 is replaced by 1000[0m
+[37mtest-ws-many-small-frames-in-one-read[0m
+  [37ma read holding many tiny frames is parsed in linear time[0m
+    [32m✓ [0m[90mparsing did not time out[0m
+    [32m✓ [0m[90mevery frame was delivered[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LENGTH (WOO.WEBSOCKET::WS-STATE-BUFFER STATE))) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (WOO.WEBSOCKET::WS-STATE-READ-POS STATE)) to be true.[0m
+  [37ma partial frame after complete ones is kept and compacted[0m
+    [32m✓ [0m[90mExpect (= (LENGTH MESSAGES) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WS-BUFFER-COPY STATE) (SUBSEQ TAIL 0 5)) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (WOO.WEBSOCKET::WS-STATE-READ-POS STATE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FIRST MESSAGES) (STRING-TO-UTF-8-BYTES "tail")) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+[37mtest-ws-nothing-follows-a-queued-close[0m
+  [37ma send after a queued echo is dropped and the close still happens[0m
+    [32m✓ [0m[90mthe data frame is dropped[0m
+    [32m✓ [0m[90ma ping is dropped too[0m
+    [32m✓ [0m[90mthe socket stays open until the close is flushed[0m
+    [32m✓ [0m[90monly the close frame is written[0m
+    [32m✓ [0m[90mthe pending close survives the later sends[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be false.[0m
+  [37msend-close twice queues a single close frame[0m
+    [32m✓ [0m[90mExpect (SEND-CLOSE SOCKET 1001) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (SEND-CLOSE SOCKET 1000)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (SEND-BINARY-FRAME SOCKET (WS-OCTETS 1 2))) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FAKE-FLUSH SOCKET) (SERVER-CLOSE-FRAME 1001)) to be true.[0m
+    [32m✓ [0m[90ma server-initiated close waits for the peer's close[0m
+[37mtest-ws-server-initiated-close-is-not-echoed[0m
+  [37mthe peer's close answers ours: no second close, socket closes[0m
+    [32m✓ [0m[90mExpect (EQUALP (FAKE-FLUSH SOCKET) (SERVER-CLOSE-FRAME 1000)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mthe default on-close does not echo a second close[0m
+    [32m✓ [0m[90mthe socket closes once both closes are exchanged[0m
+  [37ma peer close crossing an unflushed close closes after the flush[0m
+    [32m✓ [0m[90mour close frame is still queued[0m
+    [32m✓ [0m[90mExpect (EQUALP (FAKE-FLUSH SOCKET) (SERVER-CLOSE-FRAME 1001)) to be true.[0m
+    [32m✓ [0m[90mExpect CLOSED to be true.[0m
+[37mtest-ws-failed-connection-flushes-its-close-frame[0m
+  [37ma read after a failure does not close before the close frame is written[0m
+    [32m✓ [0m[90mExpect (= ERRORS 1) to be true.[0m
+    [32m✓ [0m[90mlater reads are ignored[0m
+    [32m✓ [0m[90mthe socket is not closed before the flush[0m
+    [32m✓ [0m[90mthe 1002 close frame is written[0m
+    [32m✓ [0m[90mthe flush closes the socket[0m
+[37mtest-upgrade-response-bytes[0m
+  [37mthe 101 response for the RFC 6455 sample key, byte for byte[0m
+    [32m✓ [0m[90mexact handshake bytes[0m
+    [32m✓ [0m[90mstatus line ends at CR LF[0m
+    [32m✓ [0m[90mthe header block ends with an empty line[0m
+    [32m✓ [0m[90mno backslash escapes leaked into the response[0m
+    [32m✓ [0m[90mno bare CR or LF[0m
+    [32m✓ [0m[90mExpect (EQUAL (CDR (ASSOC "upgrade" HEADERS :TEST #'STRING=)) "websocket") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (CDR (ASSOC "connection" HEADERS :TEST #'STRING=)) "Upgrade") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (CDR (ASSOC "sec-websocket-accept" HEADERS :TEST #'STRING=))
+                    "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") to be true.[0m
+  [37mextra headers are CR LF lines before the blank line[0m
+    [32m✓ [0m[90mExpect (EQUAL LINES
+                    '("HTTP/1.1 101 Switching Protocols" "Upgrade: websocket"
+                      "Connection: Upgrade" "Sec-WebSocket-Accept: abc="
+                      "Sec-Websocket-Protocol: chat" "" "")) to be true.[0m
+[37mtest-no-http-response-after-upgrade[0m
+  [37mhandle-response writes nothing to an upgraded socket[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET:SOCKET-UPGRADED-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET:SOCKET-UPGRADED-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO::HANDLE-RESPONSE NIL SOCKET RES)) to be true.[0m
+    [32m✓ [0m[90mnothing follows the 101 for (500 NIL NIL)[0m
+    [32m✓ [0m[90mExpect (NULL (WOO::HANDLE-RESPONSE NIL SOCKET RES)) to be true.[0m
+    [32m✓ [0m[90mnothing follows the 101 for (200 (:CONTENT-TYPE "text/html") (""))[0m
+    [32m✓ [0m[90mExpect (NULL (WOO::HANDLE-RESPONSE NIL SOCKET RES)) to be true.[0m
+    [32m✓ [0m[90mnothing follows the 101 for #<FUNCTION (LAMBDA (RESPONDER)
+                                               :IN
+                                               #:DROP-THRU-TAG-3) {803EDE8CAB}>[0m
+  [37msetup-websocket alone marks the socket[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET:SOCKET-UPGRADED-P SOCKET) to be true.[0m
+[37mtest-ws-fragment-buffer-grows-geometrically[0m
+  [37m2000 continuation frames reallocate the fragment buffer O(log n) times[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-BINARY+ PIECE :FIN NIL)) T) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ (FEED-WS STATE (MASKED-FRAME +OPCODE-CONTINUATION+ PIECE)) T) to be true.[0m
+    [32m✓ [0m[90mthe whole message is delivered[0m
+    [32m✓ [0m[90mExpect (EVERY (LAMBDA (B) (= B 65)) DELIVERED) to be true.[0m
+    [32m✓ [0m[90m11 reallocations for 2000 fragments[0m
+  [37mgrowth never allocates past +max-ws-payload+[0m
+    [32m✓ [0m[90mExpect (= (LENGTH GROWN) (- MAX 5)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CAPACITY GROWN) MAX) to be true.[0m
+[37mtest-ws-read-buffer-grows-geometrically[0m
+  [37ma 200 KB frame read 1000 octets at a time reallocates O(log n) times[0m
+    [32m✓ [0m[90mthe frame is delivered intact[0m
+    [32m✓ [0m[90m9 reallocations for 201 reads[0m
+[37mtest-send-close-caps-reason[0m
+  [37ma short reason is sent whole[0m
+    [32m✓ [0m[90mExpect (= (AREF FRAME 0) (LOGIOR 128 +OPCODE-CLOSE+)) to be true.[0m
+    [32m✓ [0m[90ma control frame uses the 7-bit length[0m
+    [32m✓ [0m[90mExpect (EQUALP (CLOSE-FRAME-PAYLOAD-SENT SOCKET)
+                     (CONCAT-OCTETS (CLOSE-FRAME-PAYLOAD 1000)
+                                    (STRING-TO-UTF-8-BYTES "bye"))) to be true.[0m
+  [37man ASCII reason is cut to 123 octets[0m
+    [32m✓ [0m[90mExpect (= (AREF FRAME 0) (LOGIOR 128 +OPCODE-CLOSE+)) to be true.[0m
+    [32m✓ [0m[90ma control frame uses the 7-bit length[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 125) to be true.[0m
+    [32m✓ [0m[90mExpect (= (+ (ASH (AREF PAYLOAD 0) 8) (AREF PAYLOAD 1)) 1001) to be true.[0m
+  [37ma multi-byte reason is cut before a split character[0m
+    [32m✓ [0m[90mExpect (= (AREF FRAME 0) (LOGIOR 128 +OPCODE-CLOSE+)) to be true.[0m
+    [32m✓ [0m[90ma control frame uses the 7-bit length[0m
+    [32m✓ [0m[90mExpect (= (LENGTH REASON) 122) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET::VALID-UTF-8-P REASON) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (UTF-8-BYTES-TO-STRING REASON)
+                    (MAKE-STRING 61 :INITIAL-ELEMENT (CODE-CHAR 233))) to be true.[0m
+  [37m4-octet characters[0m
+    [32m✓ [0m[90mExpect (= (LENGTH REASON) 120) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.WEBSOCKET::VALID-UTF-8-P REASON) to be true.[0m
+[37mtest-send-control-frame-rejects-oversized-payload[0m
+  [32m✓ [0m[90man oversized ping is not queued[0m
+  [32m✓ [0m[90man oversized pong is not queued[0m
+  [32m✓ [0m[90mno invalid control frame reaches the socket[0m
+[37mtest-ws-data-before-setup[0m
+  [37moctets fed before setup-websocket are parsed by it, in order[0m
+    [32m✓ [0m[90mnothing is parsed before setup-websocket[0m
+    [32m✓ [0m[90mthe buffered frames are delivered[0m
+    [32m✓ [0m[90mnothing stays buffered[0m
+    [32m✓ [0m[90mlater octets go to the reader and complete the partial frame[0m
+    [32m✓ [0m[90mExpect (NULL CLOSED) to be true.[0m
+  [37ma declined upgrade takes the buffered octets back[0m
+    [32m✓ [0m[90mExpect (EQUAL
+              (UTF-8-BYTES-TO-STRING
+               (WOO.WEBSOCKET:TAKE-PENDING-WEBSOCKET-DATA SOCKET))
+              "GET / HTTP/1.1 tail") to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.WEBSOCKET:TAKE-PENDING-WEBSOCKET-DATA SOCKET)) to be true.[0m
+  [37mmore than *max-pending-websocket-octets* on one connection closes it[0m
+    [32m✓ [0m[90m60 octets are held[0m
+    [32m✓ [0m[90mExpect (= (WOO.WEBSOCKET::PENDING-WEBSOCKET-OCTETS) (+ BEFORE 60)) to be true.[0m
+    [32m✓ [0m[90m101 octets close the connection[0m
+    [32m✓ [0m[90mits octets are released[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.WEBSOCKET:TAKE-PENDING-WEBSOCKET-DATA SOCKET)) to be true.[0m
+  [37mpast *max-total-pending-websocket-octets* for all connections, the one that would exceed it is closed[0m
+    [32m✓ [0m[90mthe second 100 octets pass the total[0m
+    [32m✓ [0m[90mExpect (= (WOO.WEBSOCKET::PENDING-WEBSOCKET-OCTETS) (+ BEFORE 100)) to be true.[0m
+    [32m✓ [0m[90ma closed connection's octets no longer count[0m
+    [32m✓ [0m[90mExpect (EQUALP (WOO.WEBSOCKET:TAKE-PENDING-WEBSOCKET-DATA C) OCTETS) to be true.[0m
+    [32m✓ [0m[90msetup or decline releases them[0m
+
+[32m✓ 43 tests completed[0m
+
+Summary:
+  All 43 tests passed.
+
+;; testing 'woo-test.websocket-e2e'
+[37me2e-handshake-and-nothing-after-it[0m
+  [37mwoo WebSocket server[0m
+    [37m/ws: exact 101 bytes, then only frames[0m
+      [32m✓ [0m[90mthe handshake is CR LF lines with the RFC 6455 accept key[0m
+      [32m✓ [0m[90mno HTTP response follows the 101[0m[31m (302ms)[0m
+      [32m✓ [0m[90ma text frame comes back[0m
+      [32m✓ [0m[90mExpect FIN to be true.[0m
+      [32m✓ [0m[90mExpect (EQUAL (AND PAYLOAD (UTF-8-BYTES-TO-STRING PAYLOAD)) "hello") to be true.[0m
+      [32m✓ [0m[90mnothing else follows the echo[0m[31m (205ms)[0m
+    [37m/ws-200: exact 101 bytes, then only frames[0m
+      [32m✓ [0m[90mthe handshake is CR LF lines with the RFC 6455 accept key[0m
+      [32m✓ [0m[90mno HTTP response follows the 101[0m[31m (305ms)[0m
+      [32m✓ [0m[90ma text frame comes back[0m
+      [32m✓ [0m[90mExpect FIN to be true.[0m
+      [32m✓ [0m[90mExpect (EQUAL (AND PAYLOAD (UTF-8-BYTES-TO-STRING PAYLOAD)) "hello") to be true.[0m
+      [32m✓ [0m[90mnothing else follows the echo[0m[31m (205ms)[0m
+[37me2e-fragments-ping-and-large-messages[0m
+  [37mwoo WebSocket server[0m
+    [37mexplicit text fragments with a ping between them[0m
+      [32m✓ [0m[90mthe interleaved ping is answered first[0m
+      [32m✓ [0m[90mExpect (EQUALP PAYLOAD (STRING-TO-UTF-8-BYTES "p1")) to be true.[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 1) to be true.[0m
+      [32m✓ [0m[90mthe fragments are reassembled[0m
+    [37ma 1.5 MB binary message sent as 24 fragments[0m
+      [32m✓ [0m[90mechoed as binary[0m
+      [32m✓ [0m[90mExpect FIN to be true.[0m
+      [32m✓ [0m[90mevery octet comes back[0m
+    [37mclient ping gets a pong with the same payload[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 10) to be true.[0m
+      [32m✓ [0m[90mExpect (EQUALP PAYLOAD (OCTETS 1 2 3)) to be true.[0m
+    [37mserver ping, client pong[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 9) to be true.[0m
+      [32m✓ [0m[90mExpect (EQUALP PAYLOAD (STRING-TO-UTF-8-BYTES "hi")) to be true.[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 1) to be true.[0m
+      [32m✓ [0m[90mExpect (EQUAL (AND PAYLOAD (UTF-8-BYTES-TO-STRING PAYLOAD)) "pong:hi") to be true.[0m
+[37me2e-closing-handshake[0m
+  [37mwoo WebSocket server[0m
+    [37mclient close: the default handler answers with the code, then closes[0m
+      [32m✓ [0m[90ma close frame comes back[0m
+      [32m✓ [0m[90mExpect (EQL (CLOSE-CODE PAYLOAD) 4001) to be true.[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+    [37mclient close: an app echoing the reason[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 8) to be true.[0m
+      [32m✓ [0m[90mExpect (EQL (CLOSE-CODE PAYLOAD) 4002) to be true.[0m
+      [32m✓ [0m[90mExpect (EQUAL (CLOSE-REASON PAYLOAD) "see you") to be true.[0m
+      [32m✓ [0m[90mExpect (EQUALP (READ-UNTIL-EOF CONN) #()) to be true.[0m
+    [37mserver close: the server waits for the client's close, then closes[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 8) to be true.[0m
+      [32m✓ [0m[90mExpect (EQL (CLOSE-CODE PAYLOAD) 4000) to be true.[0m
+      [32m✓ [0m[90mExpect (EQUAL (CLOSE-REASON PAYLOAD) "bye") to be true.[0m
+      [32m✓ [0m[90mthe socket stays open for the client's close[0m[31m (201ms)[0m
+      [32m✓ [0m[90mno second close; the socket closes[0m
+    [37minvalid UTF-8 in a text message fails the connection with 1007[0m
+      [32m✓ [0m[90mExpect (EQL OPCODE 8) to be true.[0m
+      [32m✓ [0m[90mExpect (EQL (CLOSE-CODE PAYLOAD) 1007) to be true.[0m
+      [32m✓ [0m[90mExpect (EQUALP (READ-UNTIL-EOF CONN) #()) to be true.[0m
+[37me2e-frames-with-the-upgrade-request[0m
+  [37mwoo WebSocket server[0m
+    [37mthe request and one complete frame[0m
+      [32m✓ [0m[90mthe 101 comes first[0m
+      [32m✓ [0m[90mtext "early" comes back[0m
+      [32m✓ [0m[90mthe close (4001) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+    [37mthe request and part of a frame; the rest comes later[0m
+      [32m✓ [0m[90mExpect (EQUAL HEAD (EXPECTED-HEAD *SAMPLE-ACCEPT*)) to be true.[0m
+      [32m✓ [0m[90mnothing is answered before the frame is complete[0m[31m (204ms)[0m
+      [32m✓ [0m[90mtext "split frame" comes back[0m
+      [32m✓ [0m[90mthe close (1000) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+    [37mthe request, text, a ping, binary and a close[0m
+      [32m✓ [0m[90mExpect (EQUAL HEAD (EXPECTED-HEAD *SAMPLE-ACCEPT*)) to be true.[0m
+      [32m✓ [0m[90mtext "one" comes back[0m
+      [32m✓ [0m[90mthe ping is answered in order[0m
+      [32m✓ [0m[90mthe binary frame comes back[0m
+      [32m✓ [0m[90mtext "two" comes back[0m
+      [32m✓ [0m[90mthe close (4002) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+    [37man ordinary GET, the upgrade request and a frame[0m
+      [32m✓ [0m[90mthe GET is answered[0m
+      [32m✓ [0m[90mthen the 101[0m
+      [32m✓ [0m[90mtext "behind a GET" comes back[0m
+      [32m✓ [0m[90mthe close (1000) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+    [37ma request with a Content-Length body, then frames[0m
+      [32m✓ [0m[90mExpect (EQUAL HEAD (EXPECTED-HEAD *SAMPLE-ACCEPT*)) to be true.[0m
+      [32m✓ [0m[90mtext "the body, as the app read it" comes back[0m
+      [32m✓ [0m[90mtext "after body" comes back[0m
+      [32m✓ [0m[90mthe close (1000) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+[37me2e-frames-before-a-late-upgrade[0m
+  [37mwoo WebSocket server[0m
+    [37m/ws-delayed: frames sent before the app upgrades are kept[0m
+      [32m✓ [0m[90mExpect (EQUAL HEAD (EXPECTED-HEAD *SAMPLE-ACCEPT*)) to be true.[0m
+      [32m✓ [0m[90mtext "first" comes back[0m
+      [32m✓ [0m[90mtext "second" comes back[0m
+      [32m✓ [0m[90mthe close (4003) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+    [37m/ws-late-setup: frames sent before the app upgrades are kept[0m
+      [32m✓ [0m[90mExpect (EQUAL HEAD (EXPECTED-HEAD *SAMPLE-ACCEPT*)) to be true.[0m
+      [32m✓ [0m[90mtext "first" comes back[0m
+      [32m✓ [0m[90mtext "second" comes back[0m
+      [32m✓ [0m[90mthe close (4003) is answered[0m
+      [32m✓ [0m[90mthen the server closes the socket[0m
+[37me2e-held-octets-are-capped[0m
+  [37mwoo WebSocket server[0m
+    [37m2 MB sent while the app is still deciding closes the connection[0m
+      [32m✓ [0m[90mclosed, with no 101 (the app had not answered yet)[0m
+[37me2e-declined-upgrade-stays-http[0m
+  [37mwoo WebSocket server[0m
+    [37m/plain: an Upgrade request the app answers normally; the next request is parsed[0m
+      [32m✓ [0m[90mboth requests are answered (2 responses)[0m
+    [37m/delayed-plain: an Upgrade request the app answers normally; the next request is parsed[0m
+      [32m✓ [0m[90mboth requests are answered (2 responses)[0m
+[37me2e-node-client[0m
+  [37mwoo WebSocket server[0m
+    [32m✓ [0m[90mnode: handshake (PASS handshake)[0m
+    [32m✓ [0m[90mnode: text-echo (PASS text-echo "hello")[0m
+    [32m✓ [0m[90mnode: binary-echo (PASS binary-echo)[0m
+    [32m✓ [0m[90mnode: large-echo (PASS large-echo 1500000)[0m
+    [32m✓ [0m[90mnode: server-ping-pong (PASS server-ping-pong "pong:hi")[0m
+    [32m✓ [0m[90mnode: client-close (PASS client-close 4001 true)[0m
+    [32m✓ [0m[90mnode: client-close-reason (PASS client-close-reason 4002 "see you" true)[0m
+    [32m✓ [0m[90mnode: server-close (PASS server-close 4000 "bye" true)[0m
+    [32m✓ [0m[90mnode reported no failures[0m
+
+[32m✓ 8 tests completed[0m
+
+Summary:
+  All 8 tests passed.
+
+;; testing 'woo-test'
+[37mwoo-server-tests[0m
+
+;; testing 'clack.test.suite'
+[37mresponse-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlist[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (plain/text)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "This is a text for test." BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (binary)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/png") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 12155) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbigger file[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/jpeg") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 139616) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (response)[0m
+    [32m✓ [0m[90mExpect (SCAN "foo,\\s*bar,\\s*baz" (GET-HEADER HEADERS :X-FOO)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mno entity headers on 304[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 304) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP BODY #()) to be true.[0m
+    [32m✓ [0m[90mNo Content-Type[0m
+    [32m✓ [0m[90mNo Content-Length[0m
+    [32m✓ [0m[90mNo Transfer-Encoding[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mCRLF output[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :FOO)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "Foo: Bar~A~A~A~AHello World" #\Return #\Newline
+                            #\Return #\Newline)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mtest 404[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 404) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Not Found") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mContent-Length 0 is not set Transfer-Encoding[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-TRANSFER-ENCODING)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "") to be true.[0m
+[37menv-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME[0m
+    [32m✓ [0m[90mExpect (MEMBER (DEXADOR:GET (LOCALHOST)) '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37murl-scheme[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "http") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle HTTP-Header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~A~%~}"
+                            `("REQUEST-METHOD::GET" "PATH-INFO:\"/foo/\""
+                              "QUERY-STRING:\"ediweitz=weitzedi\""
+                              "SERVER-NAME:\"127.0.0.1\""
+                              ,(FORMAT NIL "SERVER-PORT:~D"
+                                       *CLACK-TEST-ACCESS-PORT*)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env (must be integer)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~{~A:~A~%~}~}"
+                            `((:SERVER-PORT T) (:REMOTE-PORT T) (:CONTENT-LENGTH T)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%2cbaz")) "/foo/bar,baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% double encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%252cbaz")) "/foo/bar%2cbaz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO (outside of URI characters)[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo%E3%81%82"))
+                    (FORMAT NIL "/foo~A"
+                            (OCTETS-TO-STRING #(227 129 130) :EXTERNAL-FORMAT
+                                              :UTF-8))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mInvalid UTF-8 encoded PATH-INFO[0m
+    [32m✓ [0m[90mExpect (SCAN (FORMAT NIL "/あ~A" #\REPLACEMENT_CHARACTER)
+                   (DEXADOR:GET (LOCALHOST "/%E3%81%82%BF%27%22%28"))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSERVER-PROTOCOL is required[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "^:HTTP/1\\.[01]$" BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME should not be nil[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/?ediweitz=weitzedi")) (STRING T)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mDo not set COOKIE[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-COOKIE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "foo=bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mREQUEST-URI is set[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%20baz%73?x=a"))
+                    "/foo/bar%20baz%73?x=a") to be true.[0m
+[37mrequest-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mGET[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=fukamachi") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mPOST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) "11") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-TYPE)
+                    "application/x-www-form-urlencoded") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=eitaro") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) (PRINC-TO-STRING LEN)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST (chunked)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (request)[0m
+    [32m✓ [0m[90mExpect (SCAN "^bar,\\s*baz$"
+                   (DEXADOR:GET (LOCALHOST) :HEADERS
+                                '(("Foo" . "bar") ("Foo" . "baz")))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma big header value > 128 bytes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY CHUNK) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrequest -> input seekable[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:POST (LOCALHOST) :CONTENT "body") "body") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle Authorization header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :X-AUTHORIZATION) (STRING T)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Basic XXXX") to be true.[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-AUTHORIZATION)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER BODY '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrepeated slashes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "/foo///bar/baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mfile upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "This is a text for test.
+      ") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlarge file upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "ok") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mstreaming[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY (FORMAT NIL "0~%1~%2~%")) to be true.[0m
+[37mdebug-tests[0m
+  [37mDo not crash when the app dies[0m
+ <ERROR> [23:17:36] woo - #<FLEXI-STREAMS::VECTOR-INPUT-STREAM {80493202D3}> cannot be printed readably.
+    [32m✓ [0m[90m500 Internal Server Error[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+  [32m✓ [0m[90mupstream Clack suite failures fail the Woo gate[0m[31m (22920ms)[0m
+[37mhttp2-preface-detection[0m
+  [37mcomplete PRI preface is HTTP/2[0m
+    [32m✓ [0m[90m24-byte connection preface[0m
+    [32m✓ [0m[90mExpect (WOO:HTTP2-CONNECTION-PREFACE-MATCH PREFACE 0 24) to be true.[0m
+  [37mpartial matching prefix needs more data[0m
+    [32m✓ [0m[90mExpect (EQ (WOO:LOOKS-LIKE-HTTP2-PREFACE PARTIAL 0 8) :NEED-MORE) to be true.[0m
+  [37mHTTP/1 request is not a preface[0m
+    [32m✓ [0m[90mExpect (EQ (WOO:LOOKS-LIKE-HTTP2-PREFACE GET 0 (LENGTH GET)) :HTTP1) to be true.[0m
+  [37mempty buffer waits[0m
+    [32m✓ [0m[90mExpect (EQ (WOO:LOOKS-LIKE-HTTP2-PREFACE EMPTY 0 0) :NEED-MORE) to be true.[0m
+[37mhttp1-replay-after-protocol-detection[0m
+  [37mHTTP/1 requests survive the detection replay[0m
+    [32m✓ [0m[90mheaders and body in the first packet[0m
+    [32m✓ [0m[90mExpect (SEARCH "POST /echo [hello]" RES) to be true.[0m
+    [32m✓ [0m[90mfirst packet is a preface prefix[0m
+    [32m✓ [0m[90mExpect (SEARCH "POST /echo [world]" RES) to be true.[0m
+    [32m✓ [0m[90mrequest line split after the method[0m
+    [32m✓ [0m[90mExpect (SEARCH "GET /split []" RES) to be true.[0m
+    [32m✓ [0m[90mno server thread errors: [0m
+[37mwoo-ssl-server-tests[0m
+
+;; testing 'clack.test.suite'
+[37mresponse-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlist[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "HelloWorld") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (plain/text)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "This is a text for test." BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mpathname (binary)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/png") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 12155) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbigger file[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "image/jpeg") to be true.[0m
+    [32m✓ [0m[90mExpect (GET-HEADER HEADERS :CONTENT-LENGTH) to be true.[0m
+    [32m✓ [0m[90mExpect (EQL (LENGTH BODY) 139616) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (response)[0m
+    [32m✓ [0m[90mExpect (SCAN "foo,\\s*bar,\\s*baz" (GET-HEADER HEADERS :X-FOO)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mno entity headers on 304[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 304) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP BODY #()) to be true.[0m
+    [32m✓ [0m[90mNo Content-Type[0m
+    [32m✓ [0m[90mNo Content-Length[0m
+    [32m✓ [0m[90mNo Transfer-Encoding[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mCRLF output[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :FOO)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "Foo: Bar~A~A~A~AHello World" #\Return #\Newline
+                            #\Return #\Newline)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mtest 404[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 404) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Not Found") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mContent-Length 0 is not set Transfer-Encoding[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-TRANSFER-ENCODING)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "") to be true.[0m
+[37menv-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME[0m
+    [32m✓ [0m[90mExpect (MEMBER (DEXADOR:GET (LOCALHOST)) '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37murl-scheme[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "http") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle HTTP-Header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~A~%~}"
+                            `("REQUEST-METHOD::GET" "PATH-INFO:\"/foo/\""
+                              "QUERY-STRING:\"ediweitz=weitzedi\""
+                              "SERVER-NAME:\"127.0.0.1\""
+                              ,(FORMAT NIL "SERVER-PORT:~D"
+                                       *CLACK-TEST-ACCESS-PORT*)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mvalidate env (must be integer)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY
+                    (FORMAT NIL "~{~{~A:~A~%~}~}"
+                            `((:SERVER-PORT T) (:REMOTE-PORT T) (:CONTENT-LENGTH T)))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%2cbaz")) "/foo/bar,baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% double encoding in PATH-INFO[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%252cbaz")) "/foo/bar%2cbaz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37m% encoding in PATH-INFO (outside of URI characters)[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo%E3%81%82"))
+                    (FORMAT NIL "/foo~A"
+                            (OCTETS-TO-STRING #(227 129 130) :EXTERNAL-FORMAT
+                                              :UTF-8))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mInvalid UTF-8 encoded PATH-INFO[0m
+    [32m✓ [0m[90mExpect (SCAN (FORMAT NIL "/あ~A" #\REPLACEMENT_CHARACTER)
+                   (DEXADOR:GET (LOCALHOST "/%E3%81%82%BF%27%22%28"))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSERVER-PROTOCOL is required[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (SCAN "^:HTTP/1\\.[01]$" BODY) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mSCRIPT-NAME should not be nil[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/?ediweitz=weitzedi")) (STRING T)) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mDo not set COOKIE[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-COOKIE)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "foo=bar") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mREQUEST-URI is set[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:GET (LOCALHOST "/foo/bar%20baz%73?x=a"))
+                    "/foo/bar%20baz%73?x=a") to be true.[0m
+[37mrequest-tests[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mGET[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=fukamachi") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mPOST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) "11") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-TYPE)
+                    "application/x-www-form-urlencoded") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Hello, name=eitaro") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH) (PRINC-TO-STRING LEN)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mbig POST (chunked)[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :CLIENT-CONTENT-LENGTH)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LENGTH BODY) LEN) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mmulti headers (request)[0m
+    [32m✓ [0m[90mExpect (SCAN "^bar,\\s*baz$"
+                   (DEXADOR:GET (LOCALHOST) :HEADERS
+                                '(("Foo" . "bar") ("Foo" . "baz")))) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37ma big header value > 128 bytes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY CHUNK) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrequest -> input seekable[0m
+    [32m✓ [0m[90mExpect (EQUAL (DEXADOR:POST (LOCALHOST) :CONTENT "body") "body") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mhandle Authorization header[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :X-AUTHORIZATION) (STRING T)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "Basic XXXX") to be true.[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (GET-HEADER HEADERS :X-AUTHORIZATION)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER BODY '(NIL "") :TEST #'EQUAL) to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mrepeated slashes[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (GET-HEADER HEADERS :CONTENT-TYPE) "text/plain; charset=utf-8") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "/foo///bar/baz") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mfile upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "This is a text for test.
+      ") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mlarge file upload[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY "ok") to be true.[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.  [37mstreaming[0m
+    [32m✓ [0m[90mExpect (EQL STATUS 200) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BODY (FORMAT NIL "0~%1~%2~%")) to be true.[0m
+[37mdebug-tests[0m
+  [37mDo not crash when the app dies[0m
+ <ERROR> [23:18:02] woo - #<FLEXI-STREAMS::VECTOR-INPUT-STREAM {804B3502D3}> cannot be printed readably.
+    [32m✓ [0m[90m500 Internal Server Error[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+  [32m✓ [0m[90mupstream Clack TLS suite failures fail the Woo gate[0m[31m (24720ms)[0m
+[37mhttp1-body-is-not-split[0m
+  [37ma 1.2 MB body of CR LF CR LFs reaches the body buffer once per read[0m
+    [32m✓ [0m[90mthe app gets the whole body[0m
+    [32m✓ [0m[90m20 body writes for 19 reads[0m
+    [32m✓ [0m[90mparsed in 0.04s[0m
+[37mhttp1-upgrade-after-fixed-body[0m
+  [37man upgrade behind a POST body keeps the early WebSocket octets[0m
+    [32m✓ [0m[90mExpect (EQUAL (REVERSE SEEN) '("/first" "/ws")) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (WOO.WEBSOCKET:TAKE-PENDING-WEBSOCKET-DATA SOCKET)
+                     (TRIVIAL-UTF-8:STRING-TO-UTF-8-BYTES "xyz")) to be true.[0m
+[37mhttp1-fragmented-fixed-body-keeps-pipelined-request[0m
+  [37mthe final body fragment does not consume the next request[0m
+    [32m✓ [0m[90mExpect (STRING= SEEN-BODY "abcd") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REVERSE SEEN-PATHS) '("/body" "/next")) to be true.[0m
+[37mhttp1-pipelined-heads-are-one-piece[0m
+  [37m16 pipelined GETs in one read go to fast-http in one call[0m
+    [32m✓ [0m[90mevery request is parsed[0m
+    [32m✓ [0m[90m1 fast-http calls[0m
+[37mgraceful-stop-by-server-thread[0m
+  [32m✓ [0m[90mthe running server is addressable by its thread[0m
+  [32m✓ [0m[90mthe thread stop request is accepted[0m
+  [32m✓ [0m[90mthe server thread exits within five seconds[0m
+  [32m✓ [0m[90mthe accepted socket closes on stop[0m
+  [32m✓ [0m[90mthe thread control is removed after cleanup[0m
+[37mgraceful-stop-closes-worker-sockets[0m
+  [32m✓ [0m[90mclustered server registers a graceful stop control[0m
+  [32m✓ [0m[90mclustered stop request is accepted[0m
+  [32m✓ [0m[90mclustered server exits within twelve seconds[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+  [32m✓ [0m[90man accepted worker socket closes on stop[0m
+[37mevent-loop-backend-descriptors-close[0m
+  [32m✓ [0m[90mdescriptors before=78 after=78[0m
+
+[32m✓ 11 tests completed[0m
+
+Summary:
+  All 11 tests passed.

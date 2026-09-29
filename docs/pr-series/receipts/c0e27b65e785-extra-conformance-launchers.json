@@ -1,0 +1,31 @@
+{
+  "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_tree": "aad612a5291c196e7127436535731de71ae4d62b",
+  "worktree": "<HOME>/projects/woo-pr-series/16-showcase",
+  "system": "conformance-launchers",
+  "suites": [],
+  "no_ssl": false,
+  "load_only": false,
+  "command": [
+    "python3",
+    "t/conformance/test_autobahn_runner.py"
+  ],
+  "elapsed_seconds": 41.46,
+  "result": "PASS",
+  "exit_code": 0,
+  "current_head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_changed": false,
+  "log": "<HOME>/projects/woo-pr-series-evidence/c0e27b65e785-extra-conformance-launchers.log",
+  "runner_sha256": "e4080050cfb368ee527789ff601d86cdcfd191ea724e3c287799be241a808cf8",
+  "environment": {},
+  "raw_artifact_sha256": {
+    "c0e27b65e785-extra-conformance-launchers.log": "a0b1746bfea252dc08164bd6484dc4661d7ffb5aad8e82ed3b4fa90435a06ca5"
+  },
+  "published_log": "docs/pr-series/receipts/c0e27b65e785-extra-conformance-launchers.log",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "0ef1851d984b1fec563e916fa127420b9880012fccae45daeabb5cffea005929"
+  }
+}

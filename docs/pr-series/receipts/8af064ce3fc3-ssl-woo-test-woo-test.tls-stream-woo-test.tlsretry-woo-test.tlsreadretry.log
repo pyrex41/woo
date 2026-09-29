@@ -1,0 +1,100 @@
+
+;; testing 'woo-test.tls-stream'
+[37mtls-static-stream-pumps-bounded-chunks[0m
+  [37mTLS pathname sends keep at most one 64 KiB chunk pending[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-SEND-STREAM-OFFSET SOCKET) 65536) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))
+                 65536) to be true.[0m
+[37mtls-pending-write-isolated-from-new-output[0m
+  [37mapplication writes do not mutate bytes awaiting TLS retry[0m
+    [32m✓ [0m[90mExpect (EQUALP PENDING #(1 2 3 4)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET)) 2) to be true.[0m
+[37mtls-ffi-retry-hooks-are-injectable[0m
+  [37mWANT results can be supplied without changing the OpenSSL ABI[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-WRITE-FUNCTION* NIL NIL 8) -1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-ERROR-FUNCTION* NIL -1)
+                CL+SSL::+SSL-ERROR-WANT-READ+) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+
+[32m✓ 3 tests completed[0m
+
+Summary:
+  All 3 tests passed.
+
+;; testing 'woo-test.tlsretry'
+[37mtls-retry-keeps-pending-bytes-before-new-output[0m
+  [37ma WANT_READ retry preserves order and queue accounting[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (NREVERSE WRITES) '((1 2 3 4) (1 2 3 4) (9 8))) to be true.[0m
+    [32m✓ [0m[90mExpect (= ADMITTED 6) to be true.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 6) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-DATA SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP
+              (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))) to be true.[0m
+[37mtls-retry-partials-want-transitions-and-reentrant-release[0m
+  [37mpartial progress and both readiness retries preserve accounting[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-WRITE-WAIT-READ-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 7) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (NREVERSE WRITES)
+                    '((1 2 3 4 5 6) (3 4 5 6) (3 4 5 6) (5 6) (5 6) (6) (9 8 7))) to be true.[0m
+    [32m✓ [0m[90mExpect (= ADMITTED 9) to be true.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 9) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-DATA SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP
+              (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))) to be true.[0m
+[37mtls-fatal-write-releases-once-and-closes[0m
+  [37ma fatal TLS write closes safely and does not reuse its buffer[0m
+ <ERROR> [23:11:36] woo.ev.socket - Unexpected TLS write error (Code: 1)
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:FLUSH-BUFFER SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 4) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= RELEASED 4) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-DATA SOCKET)) to be true.[0m
+[37mtls-shutdown-want-write-survives-flush-completion[0m
+  [32m✓ [0m[90mExpect (= SHUTDOWN-CALLS 1) to be true.[0m
+  [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-TLS-SHUTDOWN-P SOCKET) to be true.[0m
+  [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+  [32m✓ [0m[90mExpect (ZEROP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-READ-WATCHER SOCKET))) to be true.[0m
+  [32m✓ [0m[90mExpect (= SHUTDOWN-CALLS 2) to be true.[0m
+  [32m✓ [0m[90mExpect (WOO.EV.SOCKET:SOCKET-OPEN-P SOCKET) to be false.[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.
+
+;; testing 'woo-test.tlsreadretry'
+[37mtls-read-want-write-keeps-write-readiness[0m
+  [37mSSL_read WANT_WRITE stops read polling and preserves write retry[0m
+    [32m✓ [0m[90mExpect (= READ-CALLS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-READ-WAIT-WRITE-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-READ-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.EV.SOCKET:ASYNC-WRITE SOCKET)) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-READ-WAIT-WRITE-P SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET:ASYNC-WRITE SOCKET) to be true.[0m
+    [32m✓ [0m[90mExpect (= READ-CALLS 3) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.EV.SOCKET::SOCKET-READ-WAIT-WRITE-P SOCKET) to be false.[0m
+    [32m✓ [0m[90mExpect (PLUSP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-READ-WATCHER SOCKET))) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LEV:EV-IS-ACTIVE (WOO.EV.SOCKET:SOCKET-WRITE-WATCHER SOCKET))) to be true.[0m
+
+[32m✓ 1 test completed[0m
+
+Summary:
+  All 1 test passed.

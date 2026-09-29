@@ -1,0 +1,68 @@
+This is SBCL 2.6.8, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55005.
+cycle 1 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55006.
+cycle 2 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55007.
+cycle 3 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55008.
+cycle 4 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55009.
+cycle 5 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55010.
+cycle 6 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55011.
+cycle 7 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55012.
+cycle 8 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55013.
+cycle 9 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55014.
+cycle 10 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55015.
+cycle 11 PASS
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.
+Woo server is started.
+Listening on 127.0.0.1:55016.
+cycle 12 PASS
+12 CYCLES PASS

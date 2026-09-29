@@ -1,0 +1,157 @@
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/06-static-files/src/llsocket/grovel__grovel.grovel-tmp.lisp
+
+;; testing 'woo-test.static'
+[37mpathname-response-has-a-body[0m
+  [37mServe a pathname response[0m
+    [32m✓ [0m[90mExpect (AND (SEARCH "HTTP/1.1 200 OK" RESPONSE)
+                  (SEARCH "Woo private static fixture" RESPONSE)) to be true.[0m
+[37mpathname-failures-have-distinct-statuses[0m
+  [37mClassify missing files and directories[0m
+    [32m✓ [0m[90mExpect (AND (SEARCH "HTTP/1.1 404 Not Found" MISSING)
+                  (SEARCH "HTTP/1.1 500 Internal Server Error" MISMATCH-RESPONSE)
+                  (SEARCH "HTTP/1.1 403 Forbidden" DIRECTORY)) to be true.[0m
+[37munreadable-path-is-forbidden[0m
+  [37mReject unreadable pathname[0m
+    [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 403 Forbidden" RESPONSE) to be true.[0m
+
+[32m✓ 3 tests completed[0m
+
+Summary:
+  All 3 tests passed.
+
+;; testing 'woo-test.tls-stream'
+[37mtls-completed-error-paths-retry-shutdown[0m
+  [37mcompleted TLS error closes gracefully[0m
+    [32m✓ [0m[90mExpect (SEARCH (FORMAT NIL "HTTP/1.1 ~D " STATUS) RESPONSE) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "Content-Length: 0" RESPONSE) to be true.[0m
+    [32m✓ [0m[90mserver retried SSL_shutdown after WANT_WRITE[0m
+  [37mcompleted TLS error closes gracefully[0m
+    [32m✓ [0m[90mExpect (SEARCH (FORMAT NIL "HTTP/1.1 ~D " STATUS) RESPONSE) to be true.[0m
+    [32m✓ [0m[90mExpect (SEARCH "Content-Length: 0" RESPONSE) to be true.[0m
+    [32m✓ [0m[90mserver retried SSL_shutdown after WANT_WRITE[0m
+[37mtls-static-stream-pumps-bounded-chunks[0m
+  [37mTLS pathname sends keep at most one 64 KiB chunk pending[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-SEND-STREAM-OFFSET SOCKET) 65536) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))
+                 65536) to be true.[0m
+[37mtls-pending-write-isolated-from-new-output[0m
+  [37mapplication writes do not mutate bytes awaiting TLS retry[0m
+    [32m✓ [0m[90mExpect (EQUALP PENDING #(1 2 3 4)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET)) 2) to be true.[0m
+[37mtls-ffi-retry-hooks-are-injectable[0m
+  [37mWANT results can be supplied without changing the OpenSSL ABI[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-WRITE-FUNCTION* NIL NIL 8) -1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-ERROR-FUNCTION* NIL -1)
+                CL+SSL::+SSL-ERROR-WANT-READ+) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+[37mtls-alpn-setup-failure-releases-listener-context[0m
+  [37ma failure after ALPN setup releases the listener context[0m
+    [32m✓ [0m[90mExpect (WOO:RUN (LAMBDA (ENV) (DECLARE (IGNORE ENV)) '(200 NIL ("ok"))) :DEBUG
+                      NIL :WORKER-NUM NIL :SSL-CERT-FILE #P"t/certs/localhost.crt"
+                      :SSL-KEY-FILE #P"t/certs/localhost.key") to signal ERROR.[0m
+    [32m✓ [0m[90mExpect CONFIGURED to be true.[0m
+    [32m✓ [0m[90mExpect (= FREED 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= BASELINE (HASH-TABLE-COUNT WOO.SSL.ALPN::*ALPN-CTX-ARGS*)) to be true.[0m
+[37mtls-pathname-live-exact-body-and-clean-eof[0m
+  [37ma live TLS pathname response preserves bytes and closes cleanly[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.    [37mTLS pathname exact body[0m
+      [32m✓ [0m[90mExpect (SEARCH "HTTP/1.1 200" STATUS) to be true.[0m
+      [32m✓ [0m[90mExpect (=
+                (PARSE-INTEGER (CDR (ASSOC "content-length" HEADERS :TEST #'STRING=)))
+                SIZE) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (PLUSP N) to be true.[0m
+      [32m✓ [0m[90mExpect (= OFFSET SIZE) to be true.[0m
+      [32m✓ [0m[90mExpect (LOOP FOR I BELOW SIZE
+                     ALWAYS (= (AREF GOT I) (MOD (+ I 17) 251))) to be true.[0m
+      [32m✓ [0m[90mExpect (NULL (READ-BYTE TLS NIL NIL)) to be true.[0m
+[37mtls-static-preparation-failures-are-wire-visible[0m
+  [37mTLS pathname preparation reports missing, directory, EACCES, and length errors[0m
+NOTICE: Running in debug mode. Debugger will be invoked on errors.
+  Specify ':debug nil' to turn it off on remote environments.    [37mTLS pathname preparation failures[0m
+      [32m✓ [0m[90mExpect (SEARCH "404 Not Found" (REQUEST "/missing")) to be true.[0m
+      [32m✓ [0m[90mExpect (SEARCH "403 Forbidden" (REQUEST "/directory")) to be true.[0m
+      [32m✓ [0m[90mExpect (SEARCH "403 Forbidden" (REQUEST "/private")) to be true.[0m
+      [32m✓ [0m[90mExpect (SEARCH "500 Internal Server Error" (REQUEST "/mismatch")) to be true.[0m
+
+[32m✓ 7 tests completed[0m
+
+Summary:
+  All 7 tests passed.

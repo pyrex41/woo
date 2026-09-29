@@ -1,0 +1,44 @@
+{
+  "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_tree": "aad612a5291c196e7127436535731de71ae4d62b",
+  "worktree": "<HOME>/projects/woo-pr-series/16-showcase",
+  "system": "showcase-load",
+  "suites": [],
+  "no_ssl": false,
+  "load_only": true,
+  "command": [
+    "/tmp/woo-sbcl-runtime/bin/sbcl",
+    "--dynamic-space-size",
+    "4096",
+    "--noinform",
+    "--non-interactive",
+    "--load",
+    "<HOME>/quicklisp/setup.lisp",
+    "--eval",
+    "(ql:quickload :cffi :silent t)",
+    "--eval",
+    "(dolist (d (list #P\"<HOME>/.local/Homebrew/lib/\" #P\"<HOME>/.nix-profile/lib/\")) (pushnew d cffi:*foreign-library-directories* :test (function equal)))",
+    "--load",
+    "showcase/test-load.lisp"
+  ],
+  "elapsed_seconds": 11.26,
+  "result": "PASS",
+  "exit_code": 0,
+  "current_head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_changed": false,
+  "log": "<HOME>/projects/woo-pr-series-evidence/c0e27b65e785-extra-showcase-load.log",
+  "runner_sha256": "199b105c73e5c4151b1fa966691a1652063441717fe24139c84f05a0f71f2bed",
+  "environment": {
+    "XDG_CACHE_HOME": "/tmp/woo-pr-series-cache"
+  },
+  "raw_artifact_sha256": {
+    "c0e27b65e785-extra-showcase-load.log": "41b47f498c28e600ea870933f38873f6d8cbfaefaebedb1c239fcad49234debd"
+  },
+  "published_log": "docs/pr-series/receipts/c0e27b65e785-extra-showcase-load.log",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "99d6a94d6767ecfd55b53acb76c4db896547034b3d1dcc3457ae264e93c567c4"
+  }
+}

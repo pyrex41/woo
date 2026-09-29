@@ -1,0 +1,14 @@
+; clang -o /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache-no-ssl/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.grovel-tmp.lisp

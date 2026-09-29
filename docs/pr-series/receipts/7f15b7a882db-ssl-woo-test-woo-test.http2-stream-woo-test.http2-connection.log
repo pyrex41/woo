@@ -1,0 +1,1098 @@
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/10-h2-engine/src/llsocket/grovel__grovel.grovel-tmp.lisp
+
+;; testing 'woo-test.http2-stream'
+[37mmake-http2-stream-test[0m
+  [37mStream creation with default values[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-ID STREAM) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-IDLE+) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-HEADERS STREAM)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM) +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-RECV-WINDOW-SIZE STREAM) +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-CONTENT-LENGTH STREAM)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-BYTES-RECEIVED STREAM) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-HEADER-BUFFER STREAM)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-AWAITING-CONTINUATION STREAM)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-PENDING-END-STREAM STREAM)) to be true.[0m
+  [37mStream creation with custom window size[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-ID STREAM) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM) 32768) to be true.[0m
+[37mstream-state-predicates-test[0m
+  [37mstream-open-p predicate[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be false.[0m
+  [37mstream-half-closed-remote-p predicate[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be false.[0m
+  [37mstream-closed-p predicate[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be false.[0m
+[37midle-to-open-transitions-test[0m
+  [37midle -> open via send-headers[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-IDLE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-OPEN+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+  [37midle -> open via recv-headers[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-IDLE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-OPEN+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+[37mopen-to-half-closed-transitions-test[0m
+  [37mopen -> half-closed-local via send-end-stream[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-LOCAL+) to be true.[0m
+  [37mopen -> half-closed-remote via recv-end-stream[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-REMOTE+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+[37mhalf-closed-to-closed-transitions-test[0m
+  [37mhalf-closed-local -> closed via recv-end-stream[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+  [37mhalf-closed-remote -> closed via send-end-stream[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mrst-stream-transitions-test[0m
+  [37midle -> closed via send-rst[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+  [37mopen -> closed via send-rst[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+  [37mhalf-closed-local -> closed via recv-rst[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+  [37mhalf-closed-remote -> closed via send-rst[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mpush-promise-transitions-test[0m
+  [37midle -> reserved-local via send-push-promise[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-IDLE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-RESERVED-LOCAL+) to be true.[0m
+  [37midle -> reserved-remote via recv-push-promise[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-IDLE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-RESERVED-REMOTE+) to be true.[0m
+[37mreserved-to-half-closed-transitions-test[0m
+  [37mreserved-local -> half-closed-remote via send-headers[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-REMOTE+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+  [37mreserved-remote -> half-closed-local via recv-headers[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-LOCAL+) to be true.[0m
+[37mtrailing-headers-test[0m
+  [37mopen can receive HEADERS and stays open[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+  [37mopen HEADERS plus END_STREAM moves to half-closed-remote[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+  [37mhalf-closed-local can receive trailing headers[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-LOCAL+) to be true.[0m
+  [37mhalf-closed-local trailers with END_STREAM close the stream[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37minvalid-send-headers-transitions-test[0m
+  [37mCannot send HEADERS from open state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-HEADERS) to signal ERROR.[0m
+  [37mCannot send HEADERS from half-closed-local state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-HEADERS) to signal ERROR.[0m
+  [37mCannot send HEADERS from half-closed-remote state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-HEADERS) to signal ERROR.[0m
+  [37mCannot send HEADERS from closed state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-HEADERS) to signal ERROR.[0m
+[37minvalid-recv-headers-transitions-test[0m
+  [37mHEADERS on half-closed-remote is a stream error and does not change state[0m
+    [32m✓ [0m[90mExpect CONDITION to be an instance of STREAM-STATE-ERROR.[0m
+    [32m✓ [0m[90mExpect (STREAM-STATE-ERROR-CONNECTION-ERROR-P CONDITION) to be false.[0m
+    [32m✓ [0m[90mExpect (= (STREAM-STATE-ERROR-CODE CONDITION) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+  [37mHEADERS on closed is a connection error and does not change state[0m
+    [32m✓ [0m[90mExpect CONDITION to be an instance of STREAM-STATE-ERROR.[0m
+    [32m✓ [0m[90mExpect (STREAM-STATE-ERROR-CONNECTION-ERROR-P CONDITION) to be true.[0m
+    [32m✓ [0m[90mExpect (= (STREAM-STATE-ERROR-CODE CONDITION) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+  [37mHEADERS on reserved-local is a connection PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect CONDITION to be an instance of STREAM-STATE-ERROR.[0m
+    [32m✓ [0m[90mExpect (STREAM-STATE-ERROR-CONNECTION-ERROR-P CONDITION) to be true.[0m
+    [32m✓ [0m[90mExpect (= (STREAM-STATE-ERROR-CODE CONDITION) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-RESERVED-LOCAL+) to be true.[0m
+[37minvalid-send-end-stream-transitions-test[0m
+  [37mCannot send END_STREAM from idle state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-END-STREAM) to signal ERROR.[0m
+  [37mCannot send END_STREAM from half-closed-local state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-END-STREAM) to signal ERROR.[0m
+  [37mCannot send END_STREAM from closed state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-END-STREAM) to signal ERROR.[0m
+[37minvalid-recv-end-stream-transitions-test[0m
+  [37mCannot receive END_STREAM from idle state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :RECV-END-STREAM) to signal ERROR.[0m
+  [37mCannot receive END_STREAM from half-closed-remote state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :RECV-END-STREAM) to signal ERROR.[0m
+  [37mCannot receive END_STREAM from closed state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :RECV-END-STREAM) to signal ERROR.[0m
+[37minvalid-push-promise-transitions-test[0m
+  [37mCannot send PUSH_PROMISE from open state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-PUSH-PROMISE) to signal ERROR.[0m
+  [37mCannot send PUSH_PROMISE from closed state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :SEND-PUSH-PROMISE) to signal ERROR.[0m
+  [37mCannot receive PUSH_PROMISE from open state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :RECV-PUSH-PROMISE) to signal ERROR.[0m
+  [37mCannot receive PUSH_PROMISE from closed state[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :RECV-PUSH-PROMISE) to signal ERROR.[0m
+[37munknown-event-test[0m
+  [37mUnknown event signals error[0m
+    [32m✓ [0m[90mExpect (STREAM-TRANSITION STREAM :INVALID-EVENT) to signal ERROR.[0m
+[37mcomplete-request-flow-test[0m
+  [37mComplete client-initiated request: idle -> open -> half-closed-local -> closed[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-LOCAL+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mcomplete-server-response-flow-test[0m
+  [37mComplete server response: idle -> open -> half-closed-remote -> closed[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mserver-push-flow-test[0m
+  [37mServer push flow: idle -> reserved-local -> half-closed-remote -> closed[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-RESERVED-LOCAL+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mclient-push-flow-test[0m
+  [37mClient receiving push: idle -> reserved-remote -> half-closed-local -> closed[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-RESERVED-REMOTE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-HALF-CLOSED-LOCAL+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mwindow-size-tracking-test[0m
+  [37mInitial window size is default[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM) +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+  [37mWindow size can be updated[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM) 32768) to be true.[0m
+  [37mWindow size can be decreased[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM)
+                (- +DEFAULT-INITIAL-WINDOW-SIZE+ 1024)) to be true.[0m
+  [37mWindow size can go negative (flow control violation)[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM) -100) to be true.[0m
+[37mbody-buffer-operations-test[0m
+  [37mBody buffer is initially empty[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HTTP2-STREAM-BODY-BUFFER STREAM)) 0) to be true.[0m
+  [37mCan append data to body buffer[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HTTP2-STREAM-BODY-BUFFER STREAM)) 10) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (HTTP2-STREAM-BODY-BUFFER STREAM) DATA) to be true.[0m
+  [37mCan append multiple chunks to body buffer[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HTTP2-STREAM-BODY-BUFFER STREAM)) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF (HTTP2-STREAM-BODY-BUFFER STREAM) 0) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF (HTTP2-STREAM-BODY-BUFFER STREAM) 4) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF (HTTP2-STREAM-BODY-BUFFER STREAM) 7) 8) to be true.[0m
+[37mcontent-length-tracking-test[0m
+  [37mContent length is initially nil[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-CONTENT-LENGTH STREAM)) to be true.[0m
+  [37mCan set content length[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-CONTENT-LENGTH STREAM) 1024) to be true.[0m
+[37mbytes-received-tracking-test[0m
+  [37mBytes received is initially zero[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-BYTES-RECEIVED STREAM) 0) to be true.[0m
+  [37mCan increment bytes received[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-BYTES-RECEIVED STREAM) 512) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-BYTES-RECEIVED STREAM) 768) to be true.[0m
+[37mheader-continuation-tracking-test[0m
+  [37mHeader buffer is initially nil[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-HEADER-BUFFER STREAM)) to be true.[0m
+  [37mAwaiting continuation is initially nil[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-AWAITING-CONTINUATION STREAM)) to be true.[0m
+  [37mCan set header continuation state[0m
+    [32m✓ [0m[90mExpect (HTTP2-STREAM-HEADER-BUFFER STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-STREAM-AWAITING-CONTINUATION STREAM) to be true.[0m
+[37mheaders-storage-test[0m
+  [37mHeaders list is initially empty[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-STREAM-HEADERS STREAM)) to be true.[0m
+  [37mCan store headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HTTP2-STREAM-HEADERS STREAM)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (ASSOC :METHOD (HTTP2-STREAM-HEADERS STREAM)) '(:METHOD . "GET")) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (ASSOC :PATH (HTTP2-STREAM-HEADERS STREAM))
+                    '(:PATH . "/index.html")) to be true.[0m
+[37mmultiple-rst-stream-test[0m
+  [37mMultiple RST_STREAM transitions keep stream closed[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mstate-transitions-sequence-test[0m
+  [37mComplex state transition sequence[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-IDLE+) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+[37mstream-id-values-test[0m
+  [37mStream ID can be any valid 32-bit unsigned integer[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-ID STREAM1) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-ID STREAM2) 2147483647) to be true.[0m
+
+[32m✓ 28 tests completed[0m
+
+Summary:
+  All 28 tests passed.
+
+;; testing 'woo-test.http2-connection'
+[37mconnection-preface-constant[0m
+  [37mConnection preface is exactly 24 bytes[0m
+    [32m✓ [0m[90mExpect (= +CONNECTION-PREFACE-LENGTH+ 24) to be true.[0m
+  [37mConnection preface has correct value (PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n)[0m
+    [32m✓ [0m[90mExpect (EQUALP +CONNECTION-PREFACE+
+                     (MAKE-ARRAY 24 :ELEMENT-TYPE '(UNSIGNED-BYTE 8)
+                                 :INITIAL-CONTENTS
+                                 '(80 82 73 32 42 32 72 84 84 80 47 50 46 48 13 10 13
+                                   10 83 77 13 10 13 10))) to be true.[0m
+    [32m✓ [0m[90mFirst byte is 'P'[0m
+    [32m✓ [0m[90mSecond byte is 'R'[0m
+    [32m✓ [0m[90mThird byte is 'I'[0m
+    [32m✓ [0m[90mContains CR[0m
+    [32m✓ [0m[90mContains LF[0m
+[37msplit-preface-and-batched-frames[0m
+  [37ma preface split after its frame-sized prefix is not parsed as a frame[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-PREFACE-RECEIVED CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-PREFACE-RECEIVED CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LENGTH (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-BUFFER CONN))) to be true.[0m
+  [37ma partial frame after complete frames survives compaction[0m
+    [32m✓ [0m[90mExpect (= 10 (LENGTH (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-BUFFER CONN))) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP (LENGTH (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-BUFFER CONN))) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+[37mmalformed-priority-frames[0m
+  [32m✓ [0m[90mExpect (= (FUNCALL ERR) EXPECTED) to be true.[0m
+  [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [32m✓ [0m[90mExpect (= (FUNCALL ERR) EXPECTED) to be true.[0m
+  [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+[37mconnection-creation[0m
+  [37mmake-http2-connection creates connection with initial state[0m
+    [32m✓ [0m[90mConnection object created[0m
+    [32m✓ [0m[90mGOAWAY not sent initially[0m
+    [32m✓ [0m[90mStreams hash table exists[0m
+    [32m✓ [0m[90mStreams is a hash table[0m
+    [32m✓ [0m[90mNo streams initially[0m
+    [32m✓ [0m[90mLast stream ID starts at 0[0m
+[37mconnection-flow-control[0m
+  [37mConnection has correct initial flow control window sizes[0m
+    [32m✓ [0m[90mLocal window size is default (65535)[0m
+[37mconnection-local-settings[0m
+  [37mConnection has correct local settings[0m
+    [32m✓ [0m[90mLocal settings exist[0m
+    [32m✓ [0m[90mSettings is a list[0m
+    [32m✓ [0m[90mMax concurrent streams is 100[0m
+    [32m✓ [0m[90mInitial window size matches default[0m
+    [32m✓ [0m[90mMax frame size matches default[0m
+    [32m✓ [0m[90mHeader table size matches default[0m
+    [32m✓ [0m[90mSETTINGS_MAX_HEADER_LIST_SIZE is advertised[0m
+[37mconnection-remote-settings[0m
+  [37mConnection starts with nil remote settings[0m
+    [32m✓ [0m[90mRemote settings initially nil (not received yet)[0m
+[37mconnection-hpack-contexts[0m
+  [37mConnection initializes HPACK encoder and decoder contexts[0m
+    [32m✓ [0m[90mEncoder context exists[0m
+    [32m✓ [0m[90mEncoder is an HPACK context[0m
+    [32m✓ [0m[90mEncoder has correct max table size[0m
+    [32m✓ [0m[90mDecoder context exists[0m
+    [32m✓ [0m[90mDecoder is an HPACK context[0m
+    [32m✓ [0m[90mDecoder has correct max table size[0m
+    [32m✓ [0m[90mEncoder and decoder are separate contexts[0m
+[37mstream-management-get-without-create[0m
+  [37mconnection-get-stream without :create returns nil for non-existent stream[0m
+    [32m✓ [0m[90mNon-existent stream returns nil[0m
+    [32m✓ [0m[90mAnother non-existent stream returns nil[0m
+    [32m✓ [0m[90mNo streams were created[0m
+[37mstream-management-get-with-create[0m
+  [37mconnection-get-stream with :create creates new stream[0m
+    [32m✓ [0m[90mStream was created[0m
+    [32m✓ [0m[90mResult is an http2-stream[0m
+    [32m✓ [0m[90mStream has correct ID[0m
+    [32m✓ [0m[90mNew stream is in idle state[0m
+    [32m✓ [0m[90mStream has default window size[0m
+    [32m✓ [0m[90mStream was added to connection[0m
+  [37mconnection-get-stream returns existing stream on second call[0m
+    [32m✓ [0m[90mSame stream object returned[0m
+    [32m✓ [0m[90mNo duplicate streams created[0m
+  [37mconnection-get-stream creates multiple streams with different IDs[0m
+    [32m✓ [0m[90mDifferent stream objects[0m
+    [32m✓ [0m[90mDifferent stream objects[0m
+    [32m✓ [0m[90mDifferent stream objects[0m
+    [32m✓ [0m[90mStream 1 has ID 1[0m
+    [32m✓ [0m[90mStream 3 has ID 3[0m
+    [32m✓ [0m[90mStream 5 has ID 5[0m
+    [32m✓ [0m[90mThree streams in connection[0m
+[37mstream-management-with-callback[0m
+  [37mconnection-get-stream calls on-stream callback when creating[0m
+    [32m✓ [0m[90mCallback was invoked[0m
+    [32m✓ [0m[90mCallback received the correct stream[0m
+  [37mconnection-get-stream doesn't call callback for existing stream[0m
+    [32m✓ [0m[90mCallback called once on creation[0m
+    [32m✓ [0m[90mCallback not called for existing stream[0m
+    [32m✓ [0m[90mCallback still only called once[0m
+[37mstream-window-size-inheritance[0m
+  [37mNew streams inherit window size from connection[0m
+    [32m✓ [0m[90mStream gets default window size[0m
+[37mconnection-callbacks[0m
+  [37mConnection callback slots can be set[0m
+    [32m✓ [0m[90mon-stream callback set[0m
+[37mconnection-socket[0m
+  [37mConnection socket can be set and retrieved[0m
+    [32m✓ [0m[90mSocket value preserved[0m
+[37mconstants-verification[0m
+  [37mHTTP/2 constants have correct values[0m
+    [32m✓ [0m[90mSETTINGS_HEADER_TABLE_SIZE = 0x1[0m
+    [32m✓ [0m[90mSETTINGS_MAX_CONCURRENT_STREAMS = 0x3[0m
+    [32m✓ [0m[90mSETTINGS_INITIAL_WINDOW_SIZE = 0x4[0m
+    [32m✓ [0m[90mSETTINGS_MAX_FRAME_SIZE = 0x5[0m
+    [32m✓ [0m[90mDefault header table size is 4096[0m
+    [32m✓ [0m[90mDefault window size is 65535[0m
+    [32m✓ [0m[90mDefault frame size is 16384[0m
+    [32m✓ [0m[90mMax frame size limit is 2^24 - 1[0m
+[37mconnection-state-flags[0m
+  [37mConnection state flags are independently settable[0m
+    [32m✓ [0m[90mGOAWAY sent initially false[0m
+    [32m✓ [0m[90mGOAWAY sent flag can be set[0m
+[37mb4-illegal-stream-ids[0m
+  [37mHEADERS on stream 0 is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mEven stream id is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+  [37mHEADERS after the remote half-close is RST STREAM_CLOSED[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+ <ERROR> [23:15:29] woo.http2.connection - Stream state error: Cannot RECV-HEADERS in state half-closed (remote)
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)
+                    (CONS 1 +STREAM-CLOSED+)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37mStream id not greater than last-stream-id is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+  [37mExceeding MAX_CONCURRENT_STREAMS is RST REFUSED_STREAM[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +REFUSED-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 3 +REFUSED-STREAM+)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mA refused HEADERS block is still applied to the dynamic table[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +REFUSED-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mindexed lookup of the refused block is not a compression error[0m
+    [32m✓ [0m[90mExpect (EQUAL GOT '(("custom-key" . "custom-header"))) to be true.[0m
+[37mb5-continuation-and-end-stream[0m
+  [37mEND_STREAM on HEADERS without END_HEADERS is preserved[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN) to be true.[0m
+    [32m✓ [0m[90mExpect GOT-END to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37mNon-CONTINUATION while awaiting is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+  [37mCONTINUATION when not awaiting is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+[37mb6-padding[0m
+  [37mPADDED HEADERS with pad-length >= payload is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+  [37mPADDED DATA with pad-length >= payload is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+[37mb7-settings-and-frame-size[0m
+  [37mSETTINGS ACK with payload is FRAME_SIZE_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FRAME-SIZE-ERROR+) to be true.[0m
+  [37mSETTINGS_MAX_FRAME_SIZE below 16384 is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+  [37mSETTINGS_MAX_FRAME_SIZE above 2^24-1 is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+  [37mSETTINGS_INITIAL_WINDOW_SIZE overflow is FLOW_CONTROL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FLOW-CONTROL-ERROR+) to be true.[0m
+  [37mparse-frame rejects advertised length over max-frame-size[0m
+    [32m✓ [0m[90mExpect (NULL FRAME) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ STATUS :FRAME-SIZE-ERROR) to be true.[0m
+[37mb8-flow-control[0m
+  [37mWINDOW_UPDATE increment 0 on stream 0 is a connection PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mIncoming DATA decrements recv windows and leaves send windows[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-WINDOW-SIZE CONN) (- BEFORE-RECV 10)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-RECV-WINDOW-SIZE STREAM)
+                (- +DEFAULT-INITIAL-WINDOW-SIZE+ 10)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-REMOTE-WINDOW-SIZE CONN) BEFORE-SEND) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM)
+                (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-REMOTE-INITIAL-WINDOW-SIZE
+                 CONN)) to be true.[0m
+  [37mDATA larger than recv window is FLOW_CONTROL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FLOW-CONTROL-ERROR+) to be true.[0m
+    [32m✓ [0m[90moverflow does not debit the recv window[0m
+    [32m✓ [0m[90moverflow does not touch the send window[0m
+    [32m✓ [0m[90mflow-control overflow is a connection error[0m
+    [32m✓ [0m[90mflow-control overflow is not a stream RST[0m
+  [37mDATA after END_STREAM is STREAM_CLOSED[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mDATA after END_STREAM is RST, not GOAWAY[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)
+                    (CONS 1 +STREAM-CLOSED+)) to be true.[0m
+    [32m✓ [0m[90ma fitting DATA frame debits the connection window[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37mDATA after END_STREAM that exceeds the connection window is FLOW_CONTROL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FLOW-CONTROL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-WINDOW-SIZE CONN) 5) to be true.[0m
+  [37mWINDOW_UPDATE increment 0 on an open stream is RST PROTOCOL_ERROR (RFC 9113 §6.9)[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mstream 1 is reset[0m
+    [32m✓ [0m[90mnot a connection error[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mstream 3 still takes credit[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mWINDOW_UPDATE increment 0 on a half-closed (remote) stream is RST PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)
+                    (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+[37mb4-trailers-and-state-errors[0m
+  [37mHEADERS in open with END_STREAM are trailers and half-close remote[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REVERSE ENDS) '(NIL T)) to be true.[0m
+  [37mHEADERS on reserved-local is GOAWAY PROTOCOL_ERROR, not INTERNAL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-STATE STREAM) +STATE-RESERVED-LOCAL+) to be true.[0m
+ <ERROR> [23:15:29] woo.http2.connection - Stream state error: Cannot RECV-HEADERS in state reserved (local)
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (/= (FUNCALL ERR) +INTERNAL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)) to be true.[0m
+  [37mHEADERS on half-closed-remote is RST STREAM_CLOSED, not GOAWAY[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+ <ERROR> [23:15:29] woo.http2.connection - Stream state error: Cannot RECV-HEADERS in state half-closed (remote)
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (/= (FUNCALL ERR) +INTERNAL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)
+                    (CONS 1 +STREAM-CLOSED+)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mthe RST stream's block was decoded into the dynamic table[0m
+    [32m✓ [0m[90mExpect (EQUAL GOT '(("custom-key" . "custom-header"))) to be true.[0m
+[37mcontent-length-checks[0m
+  [37mnon-integer content-length is RST PROTOCOL_ERROR and the connection stays up[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m[90mnope[0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m4 [0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m 4[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m-1[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m+4[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4.0[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4,4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+    [32m✓ [0m[90m4, 4[0m
+  [37mduplicate content-length values are RST PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+  [37ma later content-length is a duplicate even when it matches[0m
+    [32m✓ [0m[90mExpect (= N 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= N 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+  [37mcontent-length 0 with END_STREAM and no body is valid[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL SAW '(0 T)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect (= 0 (HTTP2-STREAM-BYTES-RECEIVED (CONNECTION-GET-STREAM CONN 1))) to be true.[0m
+  [37mcontent-length 0 then a body byte is RST PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect DATA-CALLED to be false.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+  [37mEND_STREAM shorter than content-length is RST and not delivered[0m
+    [32m✓ [0m[90mExpect DATA-CALLED to be false.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37ma body longer than content-length is RST before END_STREAM[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= CHUNKS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= CHUNKS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+  [37mbytes-received must equal content-length at END_STREAM[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (= CHUNKS 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= 4 (HTTP2-STREAM-CONTENT-LENGTH STREAM)) to be true.[0m
+    [32m✓ [0m[90mExpect (= 4 (HTTP2-STREAM-BYTES-RECEIVED STREAM)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+[37mignored-frames-are-connection-errors[0m
+  [37mclient PUSH_PROMISE is GOAWAY PROTOCOL_ERROR and stops the connection[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37mPING with a non-zero stream id is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+  [37mPING whose payload is not 8 octets is FRAME_SIZE_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FRAME-SIZE-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37ma valid PING is not an error[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mWINDOW_UPDATE on an idle stream is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-REMOTE-WINDOW-SIZE CONN)
+                +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-WINDOW-SIZE CONN) +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+  [37mWINDOW_UPDATE on an explicitly idle stream is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mWINDOW_UPDATE on stream 0 credits only the send window[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-REMOTE-WINDOW-SIZE CONN)
+                (+ +DEFAULT-INITIAL-WINDOW-SIZE+ 1000)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-WINDOW-SIZE CONN) RECV) to be true.[0m
+  [37mWINDOW_UPDATE on an open stream credits the stream send window[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM)
+                (+ +DEFAULT-INITIAL-WINDOW-SIZE+ 25)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-RECV-WINDOW-SIZE STREAM) RECV) to be true.[0m
+  [37mWINDOW_UPDATE on half-closed (remote) is not an error[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE STREAM)
+                (+ +DEFAULT-INITIAL-WINDOW-SIZE+ 10)) to be true.[0m
+  [37mRST_STREAM on stream 0 is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+  [37mRST_STREAM on an idle stream is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mRST_STREAM payload other than 4 octets is FRAME_SIZE_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FRAME-SIZE-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mRST_STREAM on an open stream closes it and leaves the connection up[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mGOAWAY on a non-zero stream is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect CALLED to be false.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-GOAWAY-RECEIVED CONN) to be false.[0m
+  [37mGOAWAY shorter than 8 octets is FRAME_SIZE_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FRAME-SIZE-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37ma valid GOAWAY is delivered and is not a connection error[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-GOAWAY-RECEIVED CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL GOT (LIST 7 +PROTOCOL-ERROR+)) to be true.[0m
+  [37mSETTINGS_ENABLE_PUSH other than 0 or 1 is PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL
+              (ASSOC +SETTINGS-ENABLE-PUSH+ (HTTP2-CONNECTION-REMOTE-SETTINGS CONN))) to be true.[0m
+  [37mSETTINGS_ENABLE_PUSH 0 and 1 are accepted[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (= VALUE
+                (CDR
+                 (ASSOC +SETTINGS-ENABLE-PUSH+
+                        (HTTP2-CONNECTION-REMOTE-SETTINGS CONN)))) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (= VALUE
+                (CDR
+                 (ASSOC +SETTINGS-ENABLE-PUSH+
+                        (HTTP2-CONNECTION-REMOTE-SETTINGS CONN)))) to be true.[0m
+  [37man unknown frame type is still ignored[0m
+  <WARN> [23:15:29] woo.http2.connection - Unknown frame type: 20
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mthe first frame after the preface must be SETTINGS[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (CONNECTION-GET-STREAM CONN 3)) to be true.[0m
+  [37mSETTINGS ACK is not a valid first frame[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mpreface followed by SETTINGS then other frames is accepted[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-PREFACE-RECEIVED CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-AWAITING-FIRST-SETTINGS CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+[37mdata-after-remote-close-is-stream-error[0m
+  [37mDATA on a fully closed stream is RST STREAM_CLOSED, not GOAWAY[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P STREAM) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +STREAM-CLOSED+)) to be true.[0m
+    [32m✓ [0m[90ma fitting DATA frame debits the connection window[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-REMOTE-WINDOW-SIZE CONN) SEND) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 3)) to be true.[0m
+[37mheader-list-size-limit[0m
+  [37mSETTINGS_MAX_HEADER_LIST_SIZE is on the advertised SETTINGS frame[0m
+    [32m✓ [0m[90mExpect (= +SETTINGS-MAX-HEADER-LIST-SIZE+ 6) to be true.[0m
+    [32m✓ [0m[90mExpect (= +DEFAULT-MAX-HEADER-LIST-SIZE+
+                (CDR (ASSOC +SETTINGS-MAX-HEADER-LIST-SIZE+ PARSED))) to be true.[0m
+  [37ma peer SETTINGS_MAX_HEADER_LIST_SIZE is accepted[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (= 1000
+                (CDR
+                 (ASSOC +SETTINGS-MAX-HEADER-LIST-SIZE+
+                        (HTTP2-CONNECTION-REMOTE-SETTINGS CONN)))) to be true.[0m
+  [37ma header block over the cap is GOAWAY ENHANCE_YOUR_CALM before decode[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +ENHANCE-YOUR-CALM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37mCONTINUATION concatenation is capped before the block is complete[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= 1 (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +ENHANCE-YOUR-CALM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (CONNECTION-GET-STREAM CONN 3)) to be true.[0m
+  [37muncompressed header list at the cap is accepted and one octet over is not[0m
+    [32m✓ [0m[90mExpect (= SIZE 34) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect CALLED to be false.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +ENHANCE-YOUR-CALM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect STREAM to be true.[0m
+    [32m✓ [0m[90mExpect (= +STATE-IDLE+ (HTTP2-STREAM-STATE STREAM)) to be true.[0m
+[37mreceive-window-replenishment[0m
+  [37mmore than 64 KB on one stream is credited back with WINDOW_UPDATE[0m
+    [32m✓ [0m[90mno FLOW_CONTROL_ERROR past the initial window[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mpadding is not body[0m
+    [32m✓ [0m[90mconnection WINDOW_UPDATE sent[0m
+    [32m✓ [0m[90mstream WINDOW_UPDATE sent[0m
+    [32m✓ [0m[90mExpect (EVERY #'PLUSP (APPEND CONN-INC STREAM-INC)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-WINDOW-SIZE CONN)
+                (+ (- +DEFAULT-INITIAL-WINDOW-SIZE+ RAW) (REDUCE #'+ CONN-INC))) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-RECV-WINDOW-SIZE STREAM)
+                (+ (- +DEFAULT-INITIAL-WINDOW-SIZE+ RAW) (REDUCE #'+ STREAM-INC))) to be true.[0m
+    [32m✓ [0m[90mExpect (> (HTTP2-CONNECTION-WINDOW-SIZE CONN)
+                (FLOOR +DEFAULT-INITIAL-WINDOW-SIZE+ 2)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-REMOTE-WINDOW-SIZE CONN)
+                +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P STREAM) to be true.[0m
+    [32m✓ [0m[90mno stream credit once the peer has ended the stream[0m
+    [32m✓ [0m[90mconnection credit restores the initial window[0m
+  [37mmore than 64 KB across streams needs connection credit[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (WINDOW-UPDATES (SENT) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-WINDOW-SIZE CONN)
+                (+ (- +DEFAULT-INITIAL-WINDOW-SIZE+ 90000)
+                   (REDUCE #'+ (WINDOW-UPDATES (SENT) 0)))) to be true.[0m
+    [32m✓ [0m[90m30,000 octets per stream never reaches the stream threshold[0m
+  [37mDATA on a closed stream still returns connection credit[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mSTREAM_CLOSED RSTs, the connection window never runs out[0m
+    [32m✓ [0m[90mExpect (WINDOW-UPDATES (SENT) 0) to be true.[0m
+[37mheader-list-size-enforced-while-decoding[0m
+  [37mindexed references to a large entry stop at the cap[0m
+    [32m✓ [0m[90mthe compressed block passes the pre-decode size check[0m
+    [32m✓ [0m[90mdecoding stopped at the cap, before the poisoned tail[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect CALLED to be false.[0m
+[37mrefused-stream-code[0m
+  [37ma refused stream's block is decoded, then RST REFUSED_STREAM[0m
+    [32m✓ [0m[90mExpect RST to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.HTTP2.FRAMES:FRAME-STREAM-ID RST) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.HTTP2.FRAMES:PARSE-RST-STREAM-PAYLOAD (FRAME-PAYLOAD RST))
+                +REFUSED-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +REFUSED-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+[37mclosed-streams-are-bounded[0m
+  [37m1000 completed streams keep a bounded id table and no stream objects[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (HASH-TABLE-COUNT CLOSED) 128) to be true.[0m
+    [32m✓ [0m[90mExpect (PLUSP (HASH-TABLE-COUNT CLOSED)) to be true.[0m
+    [32m✓ [0m[90monly ids are retained, not stream objects[0m
+    [32m✓ [0m[90mExpect (ZEROP (HASH-TABLE-COUNT (HTTP2-CONNECTION-STREAMS CONN))) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-CONNECTION-LAST-STREAM-ID CONN) 1999) to be true.[0m
+  [37mframes for old and recent closed streams are still handled[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mWINDOW_UPDATE on a pruned closed stream is ignored[0m
+    [32m✓ [0m[90mRST_STREAM on a pruned closed stream is ignored[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +STREAM-CLOSED+)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1997 +STREAM-CLOSED+)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 2001)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37man id above last-stream-id is still idle[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37mHEADERS reusing a pruned closed id is a connection error[0m
+    [32m✓ [0m[90mExpect (FUNCALL ERR) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+[37mconnection-error-closes-connection[0m
+  [37ma connection error sends GOAWAY, then closes[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (= CLOSES 1) to be true.[0m
+    [32m✓ [0m[90mGOAWAY is queued before the close[0m
+    [32m✓ [0m[90mnothing is written after the close is queued[0m
+    [32m✓ [0m[90mclose is idempotent[0m
+  [37ma stream error does not close the connection[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP CLOSES) to be true.[0m
+  [37man HPACK error closes the connection[0m
+ <ERROR> [23:15:29] woo.http2.connection - HPACK compression error: HPACK compression error: integer truncated
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) WOO.HTTP2.CONSTANTS:+COMPRESSION-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (= CLOSES 1) to be true.[0m
+[37mlocal-settings-are-per-connection[0m
+  [37mediting one connection's settings leaves new connections alone[0m
+    [32m✓ [0m[90mExpect (EQ SETTINGS (HTTP2-CONNECTION-LOCAL-SETTINGS B)) to be false.[0m
+    [32m✓ [0m[90mExpect (= +DEFAULT-MAX-HEADER-LIST-SIZE+
+                (CDR
+                 (ASSOC +SETTINGS-MAX-HEADER-LIST-SIZE+
+                        (HTTP2-CONNECTION-LOCAL-SETTINGS B)))) to be true.[0m
+    [32m✓ [0m[90mExpect (= +DEFAULT-MAX-HEADER-LIST-SIZE+
+                (WOO.HTTP2.CONNECTION::CONNECTION-HEADER-LIST-LIMIT B)) to be true.[0m
+[37mrequest-body-size-limit[0m
+  [37ma body past *max-request-body-size* is RST CANCEL, the connection stays up[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +CANCEL+)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mthe over-limit frame is not buffered or delivered[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mthe dropped stream releases its buffered octets[0m
+  [37ma body of exactly the limit is accepted[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+  [37ma declared content-length above the limit is refused at HEADERS[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +CANCEL+)) to be true.[0m
+    [32m✓ [0m[90mExpect HEADERS-CALLED to be false.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mthe per-connection body budget refuses the stream that would exceed it[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 3 +CANCEL+)) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-BUFFERED-BODY-OCTETS CONN)
+                1000) to be true.[0m
+    [32m✓ [0m[90mExpect (ZEROP
+              (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-BUFFERED-BODY-OCTETS CONN)) to be true.[0m
+    [32m✓ [0m[90mstream 5 fits again[0m
+    [32m✓ [0m[90mExpect (STREAM-OPEN-P (CONNECTION-GET-STREAM CONN 5)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+[37mrequest-body-buffer-grows-geometrically[0m
+  [37m1000 appends reallocate the body buffer O(log n) times, not per frame[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH CAPACITIES) 1000) to be true.[0m
+    [32m✓ [0m[90m7 growths[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BODY) 100000) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (ARRAY-TOTAL-SIZE BODY) (* 2 (LENGTH BODY))) to be true.[0m
+    [32m✓ [0m[90moctets land in order[0m
+[37mclosed-stream-data-reset-limit[0m
+  [37mDATA on closed streams earns RSTs only up to the limit, then GOAWAY[0m
+    [32m✓ [0m[90mExpect (= (COUNT-RSTS (SENT) 1) 10) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mno RST past the limit[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +ENHANCE-YOUR-CALM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect GOAWAY to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (NTH-VALUE 1
+                         (WOO.HTTP2.FRAMES:PARSE-GOAWAY-PAYLOAD
+                          (FRAME-PAYLOAD GOAWAY)))
+              +ENHANCE-YOUR-CALM+) to be true.[0m
+  [37mthe default limit leaves ordinary stragglers alone[0m
+    [32m✓ [0m[90mExpect (>= WOO.HTTP2.CONNECTION:*MAX-CLOSED-STREAM-DATA-RESETS* 100) to be true.[0m
+[37min-flight-data-after-our-rst-is-ignored[0m
+  [37mDATA within the window the peer had at our RST is not RST again or counted[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (COUNT-RSTS (SENT) 1) 1) to be true.[0m
+    [32m✓ [0m[90min-flight DATA gets no further RST[0m
+    [32m✓ [0m[90min-flight DATA does not count toward the reset limit[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mignored DATA still has its connection credit returned[0m
+    [32m✓ [0m[90mExpect (= (COUNT-RSTS (SENT) 1) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-CLOSED-STREAM-DATA-RESETS CONN)
+              1) to be true.[0m
+  [37ma stream that ended normally gets no in-flight allowance[0m
+    [32m✓ [0m[90mExpect (= (COUNT-RSTS (SENT) 1) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (COUNT-RSTS (SENT) 1) 2) to be true.[0m
+[37mtrailer-field-validation[0m
+  [37mmalformed trailer fields are RST PROTOCOL_ERROR, not GOAWAY[0m
+    [32m✓ [0m[90mX-Upper[0m
+    [32m✓ [0m[90mX-Upper[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mX-Upper[0m
+    [32m✓ [0m[90mconnection[0m
+    [32m✓ [0m[90mconnection[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mconnection[0m
+    [32m✓ [0m[90mkeep-alive[0m
+    [32m✓ [0m[90mkeep-alive[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mkeep-alive[0m
+    [32m✓ [0m[90mproxy-connection[0m
+    [32m✓ [0m[90mproxy-connection[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mproxy-connection[0m
+    [32m✓ [0m[90mtransfer-encoding[0m
+    [32m✓ [0m[90mtransfer-encoding[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mtransfer-encoding[0m
+    [32m✓ [0m[90mupgrade[0m
+    [32m✓ [0m[90mupgrade[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mupgrade[0m
+    [32m✓ [0m[90mte[0m
+    [32m✓ [0m[90mte[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mte[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mx-a[0m
+    [32m✓ [0m[90mbad name[0m
+    [32m✓ [0m[90mbad name[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90mbad name[0m
+    [32m✓ [0m[90m:path[0m
+    [32m✓ [0m[90m:path[0m
+    [32m✓ [0m[90monly the request headers reached on-headers[0m
+    [32m✓ [0m[90m:path[0m
+  [37mcontent-length in trailers is RST PROTOCOL_ERROR[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +PROTOCOL-ERROR+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mwell-formed trailers, including TE: trailers, are accepted[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (LAST-RST CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 2) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL
+              (WOO.HTTP2.STREAM:HTTP2-STREAM-TRAILERS (CONNECTION-GET-STREAM CONN 1))
+              '(("x-checksum" . "abc") ("te" . "trailers") ("x-empty" . ""))) to be true.[0m
+[37mmax-frame-size-boundary[0m
+  [37ma DATA frame of exactly 16384 octets is accepted at the default max[0m
+    [32m✓ [0m[90mExpect (= +DEFAULT-MAX-FRAME-SIZE+ 16384) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL (FUNCALL CALLS) '((1 16384 T))) to be true.[0m
+[37mcontinuation-frame-count-is-capped[0m
+  [37mempty CONTINUATIONs past the cap are GOAWAY ENHANCE_YOUR_CALM[0m
+    [32m✓ [0m[90ma literal: raising the default must fail this test[0m
+    [32m✓ [0m[90mup to the cap is accepted[0m
+    [32m✓ [0m[90mExpect (= 1 (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +ENHANCE-YOUR-CALM+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL
+              (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM
+               CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect GOAWAY to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (NTH-VALUE 1
+                         (WOO.HTTP2.FRAMES:PARSE-GOAWAY-PAYLOAD
+                          (FRAME-PAYLOAD GOAWAY)))
+              +ENHANCE-YOUR-CALM+) to be true.[0m
+  [37m100,000 empty CONTINUATIONs stop at the cap[0m
+    [32m✓ [0m[90m65 frames before GOAWAY[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +ENHANCE-YOUR-CALM+) to be true.[0m
+  [37ma block split over the maximum number of CONTINUATIONs decodes[0m
+    [32m✓ [0m[90mExpect (< (LENGTH BLOCK) N) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (EQUAL GOT HEADERS) to be true.[0m
+    [32m✓ [0m[90mExpect (STREAM-HALF-CLOSED-REMOTE-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+[37mcontinuation-header-buffer-grows-geometrically[0m
+  [37ma block over 4000 CONTINUATIONs copies O(n) octets, not O(n^2)[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (WOO.HTTP2.STREAM:HTTP2-STREAM-HEADER-BUFFER STREAM))
+                (* FRAMES CHUNK)) to be true.[0m
+    [32m✓ [0m[90m7 growths[0m
+    [32m✓ [0m[90m64512 octets copied[0m
+    [32m✓ [0m[90mthe connection's own count agrees[0m
+[37mtrailers-in-flight-after-our-rst-are-ignored[0m
+  [37mone HEADERS frame of trailers after our RST is decoded and ignored[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +CANCEL+)) to be true.[0m
+    [32m✓ [0m[90mno new error[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mno second RST[0m
+    [32m✓ [0m[90mafter END_STREAM no DATA allowance is left[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mthe ignored block was decoded into the dynamic table[0m
+  [37mtrailers split over HEADERS and CONTINUATION after our RST are ignored[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +CANCEL+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= 1 (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mExpect (NULL (HTTP2-CONNECTION-AWAITING-CONTINUATION-STREAM-ID CONN)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (COUNT-RSTS (SENT) 1) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90mthe ignored block was decoded into the dynamic table[0m
+  [37mHEADERS on a stream that closed normally is still GOAWAY STREAM_CLOSED[0m
+ <ERROR> [23:15:29] woo.http2.connection - Stream state error: Cannot RECV-HEADERS in state closed
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+  [37msplit HEADERS on a stream that closed normally is GOAWAY STREAM_CLOSED[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+ <ERROR> [23:15:29] woo.http2.connection - Stream state error: Cannot RECV-HEADERS in state closed
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +STREAM-CLOSED+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+[37mremote-settings-stay-bounded[0m
+  [37m100 SETTINGS frames of 2730 entries keep one value per known id[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+    [32m✓ [0m[90m1 entries[0m
+    [32m✓ [0m[90mthe latest value wins[0m
+    [32m✓ [0m[90munknown ids are not stored[0m
+[37mwindow-update-on-closed-stream-is-ignored[0m
+  [37mthe largest legal increment on a closed stream is not FLOW_CONTROL_ERROR[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37ma stream we reset takes a large increment too[0m
+    [32m✓ [0m[90mExpect (EQUAL (LAST-RST CONN) (CONS 1 +CANCEL+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be false.[0m
+  [37mincrement 0 on a closed stream is ignored as well (§5.1)[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mno RST_STREAM or GOAWAY[0m
+  [37man open stream still overflows at 2^31-1, as RST FLOW_CONTROL_ERROR (§6.9.1)[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FLOW-CONTROL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mone RST_STREAM and no GOAWAY[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)
+                    (CONS 1 +FLOW-CONTROL-ERROR+)) to be true.[0m
+    [32m✓ [0m[90mthe connection stays up[0m
+    [32m✓ [0m[90mExpect (STREAM-CLOSED-P (CONNECTION-GET-STREAM CONN 1)) to be true.[0m
+    [32m✓ [0m[90mstream 1 is dropped[0m
+    [32m✓ [0m[90mstream 3 still works[0m
+    [32m✓ [0m[90ma later WINDOW_UPDATE on the reset stream is ignored[0m
+  [37mthe connection window still overflows as a connection error[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FLOW-CONTROL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-LAST-RST CONN)) to be true.[0m
+  [37mINITIAL_WINDOW_SIZE that pushes a stream past 2^31-1 is a connection error (§6.9.2)[0m
+    [32m✓ [0m[90mExpect (= (HTTP2-STREAM-WINDOW-SIZE (CONNECTION-GET-STREAM CONN 1))
+                +MAX-WINDOW-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (FUNCALL ERR)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL ERR) +FLOW-CONTROL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (HTTP2-CONNECTION-GOAWAY-SENT CONN) to be true.[0m
+    [32m✓ [0m[90mnot a stream RST[0m
+    [32m✓ [0m[90mno stream window is changed[0m
+    [32m✓ [0m[90mExpect (=
+              (WOO.HTTP2.CONNECTION::HTTP2-CONNECTION-REMOTE-INITIAL-WINDOW-SIZE
+               CONN)
+              +DEFAULT-INITIAL-WINDOW-SIZE+) to be true.[0m
+
+[32m✓ 43 tests completed[0m
+
+Summary:
+  All 43 tests passed.

@@ -1,0 +1,887 @@
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/09-h2-codecs/src/llsocket/grovel__grovel.grovel-tmp.lisp
+
+;; testing 'woo-test.hpack'
+[37mhpack-context-creation[0m
+  [37mCreate default HPACK context[0m
+    [32m✓ [0m[90mExpect CTX to be an instance of HPACK-CONTEXT.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+  [37mCreate HPACK context with custom max size[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 8192) to be true.[0m
+[37mhpack-integer-encoding-small[0m
+  [37mEncode small integers (less than 2^N-1)[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(10)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(5)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(42)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 1) to be true.[0m
+[37mhpack-integer-encoding-boundary[0m
+  [37mEncode integers at boundary (2^N-1)[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(31 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(7 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(63 0)) to be true.[0m
+[37mhpack-integer-encoding-large[0m
+  [37mEncode large integers (greater than 2^N-1)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FIRST BYTES) 31) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (SECOND BYTES) 128) 128) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (THIRD BYTES) 128) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (>= (LENGTH BYTES) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FIRST BYTES) 127) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH BYTES) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(127 1)) to be true.[0m
+[37mhpack-integer-encoding-with-prefix[0m
+  [37mEncode integers with non-zero first byte prefix[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(234)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (FIRST BYTES) 224) 224) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL BYTES '(106)) to be true.[0m
+[37mhpack-integer-decoding-roundtrip[0m
+  [37mDecode integers - roundtrip with encoding[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (= DECODED VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-integer-decoding-with-offset[0m
+  [37mDecode integers with non-zero start offset[0m
+    [32m✓ [0m[90mExpect (= DECODED 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-string-encoding-ascii[0m
+  [37mEncode ASCII strings[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 0) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 1) (CHAR-CODE #\h)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 2) (CHAR-CODE #\e)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 3) (CHAR-CODE #\l)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 4) (CHAR-CODE #\l)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 5) (CHAR-CODE #\o)) to be true.[0m
+[37mhpack-string-encoding-utf8[0m
+  [37mEncode UTF-8 strings[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (>= (LENGTH ENCODED) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (>= (LENGTH ENCODED) 9) to be true.[0m
+[37mhpack-string-encoding-empty[0m
+  [37mEncode empty string[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH ENCODED) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF ENCODED 0) 0) to be true.[0m
+[37mhpack-string-decoding-roundtrip[0m
+  [37mDecode strings - roundtrip with encoding[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED TEST-STRING) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-string-decoding-with-offset[0m
+  [37mDecode strings with non-zero start offset[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED "test") to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-static-table-lookup[0m
+  [37mLookup entries in static table (indices 1-61)[0m
+    [32m✓ [0m[90mExpect (CONSP ENTRY) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":authority") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "GET") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "POST") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "200") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "content-type") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "www-authenticate") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "") to be true.[0m
+[37mhpack-static-table-invalid-index[0m
+  [37mInvalid index 0 should error[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 0) to signal ERROR.[0m
+[37mhpack-dynamic-table-add-entry[0m
+  [37mAdd entry to dynamic table[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (> (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (CONSP ENTRY) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "custom-header") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "custom-value") to be true.[0m
+[37mhpack-dynamic-table-multiple-entries[0m
+  [37mAdd multiple entries to dynamic table[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "header-3") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "value-3") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "header-2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "value-2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) "header-1") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "value-1") to be true.[0m
+[37mhpack-dynamic-table-entry-size[0m
+  [37mEntry size is octets, not Lisp characters (RFC 7541 §4.1)[0m
+    [32m✓ [0m[90mExpect (= SIZE (+ 32 4 5)) to be true.[0m
+    [32m✓ [0m[90mExpect (= SIZE (+ 32 1 2)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH VALUE) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= SIZE (+ 32 1 9)) to be true.[0m
+[37mhpack-dynamic-table-eviction[0m
+  [37mEvict entries when max size exceeded[0m
+    [32m✓ [0m[90mExpect (<= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (< (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+[37mhpack-dynamic-table-size-update[0m
+  [37mUpdate dynamic table max size and trigger eviction[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) OLD-COUNT) to be true.[0m
+[37mhpack-dynamic-table-entry-too-large[0m
+  [37mEntry larger than max size should not be added[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+  [37mOversized insert empties existing entries and does not insert (RFC 7541 §4.4)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+[37mhpack-encode-headers-simple[0m
+  [37mEncode simple headers[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-encode-headers-with-static-table[0m
+  [37mEncode headers using static table[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LOGAND (AREF ENCODED 0) 128) 128) to be true.[0m
+[37mhpack-encode-headers-custom[0m
+  [37mEncode custom headers not in static table[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-encode-headers-mixed[0m
+  [37mEncode mix of static and custom headers[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-encode-headers-symbol-names[0m
+  [37mEncode headers with symbol names (keyword and regular)[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (> (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-decode-headers-indexed[0m
+  [37mDecode indexed header (static table)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+[37mhpack-decode-headers-literal-without-indexing[0m
+  [37mDecode literal header without indexing[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "test") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "value") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+[37mhpack-decode-headers-literal-with-indexing[0m
+  [37mDecode literal header with incremental indexing[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "custom") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "test") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+[37mhpack-decode-headers-dynamic-table-size-update[0m
+  [37mDecode dynamic table size update[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 1024) to be true.[0m
+[37mhpack-decode-headers-multiple[0m
+  [37mDecode multiple headers in one block[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAADR HEADERS) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDADR HEADERS) "200") to be true.[0m
+[37mhpack-roundtrip-simple-headers[0m
+  [37mRoundtrip encode/decode simple headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-static-table-headers[0m
+  [37mRoundtrip encode/decode static table headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-custom-headers[0m
+  [37mRoundtrip encode/decode custom headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-mixed-headers[0m
+  [37mRoundtrip encode/decode mixed static and custom headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-utf8-headers[0m
+  [37mRoundtrip encode/decode UTF-8 header values[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-empty-values[0m
+  [37mRoundtrip encode/decode headers with empty values[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-common-http-headers[0m
+  [37mRoundtrip encode/decode common HTTP/2 request headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-roundtrip-response-headers[0m
+  [37mRoundtrip encode/decode common HTTP/2 response headers[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-encode-empty-header-list[0m
+  [37mEncode empty header list[0m
+    [32m✓ [0m[90mExpect (VECTORP ENCODED) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH ENCODED) 0) to be true.[0m
+[37mhpack-decode-empty-data[0m
+  [37mDecode empty data[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 0) to be true.[0m
+[37mhpack-large-header-value[0m
+  [37mEncode/decode large header value[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR DECODED) "x-large") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR DECODED) LARGE-VALUE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (CDAR DECODED)) 10000) to be true.[0m
+[37mhpack-special-characters-in-values[0m
+  [37mEncode/decode headers with special characters[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DECODED) (LENGTH HEADERS)) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER ORIGINAL DECODED :TEST #'EQUAL) to be true.[0m
+[37mhpack-integer-truncated[0m
+  [37mTruncated integer (prefix filled, no continuation) is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-DECODE-INTEGER DATA 0 5) to signal HPACK-COMPRESSION-ERROR.[0m
+[37mhpack-integer-0x80-chain[0m
+  [37mUnbounded 0x80 continuation chain is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-DECODE-INTEGER DATA 0 5) to signal HPACK-COMPRESSION-ERROR.[0m
+[37mhpack-unknown-index[0m
+  [37mUnknown static/dynamic index is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 62) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 1000) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX DATA) to signal HPACK-COMPRESSION-ERROR.[0m
+[37mhpack-dynamic-table-octet-size-non-ascii[0m
+  [37mNon-ASCII value is sized in UTF-8 octets and forces eviction[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "a") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (MAP 'LIST #'CHAR-CODE (CDAR HEADERS)) '(26085 26412 35486)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+  [37mSame value is inserted and counted as 42 octets when it fits[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 41) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+[37mhpack-oversized-insert-on-wire[0m
+  [37mWire insert larger than the table max empties the table[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "name") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (CDAR HEADERS)) 15) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 0) to be true.[0m
+[37mhpack-rfc7541-c5-eviction[0m
+  [37mRFC 7541 C.5 responses evict at SETTINGS_HEADER_TABLE_SIZE 256[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "302") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "307") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR ENTRY) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR ENTRY) "307") to be true.[0m
+    [32m✓ [0m[90mExpect (WOO.HTTP2.HPACK::HPACK-LOOKUP-INDEX CTX 66) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (FIND "302" (HPACK-CONTEXT-DYNAMIC-TABLE CTX) :KEY #'CDR :TEST #'STRING=) to be false.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 6) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":status") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "200") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAR (CAR (LAST HEADERS))) "set-cookie") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 215) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+[37mhpack-rfc7541-c6-huffman-eviction[0m
+  [37mRFC 7541 C.6 evicts using decoded octets, not Huffman wire length[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "302") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR (NTH 3 HEADERS)) "https://www.example.com") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "307") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 222) to be true.[0m
+    [32m✓ [0m[90mExpect (FIND "302" (HPACK-CONTEXT-DYNAMIC-TABLE CTX) :KEY #'CDR :TEST #'STRING=) to be false.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 6) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDR (CAR (LAST HEADERS)))
+                      "foo=ASDJKHQKBZXOQWEOPIUAXQWEOIU; max-age=3600; version=1") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 215) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 3) to be true.[0m
+[37mhpack-size-update-literal-octets[0m
+  [37mPublished size-update octets, not an encode/decode round trip[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 130 32)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 63 226 31)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) 34) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 63 69))) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-BYTES 63 70)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+[37mhpack-dynamic-table-size-update-rules[0m
+  [37mSize update equal to the advertised limit is accepted[0m
+    [32m✓ [0m[90mExpect (NULL (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 4096))) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+  [37mEncoder may lower the table and later raise it back to the limit[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 200) to be true.[0m
+  [37mSize update above SETTINGS_HEADER_TABLE_SIZE is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 4097)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) SIZE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) MAX) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+  [37mCustom context limit is the ceiling, not only the default 4096[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 101)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 100) to be true.[0m
+  [37mSETTINGS_HEADER_TABLE_SIZE raises the ceiling[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 8192) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX (HPACK-SIZE-UPDATE-BYTES 8193)) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 8192) to be true.[0m
+  [37mSize update after a header field is COMPRESSION_ERROR[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS CTX
+                                   (HPACK-CAT (HPACK-BYTES 130)
+                                              (HPACK-SIZE-UPDATE-BYTES 0))) to signal HPACK-COMPRESSION-ERROR.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 4096) to be true.[0m
+  [37mTwo size updates before the first field are accepted[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-MAX-DYNAMIC-TABLE-SIZE CTX) 256) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+[37mhpack-obs-text-not-utf8[0m
+  [37mRaw obs-text is not a compression error and counts as one octet[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CHAR-CODE (CHAR (CAAR HEADERS) 0)) 255) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "a") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) (+ 32 1 1)) to be true.[0m
+  [37mA later indexed name keeps the raw octet length[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (HPACK-CONTEXT-DYNAMIC-TABLE-SIZE CTX) (+ 34 34)) to be true.[0m
+  [37mHuffman-coded obs-text does not signal[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) "x") to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (CDAR HEADERS)) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CHAR-CODE (CHAR (CDAR HEADERS) 0)) 255) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (HPACK-CONTEXT-DYNAMIC-TABLE CTX)) 0) to be true.[0m
+[37mhpack-huffman-method-get[0m
+  [37mHuffman-encoded :method GET decodes correctly[0m
+    [32m✓ [0m[90mExpect (LOGBITP 7 (AREF NAME-ENC 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (LOGBITP 7 (AREF VALUE-ENC 0)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH HEADERS) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CAAR HEADERS) ":method") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= (CDAR HEADERS) "GET") to be true.[0m
+  [37mHuffman string roundtrip[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= DECODED S) to be true.[0m
+    [32m✓ [0m[90mExpect (= CONSUMED (LENGTH ENCODED)) to be true.[0m
+[37mhpack-header-list-limit-while-decoding[0m
+  [37mdecoding stops at the field that crosses the limit[0m
+    [32m✓ [0m[90mExpect (EQL FIELDS 17) to be true.[0m
+  [37mthe limit counts name + value + 32 per field[0m
+    [32m✓ [0m[90mExpect (= 2
+                (LENGTH
+                 (HPACK-DECODE-HEADERS (MAKE-HPACK-CONTEXT) BLOCK
+                                       :MAX-HEADER-LIST-SIZE 86))) to be true.[0m
+    [32m✓ [0m[90mExpect (HPACK-DECODE-HEADERS (MAKE-HPACK-CONTEXT) BLOCK :MAX-HEADER-LIST-SIZE
+                                   85) to signal HPACK-HEADER-LIST-TOO-LARGE.[0m
+  [37mwithout a limit the whole block decodes[0m
+    [32m✓ [0m[90mExpect (= 1001
+                (LENGTH
+                 (HPACK-DECODE-HEADERS (MAKE-HPACK-CONTEXT)
+                                       (INDEXED-BOMB-BLOCK 4000 1000)))) to be true.[0m
+
+[32m✓ 54 tests completed[0m
+
+Summary:
+  All 54 tests passed.
+
+;; testing 'woo-test.http2-frames'
+[37mparse-frame-header-basic[0m
+  [37mparse-frame-header with valid 9-byte header[0m
+    [32m✓ [0m[90mExpect (= LENGTH 16) to be true.[0m
+    [32m✓ [0m[90mExpect (= TYPE +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= FLAGS 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= STREAM-ID 1) to be true.[0m
+[37mparse-frame-header-insufficient-data[0m
+  [37mparse-frame-header with insufficient data returns NIL[0m
+    [32m✓ [0m[90mExpect (NULL (PARSE-FRAME-HEADER DATA)) to be true.[0m
+[37mparse-frame-header-with-offset[0m
+  [37mparse-frame-header with offset[0m
+    [32m✓ [0m[90mExpect (= LENGTH 32) to be true.[0m
+    [32m✓ [0m[90mExpect (= TYPE +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= FLAGS 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= STREAM-ID 0) to be true.[0m
+[37mparse-frame-header-reserved-bit[0m
+  [37mparse-frame-header clears reserved bit in stream-id[0m
+    [32m✓ [0m[90mReserved bit should be cleared[0m
+[37mparse-frame-header-max-values[0m
+  [37mparse-frame-header with maximum values[0m
+    [32m✓ [0m[90mExpect (= LENGTH 16777215) to be true.[0m
+    [32m✓ [0m[90mExpect (= TYPE +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= FLAGS 255) to be true.[0m
+    [32m✓ [0m[90mExpect (= STREAM-ID 2147483647) to be true.[0m
+[37mparse-frame-basic[0m
+  [37mparse-frame with DATA frame[0m
+    [32m✓ [0m[90mExpect FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= BYTES-CONSUMED 25) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 16) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) PAYLOAD) to be true.[0m
+[37mparse-frame-empty-payload[0m
+  [37mparse-frame with empty payload[0m
+    [32m✓ [0m[90mExpect FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= BYTES-CONSUMED 9) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mparse-frame-insufficient-data[0m
+  [37mparse-frame with insufficient data for payload[0m
+    [32m✓ [0m[90mExpect (NULL (PARSE-FRAME DATA)) to be true.[0m
+[37mparse-frame-exceeds-max-frame-size[0m
+  [37mparse-frame signals :frame-size-error when length exceeds max[0m
+    [32m✓ [0m[90mExpect (NULL FRAME) to be true.[0m
+    [32m✓ [0m[90mExpect (EQ STATUS :FRAME-SIZE-ERROR) to be true.[0m
+[37mparse-frame-with-offset[0m
+  [37mparse-frame with offset[0m
+    [32m✓ [0m[90mExpect FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= BYTES-CONSUMED 13) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-PING+) to be true.[0m
+[37mserialize-frame-basic[0m
+  [37mserialize-frame produces correct byte sequence[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SERIALIZED) 17) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 0) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 1) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 2) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 3) +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 4) +FLAG-END-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 5) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 6) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 7) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 8) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SUBSEQ SERIALIZED 9) PAYLOAD) to be true.[0m
+[37mserialize-frame-empty-payload[0m
+  [37mserialize-frame with empty payload[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SERIALIZED) 9) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 0) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 1) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF SERIALIZED 2) 0) to be true.[0m
+[37mserialize-parse-roundtrip[0m
+  [37mserialize and parse roundtrip[0m
+    [32m✓ [0m[90mExpect PARSED-FRAME to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE PARSED-FRAME) (FRAME-TYPE ORIGINAL-FRAME)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS PARSED-FRAME) (FRAME-FLAGS ORIGINAL-FRAME)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID PARSED-FRAME) (FRAME-STREAM-ID ORIGINAL-FRAME)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD PARSED-FRAME) (FRAME-PAYLOAD ORIGINAL-FRAME)) to be true.[0m
+[37mmake-settings-frame-basic[0m
+  [37mmake-settings-frame with settings list[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 18) to be true.[0m
+    [32m✓ [0m[90mExpect (= (+ (ASH (AREF PAYLOAD 0) 8) (AREF PAYLOAD 1))
+                +SETTINGS-HEADER-TABLE-SIZE+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 2) 24) (ASH (AREF PAYLOAD 3) 16)
+                 (ASH (AREF PAYLOAD 4) 8) (AREF PAYLOAD 5))
+              4096) to be true.[0m
+[37mmake-settings-frame-empty[0m
+  [37mmake-settings-frame with empty settings[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mmake-settings-ack-frame[0m
+  [37mmake-settings-ack-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mmake-settings-frame-with-ack[0m
+  [37mmake-settings-frame with :ack t[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-SETTINGS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+[37mmake-headers-frame-basic[0m
+  [37mmake-headers-frame with basic options[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-HEADERS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-HEADERS+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) HEADER-BLOCK) to be true.[0m
+[37mmake-headers-frame-with-flags[0m
+  [37mmake-headers-frame with END_STREAM and END_HEADERS[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) (LOGIOR +FLAG-END-STREAM+ +FLAG-END-HEADERS+)) to be true.[0m
+[37mmake-headers-frame-no-end-headers[0m
+  [37mmake-headers-frame without END_HEADERS[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+[37mmake-headers-frame-end-stream-only[0m
+  [37mmake-headers-frame with END_STREAM only[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+[37mmake-headers-frame-with-priority[0m
+  [37mmake-headers-frame encodes the optional PRIORITY field[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) (LOGIOR +FLAG-END-HEADERS+ +FLAG-PRIORITY+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 7) to be true.[0m
+    [32m✓ [0m[90mexclusive and dependency high octet[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 1) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 2) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 3) 4) to be true.[0m
+    [32m✓ [0m[90mwire weight is weight minus one[0m
+    [32m✓ [0m[90mheader block follows priority[0m
+[37mmake-headers-frame-rejects-invalid-priority[0m
+  [37mmake-headers-frame rejects invalid priority fields[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN (MAKE-HEADERS-FRAME 1 #() :PRIORITY T :WEIGHT 0) NIL)
+              (ERROR NIL T)) to be true.[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN
+               (MAKE-HEADERS-FRAME 1 #() :PRIORITY T :STREAM-DEPENDENCY 2147483648)
+               NIL)
+              (ERROR NIL T)) to be true.[0m
+    [32m✓ [0m[90mself dependency retains the RFC 9113 wire format[0m
+[37mmake-data-frame-basic[0m
+  [37mmake-data-frame with byte vector[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-DATA+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 100) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) DATA) to be true.[0m
+[37mmake-data-frame-with-end-stream[0m
+  [37mmake-data-frame with END_STREAM flag[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+[37mmake-data-frame-empty[0m
+  [37mmake-data-frame with empty data[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-END-STREAM+) to be true.[0m
+[37mmake-data-frame-coercion[0m
+  [37mmake-data-frame with list (coercion)[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (FRAME-PAYLOAD FRAME) to be an instance of (SIMPLE-ARRAY
+                                                         (UNSIGNED-BYTE 8) (*)).[0m
+[37mmake-data-frame-with-padding[0m
+  [37mmake-data-frame encodes PADDED payload shape[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) (LOGIOR +FLAG-END-STREAM+ +FLAG-PADDED+)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 6) to be true.[0m
+    [32m✓ [0m[90mpad length octet[0m
+    [32m✓ [0m[90mdata precedes padding[0m
+    [32m✓ [0m[90mpadding octets are zero[0m
+[37mmake-data-frame-with-padding-and-empty-data[0m
+  [37mmake-data-frame can pad an empty DATA payload[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-PADDED+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PAYLOAD) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF PAYLOAD 0) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (EVERY #'ZEROP (SUBSEQ PAYLOAD 1)) to be true.[0m
+[37mmake-data-frame-rejects-invalid-padding-length[0m
+  [37mmake-data-frame rejects a pad length outside the octet range[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN (MAKE-DATA-FRAME 1 #() :PADDED T :PAD-LENGTH 256) NIL)
+              (ERROR NIL T)) to be true.[0m
+    [32m✓ [0m[90mExpect (HANDLER-CASE
+              (PROGN (MAKE-DATA-FRAME 1 #() :PADDED T :PAD-LENGTH -1) NIL)
+              (ERROR NIL T)) to be true.[0m
+[37mmake-window-update-frame-basic[0m
+  [37mmake-window-update-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-WINDOW-UPDATE+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              1024) to be true.[0m
+[37mmake-window-update-frame-connection[0m
+  [37mmake-window-update-frame for connection (stream 0)[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+[37mmake-window-update-frame-max-increment[0m
+  [37mmake-window-update-frame with maximum increment[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              2147483647) to be true.[0m
+[37mmake-ping-frame-basic[0m
+  [37mmake-ping-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-PING+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) OPAQUE-DATA) to be true.[0m
+[37mmake-ping-frame-with-ack[0m
+  [37mmake-ping-frame with ACK flag[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+[37mmake-ping-ack-frame[0m
+  [37mmake-ping-ack-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-PING+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) +FLAG-ACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (FRAME-PAYLOAD FRAME) OPAQUE-DATA) to be true.[0m
+[37mmake-ping-frame-invalid-length[0m
+  [37mmake-ping-frame with invalid opaque data length[0m
+    [32m✓ [0m[90mExpect (MAKE-PING-FRAME INVALID-DATA) to signal SIMPLE-ERROR.[0m
+[37mmake-goaway-frame-basic[0m
+  [37mmake-goaway-frame without debug data[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 8) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              10) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 4) 24) (ASH (AREF PAYLOAD 5) 16)
+                 (ASH (AREF PAYLOAD 6) 8) (AREF PAYLOAD 7))
+              +NO-ERROR+) to be true.[0m
+[37mmake-goaway-frame-with-debug-data[0m
+  [37mmake-goaway-frame with debug data[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 18) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 4) 24) (ASH (AREF PAYLOAD 5) 16)
+                 (ASH (AREF PAYLOAD 6) 8) (AREF PAYLOAD 7))
+              +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP (SUBSEQ PAYLOAD 8) DEBUG-DATA) to be true.[0m
+[37mmake-goaway-frame-various-errors[0m
+  [37mmake-goaway-frame with various error codes[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-GOAWAY+) to be true.[0m
+[37mmake-rst-stream-frame-basic[0m
+  [37mmake-rst-stream-frame[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-FLAGS FRAME) 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID FRAME) 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH (FRAME-PAYLOAD FRAME)) 4) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              +CANCEL+) to be true.[0m
+[37mmake-rst-stream-frame-various-errors[0m
+  [37mmake-rst-stream-frame with various error codes[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-TYPE FRAME) +FRAME-RST-STREAM+) to be true.[0m
+    [32m✓ [0m[90mExpect (=
+              (+ (ASH (AREF PAYLOAD 0) 24) (ASH (AREF PAYLOAD 1) 16)
+                 (ASH (AREF PAYLOAD 2) 8) (AREF PAYLOAD 3))
+              ERROR-CODE) to be true.[0m
+[37mparse-settings-payload-basic[0m
+  [37mparse-settings-payload with multiple settings[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SETTINGS) 3) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-HEADER-TABLE-SIZE+ SETTINGS)) 8192) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-MAX-CONCURRENT-STREAMS+ SETTINGS)) 128) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-INITIAL-WINDOW-SIZE+ SETTINGS)) 65536) to be true.[0m
+[37mparse-settings-payload-empty[0m
+  [37mparse-settings-payload with empty payload[0m
+    [32m✓ [0m[90mExpect (NULL (PARSE-SETTINGS-PAYLOAD PAYLOAD)) to be true.[0m
+[37mparse-settings-payload-incomplete[0m
+  [37mparse-settings-payload with incomplete setting[0m
+    [32m✓ [0m[90mExpect (= (LENGTH SETTINGS) 1) to be true.[0m
+[37mparse-window-update-payload-basic[0m
+  [37mparse-window-update-payload[0m
+    [32m✓ [0m[90mExpect (= (PARSE-WINDOW-UPDATE-PAYLOAD PAYLOAD) 1024) to be true.[0m
+[37mparse-window-update-payload-reserved-bit[0m
+  [37mparse-window-update-payload clears reserved bit[0m
+    [32m✓ [0m[90mExpect (= (PARSE-WINDOW-UPDATE-PAYLOAD PAYLOAD) 2147483647) to be true.[0m
+[37mparse-window-update-payload-max-value[0m
+  [37mparse-window-update-payload with maximum increment[0m
+    [32m✓ [0m[90mExpect (= (PARSE-WINDOW-UPDATE-PAYLOAD PAYLOAD) 2147483647) to be true.[0m
+[37mparse-goaway-payload-basic[0m
+  [37mparse-goaway-payload without debug data[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL DEBUG-DATA) to be true.[0m
+[37mparse-goaway-payload-with-debug-data[0m
+  [37mparse-goaway-payload with debug data[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 100) to be true.[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +INTERNAL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect DEBUG-DATA to be true.[0m
+    [32m✓ [0m[90mExpect (= (LENGTH DEBUG-DATA) 12) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF DEBUG-DATA 0) 65) to be true.[0m
+    [32m✓ [0m[90mExpect (= (AREF DEBUG-DATA 11) 76) to be true.[0m
+[37mparse-goaway-payload-reserved-bit[0m
+  [37mparse-goaway-payload clears reserved bit in last-stream-id[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 2147483647) to be true.[0m
+[37mparse-rst-stream-payload-basic[0m
+  [37mparse-rst-stream-payload[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) +CANCEL+) to be true.[0m
+[37mparse-rst-stream-payload-various-errors[0m
+  [37mparse-rst-stream-payload with various error codes[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+    [32m✓ [0m[90mExpect (= (PARSE-RST-STREAM-PAYLOAD PAYLOAD) ERROR-CODE) to be true.[0m
+[37mintegration-settings-roundtrip[0m
+  [37mSETTINGS frame complete roundtrip[0m
+    [32m✓ [0m[90mExpect (= (LENGTH PARSED-SETTINGS) 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-HEADER-TABLE-SIZE+ PARSED-SETTINGS)) 4096) to be true.[0m
+    [32m✓ [0m[90mExpect (= (CDR (ASSOC +SETTINGS-MAX-CONCURRENT-STREAMS+ PARSED-SETTINGS)) 100) to be true.[0m
+[37mintegration-window-update-roundtrip[0m
+  [37mWINDOW_UPDATE frame complete roundtrip[0m
+    [32m✓ [0m[90mExpect (= INCREMENT 32768) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID PARSED-FRAME) 3) to be true.[0m
+[37mintegration-goaway-roundtrip[0m
+  [37mGOAWAY frame complete roundtrip with debug data[0m
+    [32m✓ [0m[90mExpect (= LAST-STREAM-ID 42) to be true.[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +PROTOCOL-ERROR+) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUALP DEBUG-DATA DEBUG-MSG) to be true.[0m
+[37mintegration-rst-stream-roundtrip[0m
+  [37mRST_STREAM frame complete roundtrip[0m
+    [32m✓ [0m[90mExpect (= ERROR-CODE +CANCEL+) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FRAME-STREAM-ID PARSED-FRAME) 7) to be true.[0m
+
+[32m✓ 57 tests completed[0m
+
+Summary:
+  All 57 tests passed.

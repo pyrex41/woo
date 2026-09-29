@@ -14,7 +14,7 @@ and the user's untracked .grok directory.
 
 ## Sequence
 
-1. Native test gate and reusable bounded fixture support.
+1. Event-loop descriptor destruction, native test gate and bounded fixture support.
 2. Existing small fixes: final statuses, per-call stat and worker RNG isolation.
 3. Nonblocking TLS write/read retries, bounded pumping and graceful close.
 4. Listener TLS context/certificate-chain/ALPN ownership.
@@ -34,8 +34,8 @@ and the user's untracked .grok directory.
 TLS precedes static/upload extraction because their completed responses use
 its graceful-close and bounded stream primitives. ALPN context ownership
 precedes HTTP/2 negotiation. Native tests accompany every implementation;
-the extended tools remain an explicit test lane. Documentation travels with
-its owning feature. Clack's legacy threaded stop is a separate repository PR.
+the extended tools remain an explicit test lane. API descriptions are in the topic PR bodies; the complete upstream README
+and evidence semantics are consolidated in the final documentation/example topic. Clack's legacy threaded stop is a separate repository PR.
 
 ## Acceptance
 

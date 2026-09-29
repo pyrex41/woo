@@ -1,0 +1,47 @@
+{
+  "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_tree": "aad612a5291c196e7127436535731de71ae4d62b",
+  "worktree": "<HOME>/projects/woo-pr-series/16-showcase",
+  "system": "hegel-native-correct-oracle",
+  "suites": [],
+  "no_ssl": false,
+  "load_only": false,
+  "command": [
+    "go",
+    "-C",
+    "t/hegel",
+    "test",
+    "-v",
+    "-count=1",
+    "-skip",
+    "^TestManaged",
+    "-parallel",
+    "1",
+    "-timeout",
+    "10m",
+    "./..."
+  ],
+  "elapsed_seconds": 55.73,
+  "result": "PASS",
+  "exit_code": 0,
+  "current_head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "source_changed": false,
+  "log": "<HOME>/projects/woo-pr-series-evidence/c0e27b65e785-extra-hegel-native-correct-oracle.log",
+  "runner_sha256": "199b105c73e5c4151b1fa966691a1652063441717fe24139c84f05a0f71f2bed",
+  "environment": {
+    "WOO_HEGEL_LISP": "/tmp/woo-sbcl-runtime/bin/sbcl",
+    "WOO_HEGEL_FOREIGN_LIB_DIRS": "<HOME>/.local/Homebrew/lib:<HOME>/.nix-profile/lib",
+    "WOO_HEGEL_ORACLE_BIN": "<HOME>/projects/woo-upstream-hardening/t/hegel/oracle/target/debug/woo-hegel-oracle",
+    "XDG_CACHE_HOME": "/tmp/woo-pr-series-cache"
+  },
+  "raw_artifact_sha256": {
+    "c0e27b65e785-extra-hegel-native-correct-oracle.log": "4565a78b03d067f9b01613c73ecf8d353d995007830b126c814f65b4980306aa"
+  },
+  "published_log": "docs/pr-series/receipts/c0e27b65e785-extra-hegel-native-correct-oracle.log",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "e12d6aa30b0f94a316c9f389c11d51ee1e133cdd50797a842383413fee85aaea"
+  }
+}

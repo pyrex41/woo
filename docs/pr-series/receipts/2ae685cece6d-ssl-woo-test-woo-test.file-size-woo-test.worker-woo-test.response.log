@@ -1,0 +1,114 @@
+
+;; testing 'woo-test.file-size'
+[37mfd-file-size-single-threaded-tests[0m
+  [37mreports the true size of the file behind the fd[0m
+    [32m✓ [0m[90mExpect (= (WOO::FD-FILE-SIZE FD) *SMALL-SIZE*) to be true.[0m
+[37mfd-file-size-concurrency-tests[0m
+  [37mconcurrent callers each get their own file's size[0m
+    [32m✓ [0m[90m0/80000 concurrent fd-file-size calls returned another file's size[0m
+[37mfd-file-size-closed-descriptor-tests[0m
+  [37ma closed descriptor fails instead of returning stale metadata[0m
+    [32m✓ [0m[90mExpect (WOO::FD-FILE-SIZE FD) to signal ERROR.[0m
+
+[32m✓ 3 tests completed[0m
+
+Summary:
+  All 3 tests passed.
+
+;; testing 'woo-test.worker'
+[37mlegacy-worker-random-bindings-are-private[0m
+  [37mactual legacy workers receive distinct random states[0m
+    [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE DONE :TIMEOUT 5) to be true.[0m
+    [32m✓ [0m[90mExpect (BT2:WAIT-ON-SEMAPHORE DONE :TIMEOUT 5) to be true.[0m
+    [32m✓ [0m[90mExpect (= 2 (LENGTH (REMOVE-DUPLICATES STATES :TEST #'EQ))) to be true.[0m
+    [32m✓ [0m[90mExpect (MEMBER *RANDOM-STATE* STATES :TEST #'EQ) to be false.[0m
+
+[32m✓ 1 test completed[0m
+
+Summary:
+  All 1 test passed.
+
+;; testing 'woo-test.response'
+[37mstatus-code-to-text-tests[0m
+  [37mreturns the reason phrase for known codes[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 200) "OK") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 404) "Not Found") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 500) "Internal Server Error") to be true.[0m
+  [37mreturns NIL for unassigned codes[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 306)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 419)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 499)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 599)) to be true.[0m
+  [37mreturns NIL outside the HTTP status range[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 99)) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL (REASON-PHRASE 600)) to be true.[0m
+[37mstatus-line-format-tests[0m
+  [37ma status line is HTTP/1.1 SP code SP reason CRLF[0m
+    [32m✓ [0m[90mExpect (EQUAL (STATUS-LINE-STRING 200)
+                    (FORMAT NIL "HTTP/1.1 200 OK~C~C" #\Return #\Newline)) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (STATUS-LINE-STRING 404)
+                    (FORMAT NIL "HTTP/1.1 404 Not Found~C~C" #\Return #\Newline)) to be true.[0m
+  [37mevery registered status line is well formed[0m
+    [32m✓ [0m[90mmalformed status lines for: NIL[0m
+  [37mstatus lines are octet vectors, not strings[0m
+    [32m✓ [0m[90mnon-octet status lines for: NIL[0m
+[37mstatus-line-table-consistency-tests[0m
+  [37mevery code with a reason phrase is registered in *status-line*[0m
+    [32m✓ [0m[90mcodes with a reason phrase but no status line: NIL[0m
+  [37mevery registered code has a reason phrase[0m
+    [32m✓ [0m[90mregistered codes with no reason phrase: NIL[0m
+  [37mno reason phrase exists beyond the loop's upper bound[0m
+    [32m✓ [0m[90mreason phrases outside the built range: NIL[0m
+[37mrfc-6585-and-8470-status-tests[0m
+  [37mRFC 6585 codes are present[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 429) "Too Many Requests") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 428) "Precondition Required") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 431) "Request Header Fields Too Large") to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 511) "Network Authentication Required") to be true.[0m
+  [37mRFC 8470 425 Too Early is present[0m
+    [32m✓ [0m[90mExpect (EQUAL (REASON-PHRASE 425) "Too Early") to be true.[0m
+  [37mthey render as complete status lines[0m
+    [32m✓ [0m[90m425 has a status line[0m
+    [32m✓ [0m[90m428 has a status line[0m
+    [32m✓ [0m[90m429 has a status line[0m
+    [32m✓ [0m[90m431 has a status line[0m
+    [32m✓ [0m[90m511 has a status line[0m
+  [37m511 specifically, as it sits on the loop's upper bound[0m
+    [32m✓ [0m[90mExpect (EQUAL (STATUS-LINE-STRING 511)
+                    (FORMAT NIL "HTTP/1.1 511 Network Authentication Required~C~C"
+                            #\Return #\Newline)) to be true.[0m
+[37mcommon-status-coverage-tests[0m
+  [37mthe codes a typical app returns are all registered[0m
+    [32m✓ [0m[90m200 is registered[0m
+    [32m✓ [0m[90m201 is registered[0m
+    [32m✓ [0m[90m204 is registered[0m
+    [32m✓ [0m[90m206 is registered[0m
+    [32m✓ [0m[90m301 is registered[0m
+    [32m✓ [0m[90m302 is registered[0m
+    [32m✓ [0m[90m303 is registered[0m
+    [32m✓ [0m[90m304 is registered[0m
+    [32m✓ [0m[90m307 is registered[0m
+    [32m✓ [0m[90m308 is registered[0m
+    [32m✓ [0m[90m400 is registered[0m
+    [32m✓ [0m[90m401 is registered[0m
+    [32m✓ [0m[90m403 is registered[0m
+    [32m✓ [0m[90m404 is registered[0m
+    [32m✓ [0m[90m405 is registered[0m
+    [32m✓ [0m[90m409 is registered[0m
+    [32m✓ [0m[90m410 is registered[0m
+    [32m✓ [0m[90m413 is registered[0m
+    [32m✓ [0m[90m415 is registered[0m
+    [32m✓ [0m[90m422 is registered[0m
+    [32m✓ [0m[90m500 is registered[0m
+    [32m✓ [0m[90m501 is registered[0m
+    [32m✓ [0m[90m502 is registered[0m
+    [32m✓ [0m[90m503 is registered[0m
+    [32m✓ [0m[90m504 is registered[0m
+[37mfinal-status-wire-range[0m
+  [37mAll final HTTP statuses reach the wire[0m
+    [32m✓ [0m[90mbad final statuses: NIL[0m
+
+[32m✓ 6 tests completed[0m
+
+Summary:
+  All 6 tests passed.

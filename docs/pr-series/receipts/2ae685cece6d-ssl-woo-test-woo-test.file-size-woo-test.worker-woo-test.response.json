@@ -1,0 +1,41 @@
+{
+  "head": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+  "worktree": "<HOME>/projects/woo-pr-series/02-small-fixes",
+  "system": "woo-test",
+  "suites": [
+    "woo-test.file-size",
+    "woo-test.worker",
+    "woo-test.response"
+  ],
+  "no_ssl": false,
+  "load_only": false,
+  "command": [
+    "/tmp/woo-sbcl-runtime/bin/sbcl",
+    "--dynamic-space-size",
+    "4096",
+    "--noinform",
+    "--non-interactive",
+    "--load",
+    "<HOME>/projects/woo-pr-series-evidence/2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.lisp"
+  ],
+  "elapsed_seconds": 5.77,
+  "exit_code": 0,
+  "result": "PASS",
+  "source_tree": "7925aa4010bc33aed9d4a189a5e9775c2a3216ff",
+  "current_head": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+  "source_changed": false,
+  "runner_sha256": "4e5e835154f22fa9350efde8a70732cbff45ab49224a6dee8fc0fd1d1de075fa",
+  "log": "<HOME>/projects/woo-pr-series-evidence/2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.log",
+  "raw_artifact_sha256": {
+    "2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.log": "a4a3e6e8af4f2f4cf8beb4b23cd5ae55d3eb0a963827f997b93d2a723913f91d",
+    "2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.lisp": "81b036cb9512989cb6939dc59cd0be71925890eef0a7e25c55fc66b57f60c944"
+  },
+  "published_log": "docs/pr-series/receipts/2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.log",
+  "published_script": "docs/pr-series/receipts/2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.lisp",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "0f95a805ae5ca5b1249a425a47a1e1919b989f1a5a8ae59833f1e85c532f927b"
+  }
+}

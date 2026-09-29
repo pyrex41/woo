@@ -1,0 +1,184 @@
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel-tmp5GEXGEG5.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.c:13:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   13 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel-tmpAR3FSGEY -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/syscall/types__grovel.grovel-tmp.lisp
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel-tmp9BN22RMA.o -c -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -g -Wall -fdollars-in-identifiers -arch arm64 -fno-omit-frame-pointer -fPIC -I<HOME>/quicklisp/dists/quicklisp/software/cffi-20260101-git/ /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.c
+/private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.c:16:7: warning: unused variable 'autotype_tmp' [-Wunused-variable]
+   16 |   int autotype_tmp;
+      |       ^~~~~~~~~~~~
+1 warning generated.
+; clang -o /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel-tmp1CXFJSK9 -g -dynamic -twolevel_namespace -arch arm64 /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.o
+; /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel /private/tmp/woo-pr-series-cache/common-lisp/sbcl-2.6.8-macosx-arm64<HOME>/projects/woo-pr-series/04-tls-context/src/llsocket/grovel__grovel.grovel-tmp.lisp
+
+;; testing 'woo-test.alpn'
+[37mtest-alpn-constants[0m
+  [37mALPN error constants have correct values[0m
+    [32m✓ [0m[90mExpect (= +SSL-TLSEXT-ERR-OK+ 0) to be true.[0m
+    [32m✓ [0m[90mExpect (= +SSL-TLSEXT-ERR-ALERT-FATAL+ 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= +SSL-TLSEXT-ERR-NOACK+ 3) to be true.[0m
+[37mtest-parse-alpn-protocols-empty[0m
+  [37mparse-alpn-protocols handles empty buffer[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-parse-alpn-protocols-single[0m
+  [37mparse-alpn-protocols parses single protocol[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2")) to be true.[0m
+[37mtest-parse-alpn-protocols-multiple[0m
+  [37mparse-alpn-protocols parses multiple protocols[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2" "http/1.1")) to be true.[0m
+[37mtest-parse-alpn-protocols-three-protocols[0m
+  [37mparse-alpn-protocols parses three protocols[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2" "http/1.1" "h3")) to be true.[0m
+[37mtest-parse-alpn-protocols-zero-length-protocol[0m
+  [37mparse-alpn-protocols skips zero-length protocol[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2")) to be true.[0m
+[37mtest-parse-alpn-protocols-truncated[0m
+  [37mparse-alpn-protocols handles truncated buffer gracefully[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-parse-alpn-protocols-truncated-after-valid[0m
+  [37ma truncated entry does not discard an earlier protocol or read past inlen[0m
+    [32m✓ [0m[90mExpect (EQUAL RESULT '("h2")) to be true.[0m
+[37mtest-find-protocol-in-buffer-found[0m
+  [37mfind-protocol-in-buffer finds existing protocol[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be false.[0m
+    [32m✓ [0m[90mExpect (= LEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 1) 50) to be true.[0m
+[37mtest-find-protocol-in-buffer-second-protocol[0m
+  [37mfind-protocol-in-buffer finds second protocol[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be false.[0m
+    [32m✓ [0m[90mExpect (= LEN 8) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 1) 116) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 2) 116) to be true.[0m
+[37mtest-find-protocol-in-buffer-not-found[0m
+  [37mfind-protocol-in-buffer returns nil when protocol not found[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-find-protocol-in-buffer-empty[0m
+  [37mfind-protocol-in-buffer handles empty buffer[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-find-protocol-in-buffer-partial-match[0m
+  [37mfind-protocol-in-buffer doesn't match partial strings[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-find-protocol-in-buffer-truncated-entry[0m
+  [37mfind-protocol-in-buffer does not read past inlen[0m
+    [32m✓ [0m[90mtruncated h2 is not a match[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+    [32m✓ [0m[90min-bounds h3 is still found[0m
+    [32m✓ [0m[90mExpect (= LEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+[37mtest-make-alpn-selector-basic[0m
+  [37mmake-alpn-selector creates working selector[0m
+    [32m✓ [0m[90mExpect (FUNCTIONP SELECTOR) to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "http/1.1") to be true.[0m
+[37mtest-make-alpn-selector-order-preference[0m
+  [37mmake-alpn-selector respects server preference order[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h2") to be true.[0m
+[37mtest-make-alpn-selector-no-match[0m
+  [37mmake-alpn-selector returns nil when no match[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-empty-client-list[0m
+  [37mmake-alpn-selector handles empty client list[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-empty-preferred-list[0m
+  [37mmake-alpn-selector with empty preference list returns nil[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-single-protocol[0m
+  [37mmake-alpn-selector works with single protocol[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "http/1.1") to be true.[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-case-sensitive[0m
+  [37mmake-alpn-selector is case-sensitive[0m
+    [32m✓ [0m[90mExpect (NULL RESULT) to be true.[0m
+[37mtest-make-alpn-selector-multiple-matches[0m
+  [37mmake-alpn-selector returns first match in preference order[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h2") to be true.[0m
+    [32m✓ [0m[90mExpect (STRING= RESULT "h3") to be true.[0m
+[37mtest-alpn-protocols-default[0m
+  [37m*alpn-protocols* has correct default value[0m
+    [32m✓ [0m[90mExpect (EQUAL (SYMBOL-VALUE (FIND-SYMBOL "*ALPN-PROTOCOLS*" :WOO.SSL))
+                    '("http/1.1")) to be true.[0m
+[37mtest-alpn-callback-arg-roundtrip[0m
+  [37mpreferred protocols encoded in a private callback arg[0m
+    [32m✓ [0m[90meach encode allocates its own buffer[0m
+    [32m✓ [0m[90mearlier buffer is not freed by a later encode[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG SECOND) '("http/1.1")) to be true.[0m
+[37mtest-alpn-arg-per-context[0m
+  [37meach SSL_CTX has its own callback arg and reconfigure does not free it[0m
+    [32m✓ [0m[90munchanged protocols keep the same pointer[0m
+    [32m✓ [0m[90mcontexts do not share one C buffer[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG A1) '("h2" "http/1.1")) to be true.[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG B1) '("http/1.1")) to be true.[0m
+    [32m✓ [0m[90ma new list gets a new buffer[0m
+    [32m✓ [0m[90mprevious arg is still readable[0m
+    [32m✓ [0m[90mExpect (EQUAL (WOO.SSL.ALPN::PROTOCOLS-FROM-ARG A3) '("h2")) to be true.[0m
+    [32m✓ [0m[90mthe other context is untouched[0m
+[37mtest-alpn-callback-inbounds-and-truncated[0m
+  [37mALPN callback selects an in-bounds protocol and rejects a truncated list[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-OK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= OUTLEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (CFFI-SYS:NULL-POINTER-P OUT) to be false.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 1) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-NOACK+) to be true.[0m
+    [32m✓ [0m[90mtruncated match must not publish a length[0m
+    [32m✓ [0m[90mtruncated match must not publish a pointer past inlen[0m
+[37mtest-alpn-truncated-allocation[0m
+  [37mscanner and callback do not read past a truncated ALPN buffer[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL LEN) to be true.[0m
+    [32m✓ [0m[90mExpect (NULL PTR) to be false.[0m
+    [32m✓ [0m[90mExpect (= LEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF PTR :UNSIGNED-CHAR 1) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-OK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= OUTLEN 2) to be true.[0m
+    [32m✓ [0m[90mExpect (CFFI-SYS:NULL-POINTER-P OUT) to be false.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 0) 104) to be true.[0m
+    [32m✓ [0m[90mExpect (= (MEM-AREF OUT :UNSIGNED-CHAR 1) 50) to be true.[0m
+    [32m✓ [0m[90mExpect (= RC +SSL-TLSEXT-ERR-NOACK+) to be true.[0m
+    [32m✓ [0m[90mExpect (= OUTLEN 0) to be true.[0m
+    [32m✓ [0m[90mExpect (CFFI-SYS:NULL-POINTER-P OUT) to be true.[0m
+
+[32m✓ 27 tests completed[0m
+
+Summary:
+  All 27 tests passed.
+
+;; testing 'woo-test.tls-stream'
+[37mtls-static-stream-pumps-bounded-chunks[0m
+  [37mTLS pathname sends keep at most one 64 KiB chunk pending[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-SEND-STREAM-OFFSET SOCKET) 65536) to be true.[0m
+    [32m✓ [0m[90mExpect (<= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET))
+                 65536) to be true.[0m
+[37mtls-pending-write-isolated-from-new-output[0m
+  [37mapplication writes do not mutate bytes awaiting TLS retry[0m
+    [32m✓ [0m[90mExpect (EQUALP PENDING #(1 2 3 4)) to be true.[0m
+    [32m✓ [0m[90mExpect (= (WOO.EV.SOCKET::SOCKET-PENDING-WRITE-OFFSET SOCKET) 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FAST-IO::OUTPUT-BUFFER-LEN (WOO.EV.SOCKET::SOCKET-BUFFER SOCKET)) 2) to be true.[0m
+[37mtls-ffi-retry-hooks-are-injectable[0m
+  [37mWANT results can be supplied without changing the OpenSSL ABI[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-WRITE-FUNCTION* NIL NIL 8) -1) to be true.[0m
+    [32m✓ [0m[90mExpect (= (FUNCALL WOO.EV.SOCKET:*SSL-ERROR-FUNCTION* NIL -1)
+                CL+SSL::+SSL-ERROR-WANT-READ+) to be true.[0m
+    [32m✓ [0m[90mExpect (= CALLS 1) to be true.[0m
+[37mtls-alpn-setup-failure-releases-listener-context[0m
+  [37ma failure after ALPN setup releases the listener context[0m
+    [32m✓ [0m[90mExpect (WOO:RUN (LAMBDA (ENV) (DECLARE (IGNORE ENV)) '(200 NIL ("ok"))) :DEBUG
+                      NIL :WORKER-NUM NIL :SSL-CERT-FILE #P"t/certs/localhost.crt"
+                      :SSL-KEY-FILE #P"t/certs/localhost.key") to signal ERROR.[0m[33m (45ms)[0m
+    [32m✓ [0m[90mExpect CONFIGURED to be true.[0m
+    [32m✓ [0m[90mExpect (= FREED 1) to be true.[0m
+    [32m✓ [0m[90mExpect (= BASELINE (HASH-TABLE-COUNT WOO.SSL.ALPN::*ALPN-CTX-ARGS*)) to be true.[0m
+
+[32m✓ 4 tests completed[0m
+
+Summary:
+  All 4 tests passed.

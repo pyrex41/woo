@@ -1,0 +1,37 @@
+{
+  "head": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+  "worktree": "<HOME>/projects/woo-pr-series/02-small-fixes",
+  "system": "woo-test",
+  "suites": [],
+  "no_ssl": true,
+  "load_only": true,
+  "command": [
+    "/tmp/woo-sbcl-runtime/bin/sbcl",
+    "--dynamic-space-size",
+    "4096",
+    "--noinform",
+    "--non-interactive",
+    "--load",
+    "<HOME>/projects/woo-pr-series-evidence/2ae685cece6d-no-ssl-woo-test-load.lisp"
+  ],
+  "elapsed_seconds": 3.74,
+  "exit_code": 0,
+  "result": "PASS",
+  "source_tree": "7925aa4010bc33aed9d4a189a5e9775c2a3216ff",
+  "current_head": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+  "source_changed": false,
+  "runner_sha256": "4e5e835154f22fa9350efde8a70732cbff45ab49224a6dee8fc0fd1d1de075fa",
+  "log": "<HOME>/projects/woo-pr-series-evidence/2ae685cece6d-no-ssl-woo-test-load.log",
+  "raw_artifact_sha256": {
+    "2ae685cece6d-no-ssl-woo-test-load.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2ae685cece6d-no-ssl-woo-test-load.lisp": "b0f8076ca844bd926e6236926008453794ae6a8688cbc4f85663c3e2ce42da7b"
+  },
+  "published_log": "docs/pr-series/receipts/2ae685cece6d-no-ssl-woo-test-load.log",
+  "published_script": "docs/pr-series/receipts/2ae685cece6d-no-ssl-woo-test-load.lisp",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "e05dcfee477f5ccbfd96ed287dc8edfdd9feef20ce6a75b0b650aa4a3ba1011b"
+  }
+}

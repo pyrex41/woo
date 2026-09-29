@@ -1,0 +1,2972 @@
+{
+  "source": "4d005a686a4a5287acd77050e927cc42a6f07665",
+  "upstream": "2ef0d221827becc123b46139d3965d848b04b7ef",
+  "assembled": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+  "records": [
+    {
+      "source_commit_records": [
+        "0eb57e3fc99b33e621b6082863b424e0a7725598 pyrex41 <reub.brooks@gmail.com> Contain errors from event loop exit hooks",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "334c40b4f64d27967594fd326f86a7fb0a24906b pyrex41 <reub.brooks@gmail.com> Keep HTTP/2 loop dispatch ordered and safe across loop shutdown",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "ad148aa9941be2917189119e3f4e772be7578a4c pyrex41 <reub.brooks@gmail.com> Give the CI compiler and core suite a bounded 4 GiB SBCL heap",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/2ef0d221827becc123b46139d3965d848b04b7ef...0d27a4ce3c03fe6ba5a7bf93f03966e423fc50f3",
+      "number": 1,
+      "branch": "codex/upstream-01-tests",
+      "path": "<HOME>/projects/woo-pr-series/01-tests",
+      "head": "0d27a4ce3c03fe6ba5a7bf93f03966e423fc50f3",
+      "parent": "2ef0d221827becc123b46139d3965d848b04b7ef",
+      "tree": "2109bba8192565542c388abd79c9102decf2c7a6",
+      "title": "Release event-loop descriptors and make the native test gate fail closed",
+      "stats": "7 files changed, 150 insertions(+), 21 deletions(-)",
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".gitignore",
+        "src/ev/event-loop.lisp",
+        "t/event-loop.lisp",
+        "t/generate-certificates.sh",
+        "t/test-support.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/0d27a4ce3c03-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/0d27a4ce3c03-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520530543,
+          "headBranch": "codex/upstream-01-tests",
+          "headSha": "0d27a4ce3c03fe6ba5a7bf93f03966e423fc50f3",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520530543",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/0d27a4ce3c03fe6ba5a7bf93f03966e423fc50f3...2ae685cece6d62d838d1d59c14f0650e508723fe",
+      "number": 2,
+      "branch": "codex/upstream-02-small-fixes",
+      "path": "<HOME>/projects/woo-pr-series/02-small-fixes",
+      "head": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+      "parent": "0d27a4ce3c03fe6ba5a7bf93f03966e423fc50f3",
+      "tree": "7925aa4010bc33aed9d4a189a5e9775c2a3216ff",
+      "title": "Fix status coverage, stat races and worker random states",
+      "stats": "7 files changed, 334 insertions(+), 19 deletions(-)",
+      "paths": [
+        "src/response.lisp",
+        "src/specials.lisp",
+        "src/woo.lisp",
+        "t/file-size.lisp",
+        "t/response.lisp",
+        "t/worker.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/2ae685cece6d-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/2ae685cece6d-ssl-woo-test-woo-test.file-size-woo-test.worker-woo-test.response.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.file-size",
+            "woo-test.worker",
+            "woo-test.response"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        96,
+        127,
+        129,
+        130
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520529727,
+          "headBranch": "codex/upstream-02-small-fixes",
+          "headSha": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529727",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "8298cdc2d716e2a642c4ab6e25b63b4be5dc73a5 pyrex41 <reub.brooks@gmail.com> Test graceful TLS shutdown retries for static and producer errors",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d85cacf664e7ab7ff798bae17c95eaac610fad3d pyrex41 <reub.brooks@gmail.com> Preserve TLS shutdown readiness and make qualification sampling reliable",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/2ae685cece6d62d838d1d59c14f0650e508723fe...8af064ce3fc35112312fb2164b7900c6ddf701c2",
+      "number": 3,
+      "branch": "codex/upstream-03-tls-io",
+      "path": "<HOME>/projects/woo-pr-series/03-tls-io",
+      "head": "8af064ce3fc35112312fb2164b7900c6ddf701c2",
+      "parent": "2ae685cece6d62d838d1d59c14f0650e508723fe",
+      "tree": "ed826471c60c436156567973564d01c692370c15",
+      "title": "Preserve nonblocking TLS retries and drain completed responses",
+      "stats": "9 files changed, 832 insertions(+), 75 deletions(-)",
+      "paths": [
+        "src/ev.lisp",
+        "src/ev/condition.lisp",
+        "src/ev/socket.lisp",
+        "src/ev/tcp.lisp",
+        "src/ssl.lisp",
+        "t/tls-stream.lisp",
+        "t/tlsreadretry.lisp",
+        "t/tlsretry.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/8af064ce3fc3-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.tls-stream",
+            "woo-test.tlsretry",
+            "woo-test.tlsreadretry"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        120,
+        131
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520529525,
+          "headBranch": "codex/upstream-03-tls-io",
+          "headSha": "8af064ce3fc35112312fb2164b7900c6ddf701c2",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529525",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a4b10d0a5dbc61fbd80f38ccd767afcefd9884a1 pyrex41 <reub.brooks@gmail.com> Replace the ALPN source-text test with a TLS end-to-end test",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/8af064ce3fc35112312fb2164b7900c6ddf701c2...f31d9bcdd7b8a9b9fefef58bbeee887e8ffbc8a4",
+      "number": 4,
+      "branch": "codex/upstream-04-tls-context",
+      "path": "<HOME>/projects/woo-pr-series/04-tls-context",
+      "head": "f31d9bcdd7b8a9b9fefef58bbeee887e8ffbc8a4",
+      "parent": "8af064ce3fc35112312fb2164b7900c6ddf701c2",
+      "tree": "051b0aca1ef56cbbfb0619943c9112da1abe9a01",
+      "title": "Own listener TLS contexts and load certificate chains",
+      "stats": "7 files changed, 814 insertions(+), 40 deletions(-)",
+      "paths": [
+        "src/ssl-alpn.lisp",
+        "src/ssl.lisp",
+        "src/woo.lisp",
+        "t/alpn.lisp",
+        "t/tls-context.lisp",
+        "woo-test.asd",
+        "woo.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/f31d9bcdd7b8-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/f31d9bcdd7b8-ssl-woo-test-woo-test.alpn-woo-test.tls-stream.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.alpn",
+            "woo-test.tls-stream"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        128
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520527340,
+          "headBranch": "codex/upstream-04-tls-context",
+          "headSha": "f31d9bcdd7b8a9b9fefef58bbeee887e8ffbc8a4",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520527340",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/f31d9bcdd7b8a9b9fefef58bbeee887e8ffbc8a4...2ad8b5d2088bae037fbe215dafa5caa66269cce8",
+      "number": 5,
+      "branch": "codex/upstream-05-http1-responses",
+      "path": "<HOME>/projects/woo-pr-series/05-http1-responses",
+      "head": "2ad8b5d2088bae037fbe215dafa5caa66269cce8",
+      "parent": "f31d9bcdd7b8a9b9fefef58bbeee887e8ffbc8a4",
+      "tree": "2f7b2b0e773ebe03393f995778bb5b1d4dbe32d2",
+      "title": "Validate HTTP/1 responses before committing headers",
+      "stats": "5 files changed, 322 insertions(+), 28 deletions(-)",
+      "paths": [
+        "src/response.lisp",
+        "src/woo.lisp",
+        "t/response-validation.lisp",
+        "t/response.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/2ad8b5d2088b-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/2ad8b5d2088b-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        93
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520530632,
+          "headBranch": "codex/upstream-05-http1-responses",
+          "headSha": "2ad8b5d2088bae037fbe215dafa5caa66269cce8",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520530632",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8298cdc2d716e2a642c4ab6e25b63b4be5dc73a5 pyrex41 <reub.brooks@gmail.com> Test graceful TLS shutdown retries for static and producer errors",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/2ad8b5d2088bae037fbe215dafa5caa66269cce8...5a5f105e68d9c0b5d77ff1c08e50502c2a2aabe5",
+      "number": 6,
+      "branch": "codex/upstream-06-static-files",
+      "path": "<HOME>/projects/woo-pr-series/06-static-files",
+      "head": "5a5f105e68d9c0b5d77ff1c08e50502c2a2aabe5",
+      "parent": "2ad8b5d2088bae037fbe215dafa5caa66269cce8",
+      "tree": "6a60cedfc776e2209ab4eb26f5dde2328b199045",
+      "title": "Handle static file errors and transfer ownership safely",
+      "stats": "7 files changed, 426 insertions(+), 30 deletions(-)",
+      "paths": [
+        "src/syscall/package.lisp",
+        "src/syscall/types.lisp",
+        "src/woo.lisp",
+        "t/static.lisp",
+        "t/tls-static.lisp",
+        "t/tls-stream.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/5a5f105e68d9-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/5a5f105e68d9-ssl-woo-test-woo-test.static-woo-test.tls-stream.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.static",
+            "woo-test.tls-stream"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        133
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520529298,
+          "headBranch": "codex/upstream-06-static-files",
+          "headSha": "5a5f105e68d9c0b5d77ff1c08e50502c2a2aabe5",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529298",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/5a5f105e68d9c0b5d77ff1c08e50502c2a2aabe5...a8f96400a32981fe3ea5d1357e6f245834b6784a",
+      "number": 7,
+      "branch": "codex/upstream-07-uploads",
+      "path": "<HOME>/projects/woo-pr-series/07-uploads",
+      "head": "a8f96400a32981fe3ea5d1357e6f245834b6784a",
+      "parent": "5a5f105e68d9c0b5d77ff1c08e50502c2a2aabe5",
+      "tree": "5ecabf19f83ad8fc4dc743dfb7baf5498a89b1fc",
+      "title": "Reject oversized bodies and release request spool files",
+      "stats": "4 files changed, 389 insertions(+), 25 deletions(-)",
+      "paths": [
+        "src/woo.lisp",
+        "t/body-limit.lisp",
+        "t/upload.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/a8f96400a329-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/a8f96400a329-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        135
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520528369,
+          "headBranch": "codex/upstream-07-uploads",
+          "headSha": "a8f96400a32981fe3ea5d1357e6f245834b6784a",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520528369",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "0eb57e3fc99b33e621b6082863b424e0a7725598 pyrex41 <reub.brooks@gmail.com> Contain errors from event loop exit hooks",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "334c40b4f64d27967594fd326f86a7fb0a24906b pyrex41 <reub.brooks@gmail.com> Keep HTTP/2 loop dispatch ordered and safe across loop shutdown",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/a8f96400a32981fe3ea5d1357e6f245834b6784a...15826f3236e34f36d281bb7ee23611370be06778",
+      "number": 8,
+      "branch": "codex/upstream-08-lifecycle",
+      "path": "<HOME>/projects/woo-pr-series/08-lifecycle",
+      "head": "15826f3236e34f36d281bb7ee23611370be06778",
+      "parent": "a8f96400a32981fe3ea5d1357e6f245834b6784a",
+      "tree": "ea8c526678e03a8c891db1601ebe1ba91f95efa1",
+      "title": "Stop servers on their owning event loops and join workers",
+      "stats": "8 files changed, 401 insertions(+), 21 deletions(-)",
+      "paths": [
+        "src/dispatch.lisp",
+        "src/ev/event-loop.lisp",
+        "src/signal.lisp",
+        "src/woo.lisp",
+        "src/worker.lisp",
+        "t/lifecycle.lisp",
+        "woo-test.asd",
+        "woo.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/15826f3236e3-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/15826f3236e3-ssl-woo-test-woo-test.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [
+        81
+      ],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520530998,
+          "headBranch": "codex/upstream-08-lifecycle",
+          "headSha": "15826f3236e34f36d281bb7ee23611370be06778",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520530998",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "94610b33bb1349e17fdb0320f7577902f965071b pyrex41 <reub.brooks@gmail.com> Enforce the header-list cap while HPACK decoding",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "bf5503e63077aba68f8c37cce760142b74f5084c pyrex41 <reub.brooks@gmail.com> Keep :authority and Host in the Clack env; octet default frame payload",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "eb6d44557d7957b43c8a986f9b684c2214ab0395 pyrex41 <reub.brooks@gmail.com> Use a real newline in the HPACK special-characters test",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/15826f3236e34f36d281bb7ee23611370be06778...2403a847381cb410db26dfd1d0db38783945b5c6",
+      "number": 9,
+      "branch": "codex/upstream-09-h2-codecs",
+      "path": "<HOME>/projects/woo-pr-series/09-h2-codecs",
+      "head": "2403a847381cb410db26dfd1d0db38783945b5c6",
+      "parent": "15826f3236e34f36d281bb7ee23611370be06778",
+      "tree": "219e02eaaf7000ae7faf85150b73ee3ce8649b93",
+      "title": "Add bounded HPACK and HTTP/2 frame codecs",
+      "stats": "7 files changed, 2898 insertions(+), 1 deletion(-)",
+      "paths": [
+        "src/http2/constants.lisp",
+        "src/http2/frames.lisp",
+        "src/http2/hpack.lisp",
+        "t/hpack.lisp",
+        "t/http2-frames.lisp",
+        "woo-test.asd",
+        "woo.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/2403a847381c-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/2403a847381c-ssl-woo-test-woo-test.hpack-woo-test.http2-frames.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.hpack",
+            "woo-test.http2-frames"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "",
+          "databaseId": 36520530272,
+          "headBranch": "codex/upstream-09-h2-codecs",
+          "headSha": "2403a847381cb410db26dfd1d0db38783945b5c6",
+          "status": "in_progress",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520530272",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "166940987a76a33725b1ce6a9b825312e0a37555 pyrex41 <reub.brooks@gmail.com> Tighten HTTP/2 connection tests that could not fail",
+        "27ec5ecec2b6e3f4b720d248474b8a79ef81d4ae pyrex41 <reub.brooks@gmail.com> Ignore WINDOW_UPDATE on closed streams",
+        "2e0da9fe9167eb3b1671efe64cbef5f865594980 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 test bugs: octet payloads, frame-size boundary, closure capture",
+        "3aceba93b530cda0a0ec4e8a6a128695a4b4cbcc pyrex41 <reub.brooks@gmail.com> Keep one value per setting in remote-settings",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "5a3b4181f0964fc0d893a328ef8ae5a59245a8ec pyrex41 <reub.brooks@gmail.com> Bound HTTP/2 request bodies and DATA on closed streams",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "bcc4735a512604af47240f65f761fec92400473c pyrex41 <reub.brooks@gmail.com> Give each HTTP/2 connection its own local settings list",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "c1fa04c2d997491633ff7b7dea071542abea167c pyrex41 <reub.brooks@gmail.com> Ignore in-flight DATA on streams we reset, within the peer's window",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "cc4b9d1b5771517fd9709a91fb784fcdb3f10e27 pyrex41 <reub.brooks@gmail.com> Cap CONTINUATION frames per header block and buffer them linearly",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d8f1bff9881eeba4371d3f82a157df6e85c2ce39 pyrex41 <reub.brooks@gmail.com> Ignore HEADERS in flight on streams we reset",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e213825f89b95c16cdb87624b7db4651c9e663c6 pyrex41 <reub.brooks@gmail.com> Validate HTTP/2 trailer fields and pass trailers to the app",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "fbc6e4991e776ffe18cd04e108e309b1a563ac8c pyrex41 <reub.brooks@gmail.com> Make stream WINDOW_UPDATE errors stream errors, not connection errors"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/2403a847381cb410db26dfd1d0db38783945b5c6...7f15b7a882dbc28847335e923db44532e7b7462e",
+      "number": 10,
+      "branch": "codex/upstream-10-h2-engine",
+      "path": "<HOME>/projects/woo-pr-series/10-h2-engine",
+      "head": "7f15b7a882dbc28847335e923db44532e7b7462e",
+      "parent": "2403a847381cb410db26dfd1d0db38783945b5c6",
+      "tree": "90523c69f80cf216ccf093def1ef7a35468e7169",
+      "title": "Add HTTP/2 connection and stream state handling",
+      "stats": "7 files changed, 3976 insertions(+), 2 deletions(-)",
+      "paths": [
+        "run-http2-stream-tests.lisp",
+        "src/http2/connection.lisp",
+        "src/http2/stream.lisp",
+        "t/http2-connection.lisp",
+        "t/http2-stream.lisp",
+        "woo-test.asd",
+        "woo.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/7f15b7a882db-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/7f15b7a882db-ssl-woo-test-woo-test.http2-stream-woo-test.http2-connection.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.http2-stream",
+            "woo-test.http2-connection"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520529008,
+          "headBranch": "codex/upstream-10-h2-engine",
+          "headSha": "7f15b7a882dbc28847335e923db44532e7b7462e",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529008",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "197af591b125af065f6c8d57bfc20b3b643ffe7b pyrex41 <reub.brooks@gmail.com> Run HTTP/2 e2e clients without perl and without the debugger",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "2e0da9fe9167eb3b1671efe64cbef5f865594980 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 test bugs: octet payloads, frame-size boundary, closure capture",
+        "334c40b4f64d27967594fd326f86a7fb0a24906b pyrex41 <reub.brooks@gmail.com> Keep HTTP/2 loop dispatch ordered and safe across loop shutdown",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "85dcc3e6c573f357e7ad0ffa6dd823cf13bc3d2b pyrex41 <reub.brooks@gmail.com> Reset a pathname response whose file changes mid-send",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "91cb3a79edb94c15b1b02e5538fc5bd5bab50312 pyrex41 <reub.brooks@gmail.com> Implement the Clack streaming responder for HTTP/2 and stream pathname bodies",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a15a1ea25534ca122f5573e5e884e81d6dae5411 pyrex41 <reub.brooks@gmail.com> Contain HTTP/2 response send failures and bound streamed writes",
+        "a4b10d0a5dbc61fbd80f38ccd767afcefd9884a1 pyrex41 <reub.brooks@gmail.com> Replace the ALPN source-text test with a TLS end-to-end test",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "bf5503e63077aba68f8c37cce760142b74f5084c pyrex41 <reub.brooks@gmail.com> Keep :authority and Host in the Clack env; octet default frame payload",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e213825f89b95c16cdb87624b7db4651c9e663c6 pyrex41 <reub.brooks@gmail.com> Validate HTTP/2 trailer fields and pass trailers to the app",
+        "e294b4d27dffa70b7dc9cb4b83669e1b5a3fd404 pyrex41 <reub.brooks@gmail.com> Map HTTP/2 request methods through a fixed table instead of interning",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "f5ecee6cbffdcb2caee7e0805e7bee22c5b3cced pyrex41 <reub.brooks@gmail.com> Drop connection-specific fields from HTTP/2 responses",
+        "fbc6e4991e776ffe18cd04e108e309b1a563ac8c pyrex41 <reub.brooks@gmail.com> Make stream WINDOW_UPDATE errors stream errors, not connection errors"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/7f15b7a882dbc28847335e923db44532e7b7462e...a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+      "number": 11,
+      "branch": "codex/upstream-11-h2-server",
+      "path": "<HOME>/projects/woo-pr-series/11-h2-server",
+      "head": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+      "parent": "7f15b7a882dbc28847335e923db44532e7b7462e",
+      "tree": "d24c7d58bcd1c211847aa972a03fda814f031635",
+      "title": "Map HTTP/2 requests and responses to Clack",
+      "stats": "8 files changed, 4175 insertions(+), 59 deletions(-)",
+      "paths": [
+        "src/http2/clack.lisp",
+        "src/woo.lisp",
+        "t/alpn.lisp",
+        "t/http2-clack.lisp",
+        "t/http2-detection.lisp",
+        "t/http2-e2e.lisp",
+        "woo-test.asd",
+        "woo.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/a6352421df46-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/a6352421df46-ssl-woo-test-woo-test.http2-clack-woo-test.http2-e2e-woo-test.alpn-woo-test-woo-test.upload.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.http2-clack",
+            "woo-test.http2-e2e",
+            "woo-test.alpn",
+            "woo-test",
+            "woo-test.upload"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "",
+          "databaseId": 36520528290,
+          "headBranch": "codex/upstream-11-h2-server",
+          "headSha": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+          "status": "in_progress",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520528290",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "16c2908f0c83656b9ca3bc7f274063a27b4c694b pyrex41 <reub.brooks@gmail.com> Test HTTP/1 replay after protocol detection over a raw socket",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "43f6582c6eab8cf7bd3d810276e26c3f023536b3 pyrex41 <reub.brooks@gmail.com> Drop WebSocket frames after a queued close and do not echo it",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "545cf7c1586fca61368ea0393b9641217cfd3875 pyrex41 <reub.brooks@gmail.com> Keep a failed WebSocket open until its close frame is flushed",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "586c331dde2f006289c365368291e2ca88d7df73 pyrex41 <reub.brooks@gmail.com> Cap send-close reasons at 123 UTF-8 octets",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "706c830abee3b753d3876ecd5933535d3f6c5ed6 pyrex41 <reub.brooks@gmail.com> Consume WebSocket frames before callbacks; validate UTF-8 and close codes",
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "8dcd15a2f837025e5d680c789b808769a7db88f3 pyrex41 <reub.brooks@gmail.com> Document test prerequisites, optional tools, and env vars",
+        "8e16f23430e838cbc87bddc930788ee48c914a9f pyrex41 <reub.brooks@gmail.com> Merge open-ws",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "9fc8cf02fce9f5ef12ef08972573b8e55f4609df pyrex41 <reub.brooks@gmail.com> Cap octets held before setup-websocket, per connection and in total",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "c05aa4a99282b0853f1c8379b96e468f2a07a042 pyrex41 <reub.brooks@gmail.com> Grow WebSocket read and fragment buffers geometrically",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "c8c68de28b2bc36a3248d033f7f8a4233aa12f46 pyrex41 <reub.brooks@gmail.com> Buffer WebSocket input that arrives before setup-websocket",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/a6352421df46cdfcce74ff127f1e35c5e9e452f8...7c565470a8eb51de4cadca6285edf05c93c44c2a",
+      "number": 12,
+      "branch": "codex/upstream-12-websocket",
+      "path": "<HOME>/projects/woo-pr-series/12-websocket",
+      "head": "7c565470a8eb51de4cadca6285edf05c93c44c2a",
+      "parent": "a6352421df46cdfcce74ff127f1e35c5e9e452f8",
+      "tree": "39d7d1329854bf4963bd49c1eccdcd9daa31372e",
+      "title": "Add WebSocket upgrades, framing and close handling",
+      "stats": "11 files changed, 3921 insertions(+), 351 deletions(-)",
+      "paths": [
+        "src/websocket.lisp",
+        "src/woo.lisp",
+        "t/event-loop.lisp",
+        "t/http2-detection.lisp",
+        "t/lifecycle.lisp",
+        "t/test-support.lisp",
+        "t/websocket-e2e.lisp",
+        "t/websocket.lisp",
+        "t/woo.lisp",
+        "woo-test.asd",
+        "woo.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/7c565470a8eb-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/7c565470a8eb-ssl-woo-test-woo-test.websocket-woo-test.websocket-e2e-woo-test.json",
+          "result": "PASS",
+          "scope": [
+            "woo-test.websocket",
+            "woo-test.websocket-e2e",
+            "woo-test"
+          ],
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520529107,
+          "headBranch": "codex/upstream-12-websocket",
+          "headSha": "7c565470a8eb51de4cadca6285edf05c93c44c2a",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529107",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "71cc1cbe32c81cae8997cc98921ae9a1209c8b03 pyrex41 <reub.brooks@gmail.com> Wait for managed pathname stream cleanup",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/7c565470a8eb51de4cadca6285edf05c93c44c2a...d7585aab637b14a46b482f990e307b687358d4da",
+      "number": 13,
+      "branch": "codex/upstream-13-managed-clack",
+      "path": "<HOME>/projects/woo-pr-series/13-managed-clack",
+      "head": "d7585aab637b14a46b482f990e307b687358d4da",
+      "parent": "7c565470a8eb51de4cadca6285edf05c93c44c2a",
+      "tree": "a8143fde593d98e0d4d822d8e6c248821667341a",
+      "title": "Add an optional managed Clack runtime",
+      "stats": "8 files changed, 1259 insertions(+)",
+      "paths": [
+        "clack-handler-woo-managed.asd",
+        "src/compat/http.lisp",
+        "src/compat/package.lisp",
+        "src/compat/runtime.lisp",
+        "t/compat/contract.lisp",
+        "t/compat/fixture.txt",
+        "t/compat/lifecycle.lisp",
+        "woo-lack-compat.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/d7585aab637b-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/d7585aab637b-ssl-woo-lack-compat_tests-all.json",
+          "result": "PASS",
+          "scope": "woo-lack-compat/tests",
+          "no_ssl": false,
+          "system": "woo-lack-compat/tests"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520527799,
+          "headBranch": "codex/upstream-13-managed-clack",
+          "headSha": "d7585aab637b14a46b482f990e307b687358d4da",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520527799",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "4dbfdba8ca4c4093ba9322c57cfa2435de99c40a pyrex41 <reub.brooks@gmail.com> Stop documented compatibility setup on bootstrap errors",
+        "71cc1cbe32c81cae8997cc98921ae9a1209c8b03 pyrex41 <reub.brooks@gmail.com> Wait for managed pathname stream cleanup",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "fed54b345ce6e0084f32a960c91ad0846f5d9ca9 pyrex41 <reub.brooks@gmail.com> Apply managed backpressure to ordinary compressed response bodies"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/d7585aab637b14a46b482f990e307b687358d4da...43105d204d1c2243e7197000c55edb89ff43cc5e",
+      "number": 14,
+      "branch": "codex/upstream-14-lack-middleware",
+      "path": "<HOME>/projects/woo-pr-series/14-lack-middleware",
+      "head": "43105d204d1c2243e7197000c55edb89ff43cc5e",
+      "parent": "d7585aab637b14a46b482f990e307b687358d4da",
+      "tree": "1228860d6fede8163d30d4014cb2ff6569abae3c",
+      "title": "Add managed Lack middleware and service contracts",
+      "stats": "15 files changed, 835 insertions(+), 6 deletions(-)",
+      "paths": [
+        "docs/lack-compatibility.md",
+        "lack-middleware-woo-accesslog.asd",
+        "lack-middleware-woo-backtrace.asd",
+        "lack-middleware-woo-deflater.asd",
+        "lack-middleware-woo-mount.asd",
+        "lack-middleware-woo-session.asd",
+        "src/compat/middleware.lisp",
+        "t/compat/bootstrap.py",
+        "t/compat/contract.lisp",
+        "t/compat/dependencies.json",
+        "t/compat/load.lisp",
+        "t/compat/middleware.lisp",
+        "t/compat/run.lisp",
+        "t/compat/services.lisp",
+        "woo-lack-compat.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/43105d204d1c-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/43105d204d1c-ssl-woo-lack-compat_tests-all.json",
+          "result": "PASS",
+          "scope": "woo-lack-compat/tests",
+          "no_ssl": false,
+          "system": "woo-lack-compat/tests"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520529743,
+          "headBranch": "codex/upstream-14-lack-middleware",
+          "headSha": "43105d204d1c2243e7197000c55edb89ff43cc5e",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529743",
+          "workflowName": "CI"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "0968636dd165f525015db0a0dacbf44afa6b59e7 pyrex41 <reub.brooks@gmail.com> Make legacy resource receipts phase aware",
+        "14c899101d7630db8d0887747f7ee508b0c18d83 pyrex41 <reub.brooks@gmail.com> Record and require the managed transport cancellation and drain gate",
+        "1a708b94bbb4a6f8f0bb31f197cc74e8d1baaa42 pyrex41 <reub.brooks@gmail.com> Harden the Go differential and compare payloads and HPACK state",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "2e0da9fe9167eb3b1671efe64cbef5f865594980 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 test bugs: octet payloads, frame-size boundary, closure capture",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "404297a9882ec4ddec4d85587724485a254419f9 pyrex41 <reub.brooks@gmail.com> Generate valid UTF-8 for WebSocket TEXT frames in properties",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "49210c18e3eb8c615ff7006d38aa2867c3251a52 pyrex41 <reub.brooks@gmail.com> Describe upstream adaptations without a blanket safety claim",
+        "4d005a686a4a5287acd77050e927cc42a6f07665 pyrex41 <reub.brooks@gmail.com> Reject malformed resource timelines and preserve changed-source diagnostics",
+        "4dbfdba8ca4c4093ba9322c57cfa2435de99c40a pyrex41 <reub.brooks@gmail.com> Stop documented compatibility setup on bootstrap errors",
+        "56502c2db49c94699e3695b091446135177d0c17 pyrex41 <reub.brooks@gmail.com> Scope the sb-cover policy and always reload plain codecs in fuzz",
+        "565238117cd7a5db2454994e627e6844e63e4345 pyrex41 <reub.brooks@gmail.com> Require complete oversized-body error responses in transport tests",
+        "58328ddb9845d31c606d5785a8c187f834fb6314 pyrex41 <reub.brooks@gmail.com> Treat non-compiling mutants as invalid, not killed",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "7756441b348b7272130c4adcbb6e8a82f635258e pyrex41 <reub.brooks@gmail.com> Cap Quickcheck discards and keep the replay file out of the tree",
+        "819cceb7450487daf3a81bd545da339ab925a9d4 pyrex41 <reub.brooks@gmail.com> Validate diagnostic response framing exactly",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "a8f54d7e20197321fa19364ecc44f02675907b61 pyrex41 <reub.brooks@gmail.com> Add TLS backpressure reference diagnostic",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "ad148aa9941be2917189119e3f4e772be7578a4c pyrex41 <reub.brooks@gmail.com> Give the CI compiler and core suite a bounded 4 GiB SBCL heap",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "d85cacf664e7ab7ff798bae17c95eaac610fad3d pyrex41 <reub.brooks@gmail.com> Preserve TLS shutdown readiness and make qualification sampling reliable",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "df086aa7ff75954e843eb0c8ed073f6ea5a7b8dc pyrex41 <reub.brooks@gmail.com> Property-test random HTTP/2 frame sequences on one connection",
+        "dff76b2350332e955a042abd56baed0fc6855871 pyrex41 <reub.brooks@gmail.com> Record release acceptance through source-bound qualification gates",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "ebcbf5bb424811b8b22099050d4f41912986ea30 pyrex41 <reub.brooks@gmail.com> Calibrate TLS backpressure against Go and enforce exact response framing",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "fed54b345ce6e0084f32a960c91ad0846f5d9ca9 pyrex41 <reub.brooks@gmail.com> Apply managed backpressure to ordinary compressed response bodies"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/43105d204d1c2243e7197000c55edb89ff43cc5e...564d08d9e1beca7706a81821b0ec2b5660b55313",
+      "number": 15,
+      "branch": "codex/upstream-15-qualification",
+      "path": "<HOME>/projects/woo-pr-series/15-qualification",
+      "head": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+      "parent": "43105d204d1c2243e7197000c55edb89ff43cc5e",
+      "tree": "d1987c8889f388833ae52d752c50ff445d6e3737",
+      "title": "Add protocol property, parity and qualification gates",
+      "stats": "51 files changed, 7927 insertions(+), 43 deletions(-)",
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/lack-compatibility.yml",
+        ".github/workflows/legacy-qualification.yml",
+        "docs/engineering-review.md",
+        "docs/lack-compatibility.md",
+        "docs/production-readiness.md",
+        "docs/upstream-hardening-plan.md",
+        "flake.lock",
+        "flake.nix",
+        "integration/clack/README.md",
+        "integration/clack/threaded-stop.patch",
+        "t/compat/check.py",
+        "t/compat/server.lisp",
+        "t/compat/test_receipts.py",
+        "t/conformance/README.md",
+        "t/conformance/autobahn-fuzzingclient.json.in",
+        "t/conformance/autobahn.sh",
+        "t/conformance/fixture_readiness.py",
+        "t/conformance/h2spec.sh",
+        "t/conformance/test_autobahn_runner.py",
+        "t/diff/diff.lisp",
+        "t/diff/go.mod",
+        "t/diff/go.sum",
+        "t/diff/refh2.go",
+        "t/fuzz/guided.lisp",
+        "t/hegel/diag_tls_test.go",
+        "t/hegel/flow_control_test.go",
+        "t/hegel/go.mod",
+        "t/hegel/go.sum",
+        "t/hegel/harness_test.go",
+        "t/hegel/legacy-server.lisp",
+        "t/hegel/legacy_qualification_test.go",
+        "t/hegel/managed_status_test.go",
+        "t/hegel/managed_test.go",
+        "t/hegel/oracle/Cargo.lock",
+        "t/hegel/oracle/Cargo.toml",
+        "t/hegel/oracle/README.md",
+        "t/hegel/oracle/src/main.rs",
+        "t/hegel/parity_test.go",
+        "t/hegel/server.lisp",
+        "t/hegel/tls-live-server.lisp",
+        "t/hegel/tls_live_test.go",
+        "t/hegel/woo_test.go",
+        "t/mutate/mutate.lisp",
+        "t/prop/core.lisp",
+        "t/prop/properties.lisp",
+        "t/prop/qc.lisp",
+        "t/prop/quickcheck.lisp",
+        "t/qualification/check.py",
+        "t/qualification/test_receipts.py",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/564d08d9e1be-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "",
+          "databaseId": 36520529633,
+          "headBranch": "codex/upstream-15-qualification",
+          "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+          "status": "in_progress",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529633",
+          "workflowName": "Legacy qualification"
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 36520529577,
+          "headBranch": "codex/upstream-15-qualification",
+          "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529577",
+          "workflowName": "CI"
+        },
+        {
+          "conclusion": "",
+          "databaseId": 36520529575,
+          "headBranch": "codex/upstream-15-qualification",
+          "headSha": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+          "status": "in_progress",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520529575",
+          "workflowName": "Lack compatibility"
+        }
+      ]
+    },
+    {
+      "source_commit_records": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "4d005a686a4a5287acd77050e927cc42a6f07665 pyrex41 <reub.brooks@gmail.com> Reject malformed resource timelines and preserve changed-source diagnostics",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "871d09d80f698f0b158ef363de96440270e48564 pyrex41 <reub.brooks@gmail.com> update README",
+        "8dcd15a2f837025e5d680c789b808769a7db88f3 pyrex41 <reub.brooks@gmail.com> Document test prerequisites, optional tools, and env vars",
+        "91751ef545ec3acaf9d6300da464233b87145a83 pyrex41 <reub.brooks@gmail.com> Test the showcase request-to-env fix directly",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "d2dc44c79deef1e81a499b989a25cc5d45a6fdc4 pyrex41 <reub.brooks@gmail.com> Count CPUs portably in the optimized benchmark server",
+        "d631afcc9fda9a3f5f7928917a219321bb18dfc2 pyrex41 <reub.brooks@gmail.com> Fix the showcase's benchmarks JSON, echo, close, and slow resource",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "compare_url": "https://github.com/pyrex41/woo/compare/564d08d9e1beca7706a81821b0ec2b5660b55313...c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "number": 16,
+      "branch": "codex/upstream-16-showcase",
+      "path": "<HOME>/projects/woo-pr-series/16-showcase",
+      "head": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+      "parent": "564d08d9e1beca7706a81821b0ec2b5660b55313",
+      "tree": "aad612a5291c196e7127436535731de71ae4d62b",
+      "title": "Add optional protocol showcase and benchmark tooling",
+      "stats": "25 files changed, 2314 insertions(+), 84 deletions(-)",
+      "paths": [
+        "README.md",
+        "benchmark-server-optimized.lisp",
+        "benchmark-server.lisp",
+        "benchmark.md",
+        "build-image-optimized.lisp",
+        "build-image.lisp",
+        "showcase/run-server.lisp",
+        "showcase/src/app.lisp",
+        "showcase/src/benchmark-data.lisp",
+        "showcase/src/limits.lisp",
+        "showcase/src/package.lisp",
+        "showcase/static/css/style.css",
+        "showcase/static/js/charts.js",
+        "showcase/static/js/http2-demo.js",
+        "showcase/static/js/websocket-demo.js",
+        "showcase/templates/benchmarks.html",
+        "showcase/templates/http2.html",
+        "showcase/templates/index.html",
+        "showcase/templates/layout.html",
+        "showcase/templates/websocket.html",
+        "showcase/test-load.lisp",
+        "showcase/woo-showcase.asd",
+        "t/showcase-e2e.lisp",
+        "t/showcase.lisp",
+        "woo-test.asd"
+      ],
+      "evidence": [
+        {
+          "path": "docs/pr-series/receipts/c0e27b65e785-extra-conformance-launchers.json",
+          "result": "PASS",
+          "scope": "conformance-launchers",
+          "no_ssl": false,
+          "system": "conformance-launchers"
+        },
+        {
+          "path": "docs/pr-series/receipts/c0e27b65e785-extra-hegel-native-correct-oracle.json",
+          "result": "PASS",
+          "scope": "hegel-native-correct-oracle",
+          "no_ssl": false,
+          "system": "hegel-native-correct-oracle"
+        },
+        {
+          "path": "docs/pr-series/receipts/c0e27b65e785-extra-showcase-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": false,
+          "system": "showcase-load"
+        },
+        {
+          "path": "docs/pr-series/receipts/c0e27b65e785-no-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/c0e27b65e785-no-ssl-woo-test-load.json",
+          "result": "PASS",
+          "scope": "load-only",
+          "no_ssl": true,
+          "system": "woo-test"
+        },
+        {
+          "path": "docs/pr-series/receipts/c0e27b65e785-ssl-woo-test-all.json",
+          "result": "PASS",
+          "scope": "woo-test",
+          "no_ssl": false,
+          "system": "woo-test"
+        }
+      ],
+      "related_upstream_prs": [],
+      "hosted_checks": [
+        {
+          "conclusion": "success",
+          "databaseId": 36520528021,
+          "headBranch": "codex/upstream-16-showcase",
+          "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+          "status": "completed",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520528021",
+          "workflowName": "CI"
+        },
+        {
+          "conclusion": "",
+          "databaseId": 36520527924,
+          "headBranch": "codex/upstream-16-showcase",
+          "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+          "status": "in_progress",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520527924",
+          "workflowName": "Legacy qualification"
+        },
+        {
+          "conclusion": "",
+          "databaseId": 36520527923,
+          "headBranch": "codex/upstream-16-showcase",
+          "headSha": "c0e27b65e785842b9d673c6668c17a52a2c81b4d",
+          "status": "in_progress",
+          "url": "https://github.com/pyrex41/woo/actions/runs/36520527923",
+          "workflowName": "Lack compatibility"
+        }
+      ]
+    }
+  ],
+  "missing_paths": [],
+  "runtime_differences": [],
+  "additional_paths": [
+    "t/response-validation.lisp",
+    "t/static.lisp",
+    "t/tls-context.lisp",
+    "t/tls-static.lisp",
+    "t/upload.lisp"
+  ],
+  "provenance": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "source_commits": [
+        "ad148aa9941be2917189119e3f4e772be7578a4c pyrex41 <reub.brooks@gmail.com> Give the CI compiler and core suite a bounded 4 GiB SBCL heap",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        1,
+        15
+      ]
+    },
+    {
+      "path": ".github/workflows/lack-compatibility.yml",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": ".github/workflows/legacy-qualification.yml",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": ".gitignore",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        1
+      ]
+    },
+    {
+      "path": "README.md",
+      "source_commits": [
+        "4d005a686a4a5287acd77050e927cc42a6f07665 pyrex41 <reub.brooks@gmail.com> Reject malformed resource timelines and preserve changed-source diagnostics",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates",
+        "8dcd15a2f837025e5d680c789b808769a7db88f3 pyrex41 <reub.brooks@gmail.com> Document test prerequisites, optional tools, and env vars",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "871d09d80f698f0b158ef363de96440270e48564 pyrex41 <reub.brooks@gmail.com> update README"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "benchmark-server-optimized.lisp",
+      "source_commits": [
+        "d2dc44c79deef1e81a499b989a25cc5d45a6fdc4 pyrex41 <reub.brooks@gmail.com> Count CPUs portably in the optimized benchmark server",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "benchmark-server.lisp",
+      "source_commits": [
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "benchmark.md",
+      "source_commits": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "build-image-optimized.lisp",
+      "source_commits": [
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "build-image.lisp",
+      "source_commits": [
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "clack-handler-woo-managed.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13
+      ]
+    },
+    {
+      "path": "docs/engineering-review.md",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "docs/lack-compatibility.md",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "4dbfdba8ca4c4093ba9322c57cfa2435de99c40a pyrex41 <reub.brooks@gmail.com> Stop documented compatibility setup on bootstrap errors",
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14,
+        15
+      ]
+    },
+    {
+      "path": "docs/production-readiness.md",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "docs/upstream-hardening-plan.md",
+      "source_commits": [
+        "49210c18e3eb8c615ff7006d38aa2867c3251a52 pyrex41 <reub.brooks@gmail.com> Describe upstream adaptations without a blanket safety claim",
+        "dff76b2350332e955a042abd56baed0fc6855871 pyrex41 <reub.brooks@gmail.com> Record release acceptance through source-bound qualification gates",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "flake.lock",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "flake.nix",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "integration/clack/README.md",
+      "source_commits": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "integration/clack/threaded-stop.patch",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "lack-middleware-woo-accesslog.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "lack-middleware-woo-backtrace.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "lack-middleware-woo-deflater.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "lack-middleware-woo-mount.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "lack-middleware-woo-session.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "run-http2-stream-tests.lisp",
+      "source_commits": [
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        10
+      ]
+    },
+    {
+      "path": "showcase/run-server.lisp",
+      "source_commits": [
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/src/app.lisp",
+      "source_commits": [
+        "d631afcc9fda9a3f5f7928917a219321bb18dfc2 pyrex41 <reub.brooks@gmail.com> Fix the showcase's benchmarks JSON, echo, close, and slow resource",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/src/benchmark-data.lisp",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/src/limits.lisp",
+      "source_commits": [
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/src/package.lisp",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/static/css/style.css",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/static/js/charts.js",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/static/js/http2-demo.js",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/static/js/websocket-demo.js",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/templates/benchmarks.html",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/templates/http2.html",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/templates/index.html",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/templates/layout.html",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/templates/websocket.html",
+      "source_commits": [
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/test-load.lisp",
+      "source_commits": [
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "showcase/woo-showcase.asd",
+      "source_commits": [
+        "d631afcc9fda9a3f5f7928917a219321bb18dfc2 pyrex41 <reub.brooks@gmail.com> Fix the showcase's benchmarks JSON, echo, close, and slow resource",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "fd216095822749a7f056ee51ef4def00fd33775b pyrex41 <reub.brooks@gmail.com> Add performance showcase web app"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "src/compat/http.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13
+      ]
+    },
+    {
+      "path": "src/compat/middleware.lisp",
+      "source_commits": [
+        "fed54b345ce6e0084f32a960c91ad0846f5d9ca9 pyrex41 <reub.brooks@gmail.com> Apply managed backpressure to ordinary compressed response bodies",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "src/compat/package.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13
+      ]
+    },
+    {
+      "path": "src/compat/runtime.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13
+      ]
+    },
+    {
+      "path": "src/dispatch.lisp",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        8
+      ]
+    },
+    {
+      "path": "src/ev.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        3
+      ]
+    },
+    {
+      "path": "src/ev/condition.lisp",
+      "source_commits": [
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries"
+      ],
+      "review_topics": [
+        3
+      ]
+    },
+    {
+      "path": "src/ev/event-loop.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "0eb57e3fc99b33e621b6082863b424e0a7725598 pyrex41 <reub.brooks@gmail.com> Contain errors from event loop exit hooks",
+        "334c40b4f64d27967594fd326f86a7fb0a24906b pyrex41 <reub.brooks@gmail.com> Keep HTTP/2 loop dispatch ordered and safe across loop shutdown"
+      ],
+      "review_topics": [
+        1,
+        8
+      ]
+    },
+    {
+      "path": "src/ev/socket.lisp",
+      "source_commits": [
+        "d85cacf664e7ab7ff798bae17c95eaac610fad3d pyrex41 <reub.brooks@gmail.com> Preserve TLS shutdown readiness and make qualification sampling reliable",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        3
+      ]
+    },
+    {
+      "path": "src/ev/tcp.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        3
+      ]
+    },
+    {
+      "path": "src/http2/clack.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "85dcc3e6c573f357e7ad0ffa6dd823cf13bc3d2b pyrex41 <reub.brooks@gmail.com> Reset a pathname response whose file changes mid-send",
+        "fbc6e4991e776ffe18cd04e108e309b1a563ac8c pyrex41 <reub.brooks@gmail.com> Make stream WINDOW_UPDATE errors stream errors, not connection errors",
+        "a15a1ea25534ca122f5573e5e884e81d6dae5411 pyrex41 <reub.brooks@gmail.com> Contain HTTP/2 response send failures and bound streamed writes",
+        "334c40b4f64d27967594fd326f86a7fb0a24906b pyrex41 <reub.brooks@gmail.com> Keep HTTP/2 loop dispatch ordered and safe across loop shutdown",
+        "f5ecee6cbffdcb2caee7e0805e7bee22c5b3cced pyrex41 <reub.brooks@gmail.com> Drop connection-specific fields from HTTP/2 responses",
+        "e294b4d27dffa70b7dc9cb4b83669e1b5a3fd404 pyrex41 <reub.brooks@gmail.com> Map HTTP/2 request methods through a fixed table instead of interning",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "91cb3a79edb94c15b1b02e5538fc5bd5bab50312 pyrex41 <reub.brooks@gmail.com> Implement the Clack streaming responder for HTTP/2 and stream pathname bodies",
+        "e213825f89b95c16cdb87624b7db4651c9e663c6 pyrex41 <reub.brooks@gmail.com> Validate HTTP/2 trailer fields and pass trailers to the app",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "bf5503e63077aba68f8c37cce760142b74f5084c pyrex41 <reub.brooks@gmail.com> Keep :authority and Host in the Clack env; octet default frame payload",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        11
+      ]
+    },
+    {
+      "path": "src/http2/connection.lisp",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "fbc6e4991e776ffe18cd04e108e309b1a563ac8c pyrex41 <reub.brooks@gmail.com> Make stream WINDOW_UPDATE errors stream errors, not connection errors",
+        "27ec5ecec2b6e3f4b720d248474b8a79ef81d4ae pyrex41 <reub.brooks@gmail.com> Ignore WINDOW_UPDATE on closed streams",
+        "3aceba93b530cda0a0ec4e8a6a128695a4b4cbcc pyrex41 <reub.brooks@gmail.com> Keep one value per setting in remote-settings",
+        "d8f1bff9881eeba4371d3f82a157df6e85c2ce39 pyrex41 <reub.brooks@gmail.com> Ignore HEADERS in flight on streams we reset",
+        "cc4b9d1b5771517fd9709a91fb784fcdb3f10e27 pyrex41 <reub.brooks@gmail.com> Cap CONTINUATION frames per header block and buffer them linearly",
+        "c1fa04c2d997491633ff7b7dea071542abea167c pyrex41 <reub.brooks@gmail.com> Ignore in-flight DATA on streams we reset, within the peer's window",
+        "e213825f89b95c16cdb87624b7db4651c9e663c6 pyrex41 <reub.brooks@gmail.com> Validate HTTP/2 trailer fields and pass trailers to the app",
+        "5a3b4181f0964fc0d893a328ef8ae5a59245a8ec pyrex41 <reub.brooks@gmail.com> Bound HTTP/2 request bodies and DATA on closed streams",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "bcc4735a512604af47240f65f761fec92400473c pyrex41 <reub.brooks@gmail.com> Give each HTTP/2 connection its own local settings list",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        10
+      ]
+    },
+    {
+      "path": "src/http2/constants.lisp",
+      "source_commits": [
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        9
+      ]
+    },
+    {
+      "path": "src/http2/frames.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "bf5503e63077aba68f8c37cce760142b74f5084c pyrex41 <reub.brooks@gmail.com> Keep :authority and Host in the Clack env; octet default frame payload",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        9
+      ]
+    },
+    {
+      "path": "src/http2/hpack.lisp",
+      "source_commits": [
+        "94610b33bb1349e17fdb0320f7577902f965071b pyrex41 <reub.brooks@gmail.com> Enforce the header-list cap while HPACK decoding",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        9
+      ]
+    },
+    {
+      "path": "src/http2/stream.lisp",
+      "source_commits": [
+        "cc4b9d1b5771517fd9709a91fb784fcdb3f10e27 pyrex41 <reub.brooks@gmail.com> Cap CONTINUATION frames per header block and buffer them linearly",
+        "5a3b4181f0964fc0d893a328ef8ae5a59245a8ec pyrex41 <reub.brooks@gmail.com> Bound HTTP/2 request bodies and DATA on closed streams",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        10
+      ]
+    },
+    {
+      "path": "src/response.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        2,
+        5
+      ]
+    },
+    {
+      "path": "src/signal.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        8
+      ]
+    },
+    {
+      "path": "src/specials.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        2
+      ]
+    },
+    {
+      "path": "src/ssl-alpn.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        4
+      ]
+    },
+    {
+      "path": "src/ssl.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        3,
+        4
+      ]
+    },
+    {
+      "path": "src/syscall/package.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        6
+      ]
+    },
+    {
+      "path": "src/syscall/types.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        6
+      ]
+    },
+    {
+      "path": "src/websocket.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "9fc8cf02fce9f5ef12ef08972573b8e55f4609df pyrex41 <reub.brooks@gmail.com> Cap octets held before setup-websocket, per connection and in total",
+        "c8c68de28b2bc36a3248d033f7f8a4233aa12f46 pyrex41 <reub.brooks@gmail.com> Buffer WebSocket input that arrives before setup-websocket",
+        "586c331dde2f006289c365368291e2ca88d7df73 pyrex41 <reub.brooks@gmail.com> Cap send-close reasons at 123 UTF-8 octets",
+        "c05aa4a99282b0853f1c8379b96e468f2a07a042 pyrex41 <reub.brooks@gmail.com> Grow WebSocket read and fragment buffers geometrically",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "545cf7c1586fca61368ea0393b9641217cfd3875 pyrex41 <reub.brooks@gmail.com> Keep a failed WebSocket open until its close frame is flushed",
+        "43f6582c6eab8cf7bd3d810276e26c3f023536b3 pyrex41 <reub.brooks@gmail.com> Drop WebSocket frames after a queued close and do not echo it",
+        "706c830abee3b753d3876ecd5933535d3f6c5ed6 pyrex41 <reub.brooks@gmail.com> Consume WebSocket frames before callbacks; validate UTF-8 and close codes",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        12
+      ]
+    },
+    {
+      "path": "src/woo.lisp",
+      "source_commits": [
+        "709d5f332a47380ae7ad120115c98b4309aafa39 pyrex41 <reub.brooks@gmail.com> fix: drain legacy error responses before TLS close",
+        "556265695c37a4b3bd8d2927a23de354e1a427d2 pyrex41 <reub.brooks@gmail.com> fix: gracefully close completed error responses",
+        "00fc9c657cb37968406da93e76ad2ec0e5edc52d pyrex41 <reub.brooks@gmail.com> Gracefully close oversized HTTP responses",
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        11,
+        12
+      ]
+    },
+    {
+      "path": "src/worker.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        8
+      ]
+    },
+    {
+      "path": "t/alpn.lisp",
+      "source_commits": [
+        "8e25bff5a75fb7c6bb924c173caa5e9c48fd279c pyrex41 <reub.brooks@gmail.com> Release listener TLS context when ALPN setup fails",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "a4b10d0a5dbc61fbd80f38ccd767afcefd9884a1 pyrex41 <reub.brooks@gmail.com> Replace the ALPN source-text test with a TLS end-to-end test",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        4,
+        11
+      ]
+    },
+    {
+      "path": "t/body-limit.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        7
+      ]
+    },
+    {
+      "path": "t/compat/bootstrap.py",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "t/compat/check.py",
+      "source_commits": [
+        "14c899101d7630db8d0887747f7ee508b0c18d83 pyrex41 <reub.brooks@gmail.com> Record and require the managed transport cancellation and drain gate",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/compat/contract.lisp",
+      "source_commits": [
+        "71cc1cbe32c81cae8997cc98921ae9a1209c8b03 pyrex41 <reub.brooks@gmail.com> Wait for managed pathname stream cleanup",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d98aeb11c7290dea1d2981f3342babb34732bb0f pyrex41 <reub.brooks@gmail.com> Contain socket budget failures at native callback boundaries",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13,
+        14
+      ]
+    },
+    {
+      "path": "t/compat/dependencies.json",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "t/compat/fixture.txt",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13
+      ]
+    },
+    {
+      "path": "t/compat/lifecycle.lisp",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13
+      ]
+    },
+    {
+      "path": "t/compat/load.lisp",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "t/compat/middleware.lisp",
+      "source_commits": [
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "t/compat/run.lisp",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "t/compat/server.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/compat/services.lisp",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        14
+      ]
+    },
+    {
+      "path": "t/compat/test_receipts.py",
+      "source_commits": [
+        "14c899101d7630db8d0887747f7ee508b0c18d83 pyrex41 <reub.brooks@gmail.com> Record and require the managed transport cancellation and drain gate",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/conformance/README.md",
+      "source_commits": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/conformance/autobahn-fuzzingclient.json.in",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/conformance/autobahn.sh",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/conformance/fixture_readiness.py",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/conformance/h2spec.sh",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/conformance/test_autobahn_runner.py",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/diff/diff.lisp",
+      "source_commits": [
+        "1a708b94bbb4a6f8f0bb31f197cc74e8d1baaa42 pyrex41 <reub.brooks@gmail.com> Harden the Go differential and compare payloads and HPACK state",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/diff/go.mod",
+      "source_commits": [
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/diff/go.sum",
+      "source_commits": [
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/diff/refh2.go",
+      "source_commits": [
+        "1a708b94bbb4a6f8f0bb31f197cc74e8d1baaa42 pyrex41 <reub.brooks@gmail.com> Harden the Go differential and compare payloads and HPACK state",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/file-size.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        2
+      ]
+    },
+    {
+      "path": "t/fuzz/guided.lisp",
+      "source_commits": [
+        "56502c2db49c94699e3695b091446135177d0c17 pyrex41 <reub.brooks@gmail.com> Scope the sb-cover policy and always reload plain codecs in fuzz",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/generate-certificates.sh",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures"
+      ],
+      "review_topics": [
+        1
+      ]
+    },
+    {
+      "path": "t/hegel/diag_tls_test.go",
+      "source_commits": [
+        "ebcbf5bb424811b8b22099050d4f41912986ea30 pyrex41 <reub.brooks@gmail.com> Calibrate TLS backpressure against Go and enforce exact response framing",
+        "819cceb7450487daf3a81bd545da339ab925a9d4 pyrex41 <reub.brooks@gmail.com> Validate diagnostic response framing exactly",
+        "a8f54d7e20197321fa19364ecc44f02675907b61 pyrex41 <reub.brooks@gmail.com> Add TLS backpressure reference diagnostic"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/flow_control_test.go",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/go.mod",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/go.sum",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/harness_test.go",
+      "source_commits": [
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/legacy-server.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/legacy_qualification_test.go",
+      "source_commits": [
+        "0968636dd165f525015db0a0dacbf44afa6b59e7 pyrex41 <reub.brooks@gmail.com> Make legacy resource receipts phase aware",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/managed_status_test.go",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/managed_test.go",
+      "source_commits": [
+        "565238117cd7a5db2454994e627e6844e63e4345 pyrex41 <reub.brooks@gmail.com> Require complete oversized-body error responses in transport tests",
+        "fed54b345ce6e0084f32a960c91ad0846f5d9ca9 pyrex41 <reub.brooks@gmail.com> Apply managed backpressure to ordinary compressed response bodies",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "245bac5b6457587a563c9c647b521c5d735ccf89 pyrex41 <reub.brooks@gmail.com> Fix chunked request reuse and bound fixture cleanup on gate failures",
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/oracle/Cargo.lock",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/oracle/Cargo.toml",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/oracle/README.md",
+      "source_commits": [
+        "07035842805c24ea234707958a64d88551f5f02a pyrex41 <reub.brooks@gmail.com> Correct managed compatibility evidence and runnable documentation",
+        "5a7badc75cb52b0fc4b283899c1633b0a5ed13fc pyrex41 <reub.brooks@gmail.com> Document protocol scope, tests, and release gates"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/oracle/src/main.rs",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/parity_test.go",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/server.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/tls-live-server.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/tls_live_test.go",
+      "source_commits": [
+        "ebcbf5bb424811b8b22099050d4f41912986ea30 pyrex41 <reub.brooks@gmail.com> Calibrate TLS backpressure against Go and enforce exact response framing",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hegel/woo_test.go",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/hpack.lisp",
+      "source_commits": [
+        "eb6d44557d7957b43c8a986f9b684c2214ab0395 pyrex41 <reub.brooks@gmail.com> Use a real newline in the HPACK special-characters test",
+        "94610b33bb1349e17fdb0320f7577902f965071b pyrex41 <reub.brooks@gmail.com> Enforce the header-list cap while HPACK decoding",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        9
+      ]
+    },
+    {
+      "path": "t/http2-clack.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "85dcc3e6c573f357e7ad0ffa6dd823cf13bc3d2b pyrex41 <reub.brooks@gmail.com> Reset a pathname response whose file changes mid-send",
+        "fbc6e4991e776ffe18cd04e108e309b1a563ac8c pyrex41 <reub.brooks@gmail.com> Make stream WINDOW_UPDATE errors stream errors, not connection errors",
+        "a15a1ea25534ca122f5573e5e884e81d6dae5411 pyrex41 <reub.brooks@gmail.com> Contain HTTP/2 response send failures and bound streamed writes",
+        "334c40b4f64d27967594fd326f86a7fb0a24906b pyrex41 <reub.brooks@gmail.com> Keep HTTP/2 loop dispatch ordered and safe across loop shutdown",
+        "f5ecee6cbffdcb2caee7e0805e7bee22c5b3cced pyrex41 <reub.brooks@gmail.com> Drop connection-specific fields from HTTP/2 responses",
+        "e294b4d27dffa70b7dc9cb4b83669e1b5a3fd404 pyrex41 <reub.brooks@gmail.com> Map HTTP/2 request methods through a fixed table instead of interning",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "91cb3a79edb94c15b1b02e5538fc5bd5bab50312 pyrex41 <reub.brooks@gmail.com> Implement the Clack streaming responder for HTTP/2 and stream pathname bodies",
+        "e213825f89b95c16cdb87624b7db4651c9e663c6 pyrex41 <reub.brooks@gmail.com> Validate HTTP/2 trailer fields and pass trailers to the app",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "2e0da9fe9167eb3b1671efe64cbef5f865594980 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 test bugs: octet payloads, frame-size boundary, closure capture",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "review_topics": [
+        11
+      ]
+    },
+    {
+      "path": "t/http2-connection.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "fbc6e4991e776ffe18cd04e108e309b1a563ac8c pyrex41 <reub.brooks@gmail.com> Make stream WINDOW_UPDATE errors stream errors, not connection errors",
+        "27ec5ecec2b6e3f4b720d248474b8a79ef81d4ae pyrex41 <reub.brooks@gmail.com> Ignore WINDOW_UPDATE on closed streams",
+        "3aceba93b530cda0a0ec4e8a6a128695a4b4cbcc pyrex41 <reub.brooks@gmail.com> Keep one value per setting in remote-settings",
+        "d8f1bff9881eeba4371d3f82a157df6e85c2ce39 pyrex41 <reub.brooks@gmail.com> Ignore HEADERS in flight on streams we reset",
+        "cc4b9d1b5771517fd9709a91fb784fcdb3f10e27 pyrex41 <reub.brooks@gmail.com> Cap CONTINUATION frames per header block and buffer them linearly",
+        "c1fa04c2d997491633ff7b7dea071542abea167c pyrex41 <reub.brooks@gmail.com> Ignore in-flight DATA on streams we reset, within the peer's window",
+        "166940987a76a33725b1ce6a9b825312e0a37555 pyrex41 <reub.brooks@gmail.com> Tighten HTTP/2 connection tests that could not fail",
+        "e213825f89b95c16cdb87624b7db4651c9e663c6 pyrex41 <reub.brooks@gmail.com> Validate HTTP/2 trailer fields and pass trailers to the app",
+        "5a3b4181f0964fc0d893a328ef8ae5a59245a8ec pyrex41 <reub.brooks@gmail.com> Bound HTTP/2 request bodies and DATA on closed streams",
+        "6f915bf505c3d92697f649b569a48d909aa95c44 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 flow-control credit, trailers, closed streams, and error close",
+        "bcc4735a512604af47240f65f761fec92400473c pyrex41 <reub.brooks@gmail.com> Give each HTTP/2 connection its own local settings list",
+        "2e0da9fe9167eb3b1671efe64cbef5f865594980 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 test bugs: octet payloads, frame-size boundary, closure capture",
+        "babce9d2e788f63648a9aafd63b90a1b60e78487 pyrex41 <reub.brooks@gmail.com> Replay detected-protocol bytes as a simple vector; fix test paren",
+        "5489d858afce6abffe857df2d301d5bd379fcad0 pyrex41 <reub.brooks@gmail.com> Decode header blocks before a stream error, and account DATA windows",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        10
+      ]
+    },
+    {
+      "path": "t/http2-e2e.lisp",
+      "source_commits": [
+        "197af591b125af065f6c8d57bfc20b3b643ffe7b pyrex41 <reub.brooks@gmail.com> Run HTTP/2 e2e clients without perl and without the debugger",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients"
+      ],
+      "review_topics": [
+        11
+      ]
+    },
+    {
+      "path": "t/http2-frames.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        9
+      ]
+    },
+    {
+      "path": "t/http2-stream.lisp",
+      "source_commits": [
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        10
+      ]
+    },
+    {
+      "path": "t/mutate/mutate.lisp",
+      "source_commits": [
+        "58328ddb9845d31c606d5785a8c187f834fb6314 pyrex41 <reub.brooks@gmail.com> Treat non-compiling mutants as invalid, not killed",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/prop/core.lisp",
+      "source_commits": [
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/prop/properties.lisp",
+      "source_commits": [
+        "df086aa7ff75954e843eb0c8ed073f6ea5a7b8dc pyrex41 <reub.brooks@gmail.com> Property-test random HTTP/2 frame sequences on one connection",
+        "404297a9882ec4ddec4d85587724485a254419f9 pyrex41 <reub.brooks@gmail.com> Generate valid UTF-8 for WebSocket TEXT frames in properties",
+        "2e0da9fe9167eb3b1671efe64cbef5f865594980 pyrex41 <reub.brooks@gmail.com> Fix HTTP/2 test bugs: octet payloads, frame-size boundary, closure capture",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/prop/qc.lisp",
+      "source_commits": [
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/prop/quickcheck.lisp",
+      "source_commits": [
+        "7756441b348b7272130c4adcbb6e8a82f635258e pyrex41 <reub.brooks@gmail.com> Cap Quickcheck discards and keep the replay file out of the tree",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/qualification/check.py",
+      "source_commits": [
+        "4d005a686a4a5287acd77050e927cc42a6f07665 pyrex41 <reub.brooks@gmail.com> Reject malformed resource timelines and preserve changed-source diagnostics",
+        "0968636dd165f525015db0a0dacbf44afa6b59e7 pyrex41 <reub.brooks@gmail.com> Make legacy resource receipts phase aware",
+        "d85cacf664e7ab7ff798bae17c95eaac610fad3d pyrex41 <reub.brooks@gmail.com> Preserve TLS shutdown readiness and make qualification sampling reliable",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/qualification/test_receipts.py",
+      "source_commits": [
+        "4d005a686a4a5287acd77050e927cc42a6f07665 pyrex41 <reub.brooks@gmail.com> Reject malformed resource timelines and preserve changed-source diagnostics",
+        "0968636dd165f525015db0a0dacbf44afa6b59e7 pyrex41 <reub.brooks@gmail.com> Make legacy resource receipts phase aware",
+        "d85cacf664e7ab7ff798bae17c95eaac610fad3d pyrex41 <reub.brooks@gmail.com> Preserve TLS shutdown readiness and make qualification sampling reliable",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        15
+      ]
+    },
+    {
+      "path": "t/response.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        2,
+        5
+      ]
+    },
+    {
+      "path": "t/showcase-e2e.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "t/showcase.lisp",
+      "source_commits": [
+        "8dcd15a2f837025e5d680c789b808769a7db88f3 pyrex41 <reub.brooks@gmail.com> Document test prerequisites, optional tools, and env vars",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "d631afcc9fda9a3f5f7928917a219321bb18dfc2 pyrex41 <reub.brooks@gmail.com> Fix the showcase's benchmarks JSON, echo, close, and slow resource",
+        "91751ef545ec3acaf9d6300da464233b87145a83 pyrex41 <reub.brooks@gmail.com> Test the showcase request-to-env fix directly",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "review_topics": [
+        16
+      ]
+    },
+    {
+      "path": "t/tls-stream.lisp",
+      "source_commits": [
+        "8298cdc2d716e2a642c4ab6e25b63b4be5dc73a5 pyrex41 <reub.brooks@gmail.com> Test graceful TLS shutdown retries for static and producer errors",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        3,
+        6
+      ]
+    },
+    {
+      "path": "t/tlsreadretry.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        3
+      ]
+    },
+    {
+      "path": "t/tlsretry.lisp",
+      "source_commits": [
+        "d85cacf664e7ab7ff798bae17c95eaac610fad3d pyrex41 <reub.brooks@gmail.com> Preserve TLS shutdown readiness and make qualification sampling reliable",
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        3
+      ]
+    },
+    {
+      "path": "t/websocket-e2e.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "9fc8cf02fce9f5ef12ef08972573b8e55f4609df pyrex41 <reub.brooks@gmail.com> Cap octets held before setup-websocket, per connection and in total",
+        "8e16f23430e838cbc87bddc930788ee48c914a9f pyrex41 <reub.brooks@gmail.com> Merge open-ws",
+        "6618d4bff319b1be40818d9d7dc6ed2e19f4af45 pyrex41 <reub.brooks@gmail.com> Keep frames sent in the same read as the WebSocket upgrade request",
+        "8dcd15a2f837025e5d680c789b808769a7db88f3 pyrex41 <reub.brooks@gmail.com> Document test prerequisites, optional tools, and env vars",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets"
+      ],
+      "review_topics": [
+        12
+      ]
+    },
+    {
+      "path": "t/websocket.lisp",
+      "source_commits": [
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "9fc8cf02fce9f5ef12ef08972573b8e55f4609df pyrex41 <reub.brooks@gmail.com> Cap octets held before setup-websocket, per connection and in total",
+        "c8c68de28b2bc36a3248d033f7f8a4233aa12f46 pyrex41 <reub.brooks@gmail.com> Buffer WebSocket input that arrives before setup-websocket",
+        "586c331dde2f006289c365368291e2ca88d7df73 pyrex41 <reub.brooks@gmail.com> Cap send-close reasons at 123 UTF-8 octets",
+        "c05aa4a99282b0853f1c8379b96e468f2a07a042 pyrex41 <reub.brooks@gmail.com> Grow WebSocket read and fragment buffers geometrically",
+        "be9286882009dc941c5b9c8c81d062eec8cfba96 pyrex41 <reub.brooks@gmail.com> Send a real CR LF WebSocket handshake and nothing after it",
+        "545cf7c1586fca61368ea0393b9641217cfd3875 pyrex41 <reub.brooks@gmail.com> Keep a failed WebSocket open until its close frame is flushed",
+        "43f6582c6eab8cf7bd3d810276e26c3f023536b3 pyrex41 <reub.brooks@gmail.com> Drop WebSocket frames after a queued close and do not echo it",
+        "706c830abee3b753d3876ecd5933535d3f6c5ed6 pyrex41 <reub.brooks@gmail.com> Consume WebSocket frames before callbacks; validate UTF-8 and close codes",
+        "a00db6ce84b5bc78142bca08db6c479082e8b92f pyrex41 <reub.brooks@gmail.com> Close HTTP/2 session, WebSocket, HPACK, and ALPN review bugs",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        12
+      ]
+    },
+    {
+      "path": "t/woo.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "edd39e536d809d7e0f461ba0234e4e1de6f3cb93 pyrex41 <reub.brooks@gmail.com> Isolate fixtures and session values and make qualification checks converge",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "d54bc93c96bb98e20395ca700d882c24d4a80c3b pyrex41 <reub.brooks@gmail.com> Harden protocol handling and add conformance harnesses",
+        "6fa78d82a5d4a7fee0070a0f304421bd48f268fa pyrex41 <reub.brooks@gmail.com> Feed pipelined bodiless requests in one piece, with a faster head scan",
+        "45ecd2c42dde662625ce1f558ef71247a21d8667 pyrex41 <reub.brooks@gmail.com> Scan only request heads, and split only at upgrade requests",
+        "16c2908f0c83656b9ca3bc7f274063a27b4c694b pyrex41 <reub.brooks@gmail.com> Test HTTP/1 replay after protocol detection over a raw socket",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests"
+      ],
+      "review_topics": [
+        12
+      ]
+    },
+    {
+      "path": "t/worker.lisp",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS"
+      ],
+      "review_topics": [
+        2
+      ]
+    },
+    {
+      "path": "woo-lack-compat.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile"
+      ],
+      "review_topics": [
+        13,
+        14
+      ]
+    },
+    {
+      "path": "woo-test.asd",
+      "source_commits": [
+        "417bb24d6896f4e57ba014f9fb885f6cc9bb038d pyrex41 <reub.brooks@gmail.com> Harden legacy and managed HTTP lifecycle, uploads, files and TLS",
+        "dca88fab79f98d82afe9ed3635e51eff3d86b1f7 pyrex41 <reub.brooks@gmail.com> Preserve legacy TLS metadata and make certificate and test gates portable",
+        "67b11afc1941c0d63559b6e6238140b5e39d83dd pyrex41 <reub.brooks@gmail.com> Skip showcase tests only when a dependency is missing",
+        "c3902025d137e16839c77d1a0c2c7e4f0e69319c pyrex41 <reub.brooks@gmail.com> Merge fix3-ws",
+        "3dd683101e69b8e9137ac68a7e464f78c09c92d2 pyrex41 <reub.brooks@gmail.com> Add end-to-end HTTP/2 tests with curl and Node clients",
+        "e1f4addf0e26d46fd058e28aa4c3faf6ca5a6d22 pyrex41 <reub.brooks@gmail.com> Pass the HTTP/2 request body as an input stream in :raw-body",
+        "d036021bebbcbbcaf0b71cc50fe16b3ae6008cd9 pyrex41 <reub.brooks@gmail.com> Add end-to-end WebSocket tests over real sockets",
+        "49013e1d68859cd51728fff0e9784a612faf635c pyrex41 <reub.brooks@gmail.com> Make property seeds deterministic and replayable; add unique temp dirs",
+        "a98592755a44701b308f72cbd626f9697139bf4d pyrex41 <reub.brooks@gmail.com> Add Quickcheck, Go differential, coverage fuzz, and mutation tests",
+        "be82bdd2b19c1179c35eb66f69f0e0c1339419b3 pyrex41 <reub.brooks@gmail.com> Fix flow-control, ALPN, showcase, and HPACK test holes",
+        "f466e049d6d5f6e262d07638056a20958f27510d pyrex41 <reub.brooks@gmail.com> Harden HTTP/2, WebSocket, and ALPN; add protocol tests",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        15,
+        16
+      ]
+    },
+    {
+      "path": "woo.asd",
+      "source_commits": [
+        "e4698f6136b4cc7f5c208106f74a94a7ae3e43cf pyrex41 <reub.brooks@gmail.com> Add managed Clack lifecycle and explicit Lack compatibility profile",
+        "650cfc7c8b8741c0363ac1cf04263c098eca870c pyrex41 <reub.brooks@gmail.com> Add HTTP/2, WebSocket, and ALPN protocol support"
+      ],
+      "review_topics": [
+        4,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    }
+  ],
+  "correctness_reference": "f1fd591876be816a3f76dc0f1d95b0d5bbab5eee",
+  "intentional_nonruntime_differences": [
+    "README.md",
+    "docs/engineering-review.md",
+    "docs/lack-compatibility.md",
+    "docs/production-readiness.md",
+    "t/body-limit.lisp",
+    "t/response-validation.lisp",
+    "t/static.lisp",
+    "t/tls-context.lisp",
+    "t/tls-static.lisp",
+    "t/upload.lisp",
+    "woo-test.asd"
+  ],
+  "extraction_notes": {
+    "01": "Moved existing libev destructor ahead of expanded suites to prevent intermediate Linux EMFILE failures.",
+    "03": "Kept legacy SSL init signature until listener-context topic.",
+    "04": "Only pure ALPN/context tests are registered before H2 wire integration.",
+    "05": "Kept pathname ownership changes in the following static-file topic.",
+    "07": "Saved actual spool paths/streams in focused correctness tests; bounded cleanup polling accounts for client EOF preceding unlink.",
+    "11": "Preserved native HTTP/1 parser and cleanup; added explicit lack-request reader dependency and bounded detection helpers.",
+    "12": "Restored frozen final Woo source and consolidated lifecycle/detection/descriptor helpers in t/woo.",
+    "13": "Deferred middleware-specific wrappers, dependencies and tests to14.",
+    "15": "Restored full native suite while retaining focused correctness suites; neutralized fork-specific historical qualification claims.",
+    "16": "Neutral upstream documentation; optional showcase and benchmarks remain separate from conformance."
+  },
+  "hosted_observed_at": "2026-09-29T04:27:40.469728+00:00"
+}

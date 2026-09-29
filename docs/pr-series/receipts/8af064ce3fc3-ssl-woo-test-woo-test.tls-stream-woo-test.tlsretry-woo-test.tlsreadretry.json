@@ -1,0 +1,41 @@
+{
+  "head": "8af064ce3fc35112312fb2164b7900c6ddf701c2",
+  "worktree": "<HOME>/projects/woo-pr-series/03-tls-io",
+  "system": "woo-test",
+  "suites": [
+    "woo-test.tls-stream",
+    "woo-test.tlsretry",
+    "woo-test.tlsreadretry"
+  ],
+  "no_ssl": false,
+  "load_only": false,
+  "command": [
+    "/tmp/woo-sbcl-runtime/bin/sbcl",
+    "--dynamic-space-size",
+    "4096",
+    "--noinform",
+    "--non-interactive",
+    "--load",
+    "<HOME>/projects/woo-pr-series-evidence/8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.lisp"
+  ],
+  "elapsed_seconds": 4.3,
+  "exit_code": 0,
+  "result": "PASS",
+  "source_tree": "ed826471c60c436156567973564d01c692370c15",
+  "current_head": "8af064ce3fc35112312fb2164b7900c6ddf701c2",
+  "source_changed": false,
+  "runner_sha256": "4e5e835154f22fa9350efde8a70732cbff45ab49224a6dee8fc0fd1d1de075fa",
+  "log": "<HOME>/projects/woo-pr-series-evidence/8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.log",
+  "raw_artifact_sha256": {
+    "8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.log": "4d15496efcad053893690605fa5b13f543947a8dc285debeac664ac041e2146b",
+    "8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.lisp": "df23247cb274ecebc0280385526b1cdb0c2fe0e327728d91208300585137be53"
+  },
+  "published_log": "docs/pr-series/receipts/8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.log",
+  "published_script": "docs/pr-series/receipts/8af064ce3fc3-ssl-woo-test-woo-test.tls-stream-woo-test.tlsretry-woo-test.tlsreadretry.lisp",
+  "public_copy": {
+    "redactions": [
+      "home directory paths"
+    ],
+    "raw_sha256": "bdd87c4379861b0f81df925c9cd3d521ce20f69018e32733a3edd38d694a5b9e"
+  }
+}

@@ -1,0 +1,156 @@
+From 3fbf148681d559a5aea62f1b184516441fc336f6 Mon Sep 17 00:00:00 2001
+From: pyrex41 <reub.brooks@gmail.com>
+Date: Mon, 28 Sep 2026 22:28:51 -0500
+Subject: [PATCH] Gracefully stop threaded handlers before destroying threads
+
+---
+ clack-test.asd      |  3 +-
+ src/handler.lisp    | 22 ++++++++++++-
+ t/handler-stop.lisp | 79 +++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 102 insertions(+), 2 deletions(-)
+ create mode 100644 t/handler-stop.lisp
+
+diff --git a/clack-test.asd b/clack-test.asd
+index fad1565..9e1d9df 100644
+--- a/clack-test.asd
++++ b/clack-test.asd
+@@ -12,5 +12,6 @@
+                "flexi-streams"
+                "http-body")
+   :components ((:file "src/test")
+-               (:file "src/test/suite" :depends-on ("src/test")))
++               (:file "src/test/suite" :depends-on ("src/test"))
++               (:file "t/handler-stop" :depends-on ("src/test")))
+   :description "Testing Clack Applications.")
+diff --git a/src/handler.lisp b/src/handler.lisp
+index b6c20a4..3d7a876 100644
+--- a/src/handler.lisp
++++ b/src/handler.lisp
+@@ -7,6 +7,7 @@
+                 :threadp
+                 :make-thread
+                 :thread-alive-p
++                :join-thread
+                 :destroy-thread)
+   (:import-from :usocket)
+   (:export :run
+@@ -58,11 +59,30 @@
+                                          ,@bt2:*default-special-bindings*))
+                       (run-server))))))
+ 
++(defun stop-thread-gracefully (handler acceptor)
++  (let* ((package (find-handler (handler-server handler)))
++         (stop-symbol (find-symbol "STOP-GRACEFULLY" package)))
++    (when (and stop-symbol (fboundp stop-symbol))
++      ;; The handler thread can still be starting when STOP is called.
++      (let ((requested
++              (loop repeat 100
++                    while (bt2:thread-alive-p acceptor)
++                    when (funcall stop-symbol acceptor) return t
++                    do (sleep 0.01))))
++        (when requested
++          ;; Woo can spend ten seconds stopping its worker cluster. Leave
++          ;; time for event-loop and socket cleanup before the fallback.
++          (loop repeat 1500 while (bt2:thread-alive-p acceptor)
++                do (sleep 0.01))
++          (unless (bt2:thread-alive-p acceptor)
++            (bt2:join-thread acceptor)
++            t))))))
++
+ (defun stop (handler)
+   (let ((acceptor (handler-acceptor handler))
+         (swank-port (handler-swank-port handler)))
+     (if (bt2:threadp acceptor)
+-        (progn
++        (unless (stop-thread-gracefully handler acceptor)
+           (when (bt2:thread-alive-p acceptor)
+             (bt2:destroy-thread acceptor))
+           (sleep 0.5))
+diff --git a/t/handler-stop.lisp b/t/handler-stop.lisp
+new file mode 100644
+index 0000000..0aab266
+--- /dev/null
++++ b/t/handler-stop.lisp
+@@ -0,0 +1,79 @@
++(in-package :cl-user)
++
++(defpackage clack.handler.test
++  (:use :cl)
++  (:export :run
++           :stop-gracefully))
++
++(in-package :clack.handler.test)
++
++(defvar *stop-requested* nil)
++(defvar *started* nil)
++(defvar *finished* nil)
++(defvar *stop-calls* 0)
++
++(defun run (app &rest args)
++  (declare (ignore app args))
++  (setf *started* t)
++  (unwind-protect
++       (loop while (not *stop-requested*)
++             do (sleep 0.01))
++    (setf *finished* t)))
++
++(defun stop-gracefully (acceptor)
++  (declare (ignore acceptor))
++  (incf *stop-calls*)
++  (setf *stop-requested* t)
++  t)
++
++(defpackage clack.handler.test-no-hook
++  (:use :cl)
++  (:export :run))
++
++(in-package :clack.handler.test-no-hook)
++
++(defun run (app &rest args)
++  (declare (ignore app args))
++  (loop do (sleep 0.01)))
++
++(in-package :cl-user)
++(defpackage clack-test.handler-stop
++  (:use :cl :rove))
++(in-package :clack-test.handler-stop)
++
++(deftest threaded-stop-uses-handler-graceful-hook
++  (setf clack.handler.test::*stop-requested* nil
++        clack.handler.test::*started* nil
++        clack.handler.test::*finished* nil
++        clack.handler.test::*stop-calls* 0)
++  (let ((handler (clack.handler:run (lambda (env)
++                                      (declare (ignore env))
++                                      '(200 nil ("ok")))
++                                    :test
++                                    :use-thread t)))
++    (unwind-protect
++         (let ((acceptor (clack.handler::handler-acceptor handler)))
++           (ok (bt2:threadp acceptor))
++           (loop repeat 200 while (not clack.handler.test::*started*)
++                 do (sleep 0.01))
++           (ok clack.handler.test::*started*)
++           (clack.handler:stop handler)
++           (ok (= 1 clack.handler.test::*stop-calls*))
++           (ok clack.handler.test::*finished*)
++           (ok (not (bt2:thread-alive-p acceptor))))
++      (when (bt2:thread-alive-p (clack.handler::handler-acceptor handler))
++        (bt2:destroy-thread (clack.handler::handler-acceptor handler))))))
++
++(deftest threaded-stop-falls-back-without-graceful-hook
++  (let ((handler (clack.handler:run (lambda (env)
++                                      (declare (ignore env))
++                                      '(200 nil ("ok")))
++                                    :test-no-hook
++                                    :use-thread t)))
++    (unwind-protect
++         (let ((acceptor (clack.handler::handler-acceptor handler)))
++           (ok (bt2:threadp acceptor))
++           (clack.handler:stop handler)
++           (ok (not (bt2:thread-alive-p acceptor))))
++      (when (bt2:thread-alive-p (clack.handler::handler-acceptor handler))
++        (bt2:destroy-thread (clack.handler::handler-acceptor handler))))))
+-- 
+2.50.1 (Apple Git-155)
+
