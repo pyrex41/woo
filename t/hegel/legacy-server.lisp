@@ -32,15 +32,15 @@
 (defun emit-legacy-memory-metric (label)
   (when (and (string= (or (uiop:getenv "WOO_LEGACY_MEMORY_DIAGNOSTIC") "") "1")
              (< *legacy-memory-metric-count* 64))
-    (format t "LEGACY_METRIC sbcl label=~A gc_run_time=~A gc_real_time=~A bytes_consED=~A bytes_between_gcs=~A gen0_gcs=~A gen1_gcs=~A gen2_gcs=~A gen0_bytes=~A gen1_bytes=~A gen2_bytes=~A~%"
+    (format t "LEGACY_METRIC sbcl pid=~A label=~A gc_run_time=~A gc_real_time=~A bytes_consED=~A bytes_between_gcs=~A~{ gen~A_gcs=~A gen~A_bytes=~A~}~%"
+            (sb-unix:unix-getpid)
             label sb-ext:*gc-run-time* sb-ext:*gc-real-time*
             (sb-ext:get-bytes-consed) (sb-ext:bytes-consed-between-gcs)
-            (sb-ext:generation-number-of-gcs 0)
-            (sb-ext:generation-number-of-gcs 1)
-            (sb-ext:generation-number-of-gcs 2)
-            (sb-ext:generation-bytes-allocated 0)
-            (sb-ext:generation-bytes-allocated 1)
-            (sb-ext:generation-bytes-allocated 2))
+            (loop for generation from 0 to 6
+                  append (list generation
+                               (sb-ext:generation-number-of-gcs generation)
+                               generation
+                               (sb-ext:generation-bytes-allocated generation))))
     (finish-output)
     (incf *legacy-memory-metric-count*)))
 
@@ -76,6 +76,11 @@
                          (lack.request:request-content
                           (lack.request:make-request env))))
                   ((string= path "/slow") (sleep 0.1) '(200 nil ("slow")))
+                  ((and (string= path "/.woo-memory-full-gc")
+                        (string= (or (uiop:getenv "WOO_LEGACY_MEMORY_DIAGNOSTIC") "") "1"))
+                   (sb-ext:gc :full t)
+                   (emit-legacy-memory-metric "full-gc")
+                   '(204 nil nil))
                   ((string= path "/stream")
                    (list 200 '(:content-type "application/octet-stream")
                          (list (make-string (* 128 1024) :initial-element #\A))))
