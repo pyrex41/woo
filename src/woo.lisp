@@ -373,7 +373,7 @@ SERVER may be the listener or the thread running WOO:RUN."
         (lambda (data &key start end)
           (declare (ignore data start end))))
   (let ((body (string-to-utf-8-bytes message)))
-    (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+    (wev:with-async-writing (socket :write-cb #'wev:graceful-close-socket)
       (write-response-headers socket status
                               (list :connection "close"
                                     :content-length (length body)))
