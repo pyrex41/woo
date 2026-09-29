@@ -61,6 +61,7 @@ class ReceiptTests(unittest.TestCase):
                 check.verify_receipt(path)
             for change in ({'head':'old'}, {'source_digest':'old'}, {'elapsed_seconds':20},
                            {'soak_elapsed_seconds':20}, {'cleanup':'UNKNOWN'}, {'status':'DIAGNOSTIC_PASS'},
+                           {'forced_gc_diagnostic':True},
                            {'lifecycle_cycles':0}, {'resource_samples':[]}, {'dependencies':{}},
                            {'gates':{}}, {'source_changed':True},
                            {'resource_phases':{}},

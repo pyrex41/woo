@@ -230,7 +230,8 @@ def receipt_qualifies(receipt, current, expected):
         return False
     phases = [sample.get('phase') for sample in samples]
     phase_rank = {'bootstrap': 0, 'soak': 1, 'post-soak': 2}
-    return (receipt.get('status') == 'PASS' and receipt.get('head') == current
+    return (receipt.get('status') == 'PASS' and not receipt.get('forced_gc_diagnostic')
+            and receipt.get('head') == current
             and receipt.get('source_digest') == source_digest()
             and not receipt.get('source_changed')
             and receipt.get('soak_seconds') == 1800
@@ -339,7 +340,8 @@ def main():
                WOO_COMPAT_FIXTURE_GROUP='owned-stage')
     started = time.monotonic(); receipt = {'status':'UNKNOWN', 'head': subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT, text=True).strip(),
         'source_digest': source_digest(), 'platform': platform.platform(), 'soak_seconds': args.soak_seconds,
-        'dependencies': pins, 'clack_patch_sha256': hashlib.sha256(PATCH.read_bytes()).hexdigest(), 'gates': {}}
+        'dependencies': pins, 'clack_patch_sha256': hashlib.sha256(PATCH.read_bytes()).hexdigest(), 'gates': {},
+        'forced_gc_diagnostic': os.environ.get('WOO_LEGACY_FULL_GC_DIAGNOSTIC') == '1'}
     succeeded = False
     try:
         receipt['peak_rss_bytes'], receipt['resource_samples'] = run(['go', '-C', 't/hegel', 'test', '-v', '-count=1', '-run', '^TestLegacyQualification$', '-timeout', f'{args.soak_seconds + 300}s'],
@@ -368,7 +370,7 @@ def main():
         receipt['socket_cleanup'] = 'PASS'
         receipt['spool_cleanup'] = 'PASS'
         receipt['cleanup_verified'] = 'PASS'
-        if args.soak_seconds == 1800 and not resource_evidence_ok:
+        if args.soak_seconds == 1800 and not resource_evidence_ok and not receipt['forced_gc_diagnostic']:
             raise RuntimeError(receipt['resource_failure'])
         receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
         succeeded = True
@@ -386,7 +388,8 @@ def main():
             receipt['status'] = 'UNKNOWN'
             receipt['failure'] = 'private dependency cleanup failed: ' + str(cleanup_error)
         if succeeded and receipt['cleanup'] == 'PASS' and not receipt.get('source_changed'):
-            receipt['status'] = 'PASS' if args.soak_seconds == 1800 else 'DIAGNOSTIC_PASS'
+            receipt['status'] = ('DIAGNOSTIC_PASS' if args.soak_seconds != 1800 or receipt['forced_gc_diagnostic']
+                                 else 'PASS')
             if args.soak_seconds == 1800:
                 expected = json.loads((ROOT / 't/compat/dependencies.json').read_text())
                 current = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
