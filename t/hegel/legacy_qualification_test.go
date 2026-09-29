@@ -315,6 +315,19 @@ func TestLegacyQualification(t *testing.T) {
 		}
 		duration = time.Duration(seconds) * time.Second
 	}
+	if os.Getenv("WOO_LEGACY_FULL_GC_START_DIAGNOSTIC") == "1" {
+		client := &http.Client{Timeout: 15 * time.Second}
+		response, err := client.Get("http://" + plain + "/.woo-memory-full-gc")
+		if err != nil {
+			t.Fatalf("startup full GC diagnostic request failed: %v", err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			t.Fatalf("startup full GC diagnostic response was %d", response.StatusCode)
+		}
+		// Allow the sampler to observe the post-GC resident set before soak.
+		time.Sleep(1200 * time.Millisecond)
+	}
 	deadline := time.Now().Add(duration)
 	cycles := 0
 	started := time.Now()

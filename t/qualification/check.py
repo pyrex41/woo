@@ -75,7 +75,10 @@ def process_group_stats(pgid):
             try:
                 fields = {}
                 for line in smaps.read_text().splitlines():
-                    name, value, unit = line.split()[:3]
+                    parts = line.split()
+                    if len(parts) < 3:
+                        continue
+                    name, value, unit = parts[:3]
                     if unit == 'kB' and name.rstrip(':') in ('Rss', 'Pss', 'Private_Dirty', 'Anonymous', 'Swap'):
                         fields[name.rstrip(':').lower() + '_bytes'] = int(value) * 1024
                 detail.update(fields)
@@ -341,7 +344,8 @@ def main():
     started = time.monotonic(); receipt = {'status':'UNKNOWN', 'head': subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT, text=True).strip(),
         'source_digest': source_digest(), 'platform': platform.platform(), 'soak_seconds': args.soak_seconds,
         'dependencies': pins, 'clack_patch_sha256': hashlib.sha256(PATCH.read_bytes()).hexdigest(), 'gates': {},
-        'forced_gc_diagnostic': os.environ.get('WOO_LEGACY_FULL_GC_DIAGNOSTIC') == '1'}
+        'forced_gc_diagnostic': (os.environ.get('WOO_LEGACY_FULL_GC_DIAGNOSTIC') == '1'
+                                or os.environ.get('WOO_LEGACY_FULL_GC_START_DIAGNOSTIC') == '1')}
     succeeded = False
     try:
         receipt['peak_rss_bytes'], receipt['resource_samples'] = run(['go', '-C', 't/hegel', 'test', '-v', '-count=1', '-run', '^TestLegacyQualification$', '-timeout', f'{args.soak_seconds + 300}s'],
