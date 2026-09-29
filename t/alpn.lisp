@@ -589,6 +589,44 @@ This intentionally yields between reads so a TLS writer must survive a slow peer
         (when ctx (woo.ssl:free-context ctx))
         (when (probe-file chain) (delete-file chain))))))
 
+(deftest test-listener-alpn-setup-failure-releases-context
+  (testing "a failure after installing ALPN releases the listener context"
+    (let ((create (symbol-function 'woo.ssl:create-context))
+          (configure (symbol-function 'woo.ssl:configure-context-alpn))
+          (free (symbol-function 'woo.ssl:free-context))
+          (context nil)
+          (configured nil)
+          (freed 0)
+          (baseline (hash-table-count woo.ssl.alpn::*alpn-ctx-args*)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'woo.ssl:create-context)
+                   (lambda (&rest args)
+                     (setf context (apply create args)))
+                   (symbol-function 'woo.ssl:configure-context-alpn)
+                   (lambda (&rest args)
+                     (apply configure args)
+                     (setf configured t)
+                     (error "Injected ALPN setup failure"))
+                   (symbol-function 'woo.ssl:free-context)
+                   (lambda (ctx)
+                     (funcall free ctx)
+                     (incf freed)
+                     (setf context nil)))
+             (ok (signals
+                   (woo:run (lambda (env) (declare (ignore env)) '(200 nil ("ok")))
+                            :debug nil :worker-num nil :handle-signals nil
+                            :ssl-cert-file (cert-path "localhost.crt")
+                            :ssl-key-file (cert-path "localhost.key"))
+                   'error))
+             (ok configured)
+             (ok (= freed 1))
+             (ok (= baseline (hash-table-count woo.ssl.alpn::*alpn-ctx-args*))))
+        (setf (symbol-function 'woo.ssl:create-context) create
+              (symbol-function 'woo.ssl:configure-context-alpn) configure
+              (symbol-function 'woo.ssl:free-context) free)
+        (when context (funcall free context))))))
+
 (deftest test-chain-trust-and-missing-intermediate
   (testing "OpenSSL trusts the complete chain and rejects a leaf without its intermediate"
     (let* ((root (cert-path "chain-root.crt"))
