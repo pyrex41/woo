@@ -16,6 +16,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 MAX_LOG = 8 * 1024 * 1024
+FD_SAMPLE_DEADLINE = 15.0
 PATCH = ROOT / 'integration/clack/threaded-stop.patch'
 
 def source_digest():
@@ -42,47 +43,82 @@ def process_group_rss_bytes(pgid):
               if len(fields := line.split()) == 2 and int(fields[0]) == pgid]
     return max(values, default=0) * 1024
 
-def process_group_stats(pgid):
-    rows = subprocess.check_output(['ps', '-A', '-o', 'pgid=,pid=,rss='], text=True, timeout=2)
-    pids = [fields[1] for line in rows.splitlines()
-            if len(fields := line.split()) == 3 and int(fields[0]) == pgid]
-    rss = sum((int(line.split()[2]) for line in rows.splitlines()
-               if len(line.split()) == 3 and int(line.split()[0]) == pgid), 0) * 1024
+class _ResourceSampleRetry(Exception):
+    """The process snapshot changed while its descriptors were being read."""
+
+
+def _process_group_stats_once(pgid, deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _ResourceSampleRetry('FD sample deadline exceeded')
+    rows = subprocess.check_output(['ps', '-A', '-o', 'pgid=,pid=,rss='], text=True,
+                                    timeout=min(2, remaining))
+    group = [fields for line in rows.splitlines()
+             if len(fields := line.split()) == 3 and int(fields[0]) == pgid]
+    if not group:
+        raise _ResourceSampleRetry('process group is no longer visible')
+    rss = sum(int(fields[2]) for fields in group) * 1024
     fds = 0
     details = []
-    for pid in pids:
+    for fields in group:
+        pid, rss_kib = fields[1], fields[2]
         proc_fds = Path('/proc') / pid / 'fd'
         pid_fd_count = None
-        if proc_fds.is_dir():
-            try:
+        try:
+            if proc_fds.is_dir():
                 pid_fd_count = sum(1 for _ in proc_fds.iterdir())
-                fds += pid_fd_count
-            except OSError:
-                if process_pid_running(pid):
-                    raise RuntimeError('cannot collect FD samples for live process ' + pid)
-        else:
-            try:
-                pid_fd_count = process_pid_fd_count(pid)
-                fds += pid_fd_count
-            except (OSError, subprocess.SubprocessError):
-                if process_pid_running(pid):
-                    raise RuntimeError('cannot collect FD samples for live process ' + pid)
-        details.append({'pid': int(pid), 'rss_bytes': next(int(line.split()[2]) for line in rows.splitlines()
-                                                            if len(line.split()) == 3 and line.split()[1] == pid) * 1024,
+            else:
+                pid_fd_count = process_pid_fd_count(pid, deadline)
+        except (OSError, subprocess.SubprocessError) as error:
+            # A PID can disappear between ps and lsof, or lsof can briefly
+            # lose a live process while its descriptor table changes. Let the
+            # caller take a fresh group snapshot before declaring a failure.
+            raise _ResourceSampleRetry(f'cannot sample descriptors for {pid}') from error
+        fds += pid_fd_count
+        details.append({'pid': int(pid), 'rss_bytes': int(rss_kib) * 1024,
                         'fd_count': pid_fd_count})
     if rss <= 0 or fds <= 0:
-        raise RuntimeError('resource sampler produced no positive evidence')
-    # Keep the aggregate gate unchanged while recording per-process attribution.
+        # A successful lsof with no f-records is evidence of zero descriptors,
+        # not a missing tool. Retry the snapshot, then fail closed if it stays
+        # zero so an unreadable or descriptorless live process never qualifies.
+        raise _ResourceSampleRetry('resource sampler produced no positive evidence')
     return rss, fds, details
 
-def process_pid_fd_count(pid):
+
+def process_group_stats(pgid):
+    last_error = None
+    deadline = time.monotonic() + FD_SAMPLE_DEADLINE
+    for attempt in range(3):
+        if time.monotonic() >= deadline:
+            break
+        try:
+            # Refresh ps on every attempt. This avoids using process_pid_running
+            # on a possibly reused PID after a lsof/descriptor-table race.
+            return _process_group_stats_once(pgid, deadline)
+        except _ResourceSampleRetry as error:
+            last_error = error
+            if attempt < 2:
+                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+        except (OSError, subprocess.SubprocessError) as error:
+            last_error = _ResourceSampleRetry('resource process snapshot failed')
+            last_error.__cause__ = error
+            if attempt < 2:
+                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+    raise RuntimeError('cannot collect FD samples for process group ' + str(pgid)) from last_error
+
+def process_pid_fd_count(pid, deadline=None):
     # Numeric descriptors only: exclude mapped files, cwd and executable
     # records. Disable DNS/service lookups and bound transient retries.
     command = ['lsof', '-n', '-P', '-a', '-p', pid, '-d', '0-99999', '-Ff']
     for attempt in range(3):
         try:
+            timeout = 5
+            if deadline is not None:
+                timeout = min(timeout, deadline - time.monotonic())
+                if timeout <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
             output = subprocess.check_output(command, text=True,
-                                             stderr=subprocess.DEVNULL, timeout=5)
+                                             stderr=subprocess.DEVNULL, timeout=timeout)
             return sum(1 for line in output.splitlines()
                        if line.startswith('f') and line[1:].isdigit())
         except subprocess.TimeoutExpired:

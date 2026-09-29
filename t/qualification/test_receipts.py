@@ -36,6 +36,45 @@ class ReceiptTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 check.process_pid_running('123')
 
+    def test_group_sampler_retries_with_a_fresh_pid_snapshot(self):
+        first_ps = '123 456 10\n'
+        fresh_ps = '123 789 12\n'
+        lsof_failure = check.subprocess.CalledProcessError(1, ['lsof'], output='')
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=[first_ps, lsof_failure, fresh_ps, 'p789\nf0\n']) as sample:
+            self.assertEqual(check.process_group_stats(123),
+                             (12288, 1, [{'pid': 789, 'rss_bytes': 12288, 'fd_count': 1}]))
+            self.assertEqual(sample.call_count, 4)
+
+    def test_group_sampler_fails_after_persistent_fd_unreadability(self):
+        ps = '123 456 10\n'
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=([ps, OSError('lsof unavailable')] * 3)) as sample:
+            with self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+            self.assertEqual(sample.call_count, 6)
+
+    def test_group_sampler_does_not_accept_valid_zero_descriptor_result(self):
+        ps = '123 456 10\n'
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=[ps, 'p456\n'] * 3) as sample:
+            with self.assertRaisesRegex(RuntimeError, 'cannot collect FD samples'):
+                check.process_group_stats(123)
+            self.assertEqual(sample.call_count, 6)
+
+    def test_group_sampler_accepts_zero_fd_child_with_positive_group_total(self):
+        ps = '123 456 10\n123 789 10\n'
+        with patch.object(check.Path, 'is_dir', return_value=False), \
+             patch.object(check.subprocess, 'check_output',
+                          side_effect=[ps, 'p456\n', 'p789\nf0\n']) as sample:
+            self.assertEqual(check.process_group_stats(123),
+                             (20480, 1, [{'pid': 456, 'rss_bytes': 10240, 'fd_count': 0},
+                                        {'pid': 789, 'rss_bytes': 10240, 'fd_count': 1}]))
+            self.assertEqual(sample.call_count, 3)
+
     def test_stale_and_short_receipts_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'receipt.json'
