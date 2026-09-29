@@ -27,13 +27,28 @@ jobs:
       - name: Install Rove
         run: ros install rove
       - name: Run tests
+        timeout-minutes: 10
         env:
           LISP: ${{ matrix.lisp }}
         run: |
           ulimit -n 256
           PATH="$HOME/.roswell/bin:$PATH"
           export PATH
-          ros dynamic-space-size=4096 \
+          set +e
+          timeout --signal=TERM --kill-after=10s 540s ros dynamic-space-size=4096 \
             -e '(push (truename "./") asdf:*central-registry*)' \
             -s woo-test \
             -e '(unless (rove:run :woo-test) (uiop:quit 1))'
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "native test command exited $status; collecting bounded process state"
+            date -u
+            ps -eo pid,ppid,stat,wchan:32,command || true
+            for pid in $(pgrep -f 'ros|sbcl' || true); do
+              echo "--- pid $pid ---"
+              ps -o pid,ppid,stat,wchan:32,command -p "$pid" || true
+              if [ -r "/proc/$pid/wchan" ]; then cat "/proc/$pid/wchan" || true; fi
+              gdb -batch -q -p "$pid" -ex 'thread apply all bt' -ex detach -ex quit 2>&1 || true
+            done
+          fi
+          exit "$status"
