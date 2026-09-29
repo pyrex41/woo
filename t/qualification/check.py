@@ -67,9 +67,22 @@ def process_group_stats(pgid):
             except (OSError, subprocess.SubprocessError):
                 if process_pid_running(pid):
                     raise RuntimeError('cannot collect FD samples for live process ' + pid)
-        details.append({'pid': int(pid), 'rss_bytes': next(int(line.split()[2]) for line in rows.splitlines()
-                                                            if len(line.split()) == 3 and line.split()[1] == pid) * 1024,
-                        'fd_count': pid_fd_count})
+        detail = {'pid': int(pid), 'rss_bytes': next(int(line.split()[2]) for line in rows.splitlines()
+                                                      if len(line.split()) == 3 and line.split()[1] == pid) * 1024,
+                  'fd_count': pid_fd_count}
+        smaps = Path('/proc') / pid / 'smaps_rollup'
+        if smaps.is_file():
+            try:
+                fields = {}
+                for line in smaps.read_text().splitlines():
+                    name, value, unit = line.split()[:3]
+                    if unit == 'kB' and name.rstrip(':') in ('Rss', 'Pss', 'Private_Dirty', 'Anonymous', 'Swap'):
+                        fields[name.rstrip(':').lower() + '_bytes'] = int(value) * 1024
+                detail.update(fields)
+            except (OSError, ValueError):
+                if process_pid_running(pid):
+                    raise RuntimeError('cannot collect smaps_rollup for live process ' + pid)
+        details.append(detail)
     if rss <= 0 or fds <= 0:
         raise RuntimeError('resource sampler produced no positive evidence')
     # Keep the aggregate gate unchanged while recording per-process attribution.

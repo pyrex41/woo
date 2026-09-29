@@ -26,6 +26,7 @@ jobs:
       - name: Run bounded legacy qualification
         env:
           WOO_LEGACY_MEMORY_DIAGNOSTIC: "1"
+          WOO_LEGACY_FULL_GC_DIAGNOSTIC: "1"
         run: |
           nix develop --command python3 t/qualification/check.py \
             --dependencies "$RUNNER_TEMP/woo-legacy-deps" \

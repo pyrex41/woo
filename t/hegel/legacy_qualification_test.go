@@ -368,8 +368,10 @@ func TestLegacyQualification(t *testing.T) {
 	}
 	soakElapsed := time.Since(started).Seconds()
 	emitLegacyMemoryMetric("soak-end")
-	if os.Getenv("WOO_LEGACY_MEMORY_DIAGNOSTIC") == "1" {
-		response, err := http.Get("http://" + plain + "/.woo-memory-full-gc")
+	fmt.Fprintln(os.Stdout, "LEGACY_PHASE soak-end")
+	if os.Getenv("WOO_LEGACY_FULL_GC_DIAGNOSTIC") == "1" {
+		client := &http.Client{Timeout: 15 * time.Second}
+		response, err := client.Get("http://" + plain + "/.woo-memory-full-gc")
 		if err != nil {
 			t.Fatalf("full GC diagnostic request failed: %v", err)
 		}
@@ -377,8 +379,8 @@ func TestLegacyQualification(t *testing.T) {
 		if response.StatusCode != http.StatusNoContent {
 			t.Fatalf("full GC diagnostic response was %d", response.StatusCode)
 		}
+		time.Sleep(1200 * time.Millisecond)
 	}
-	fmt.Fprintln(os.Stdout, "LEGACY_PHASE soak-end")
 	assertSpoolEmpty(t)
 	stopLegacy(t, plain)
 	lifecycleCycles := 30
