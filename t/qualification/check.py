@@ -52,17 +52,30 @@ def process_group_stats(pgid):
     for pid in pids:
         proc_fds = Path('/proc') / pid / 'fd'
         if proc_fds.is_dir():
-            fds += sum(1 for _ in proc_fds.iterdir())
+            try:
+                fds += sum(1 for _ in proc_fds.iterdir())
+            except OSError:
+                if process_pid_running(pid):
+                    raise RuntimeError('cannot collect FD samples for live process ' + pid)
         else:
             try:
                 output = subprocess.check_output(['lsof', '-a', '-p', pid], text=True,
                                                  stderr=subprocess.DEVNULL, timeout=2)
                 fds += max(0, len(output.splitlines()) - 1)
             except (OSError, subprocess.SubprocessError):
-                raise RuntimeError('cannot collect FD samples on this host')
+                if process_pid_running(pid):
+                    raise RuntimeError('cannot collect FD samples for live process ' + pid)
     if rss <= 0 or fds <= 0:
         raise RuntimeError('resource sampler produced no positive evidence')
     return rss, fds
+
+def process_pid_running(pid):
+    try:
+        output = subprocess.check_output(['ps', '-p', pid, '-o', 'stat='], text=True,
+                                         stderr=subprocess.DEVNULL, timeout=1).strip()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return bool(output) and not output.startswith('Z')
 
 def stop(process):
     try: os.killpg(process.pid, signal.SIGTERM)
@@ -80,7 +93,7 @@ def stop(process):
             raise RuntimeError('legacy qualification process group did not stop')
         time.sleep(.05)
 
-def run(command, env, log, timeout):
+def run(command, env, log, timeout, sample_resources=True):
     with log.open('wb') as output:
         process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=output,
                                    stderr=subprocess.STDOUT, start_new_session=True)
@@ -92,7 +105,7 @@ def run(command, env, log, timeout):
             while process.poll() is None:
                 if time.monotonic() >= deadline: raise RuntimeError('qualification deadline exceeded')
                 if log.stat().st_size > MAX_LOG: raise RuntimeError('qualification log exceeds 8 MiB')
-                if time.monotonic() - last_sample >= 1.0:
+                if sample_resources and time.monotonic() - last_sample >= 1.0:
                     try:
                         rss, fds = process_group_stats(process.pid)
                     except RuntimeError:
@@ -152,6 +165,16 @@ def verify_receipt(path):
         raise RuntimeError('receipt does not qualify the current exact source and full legacy gate')
     print('PASS: current source, pinned dependencies, full legacy soak and cleanup')
 
+def write_setup_failure(path, data, dependencies, error):
+    data['failure'] = 'qualification setup failed: ' + str(error)
+    try:
+        shutil.rmtree(dependencies, ignore_errors=False)
+        data['dependency_cleanup'] = 'PASS'
+    except Exception as cleanup_error:
+        data['failure'] += '; dependency cleanup failed: ' + str(cleanup_error)
+        data['dependency_cleanup'] = 'UNKNOWN'
+    path.write_text(json.dumps(data, indent=2) + '\n')
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--lisp', default=os.environ.get('WOO_HEGEL_LISP', 'sbcl'))
@@ -180,17 +203,15 @@ def main():
         pins = bootstrap(dependencies)
         apply_private_clack_patch(dependencies)
     except Exception as error:
-        setup_data['failure'] = 'qualification setup failed: ' + str(error)
-        try:
-            shutil.rmtree(dependencies, ignore_errors=False)
-            setup_data['dependency_cleanup'] = 'PASS'
-        except Exception as cleanup_error:
-            setup_data['failure'] += '; dependency cleanup failed: ' + str(cleanup_error)
-            setup_data['dependency_cleanup'] = 'UNKNOWN'
-        setup_receipt.write_text(json.dumps(setup_data, indent=2) + '\n')
+        write_setup_failure(setup_receipt, setup_data, dependencies, error)
         raise
     cert_root = args.artifacts/'certs'; cert_root.mkdir(parents=True, exist_ok=True)
-    run(['sh', 't/generate-certificates.sh', str(cert_root)], os.environ.copy(), args.artifacts/'certificates.log', 30)
+    try:
+        run(['sh', 't/generate-certificates.sh', str(cert_root)], os.environ.copy(), args.artifacts/'certificates.log', 30,
+            sample_resources=False)
+    except Exception as error:
+        write_setup_failure(setup_receipt, setup_data, dependencies, error)
+        raise
     fixture = args.artifacts/'fixture.txt'; fixture.write_bytes(b'woo legacy qualification fixture\n')
     result = args.artifacts/'result.json'
     if result.exists(): result.unlink()
