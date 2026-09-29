@@ -63,3 +63,10 @@
                       "Connection: close" ""))))
               (ok (search "HTTP/1.1 403 Forbidden" response)))))
       (wsys:chmod (namestring file) #o644))))
+
+(deftest static-preparation-status-covers-open-errors
+  (testing "static preparation maps errno and path classes before headers"
+    (ok (= 403 (woo::static-preparation-status #P"/tmp" wsys:EISDIR)))
+    (ok (= 403 (woo::static-preparation-status #P"/tmp" wsys:EACCES)))
+    (ok (= 404 (woo::static-preparation-status #P"/tmp/no-such-woo-file" wsys:ENOENT)))
+    (ok (= 404 (woo::static-preparation-status #P"/tmp/no-such-woo-file" wsys:ENOTDIR)))))

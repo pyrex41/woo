@@ -466,12 +466,34 @@
       (when close (wev:graceful-close-socket socket))
       (when body-cleanup (funcall body-cleanup)))))
 
-(defun handle-normal-response (http socket clack-res &optional body-cleanup)
-  (let ((no-body '#:no-body)
-        (close (or (= (http-minor-version http) 0)
-                   (string-equal (gethash "connection" (http-headers http)) "close"))))
+(defun handle-normal-response (http socket clack-res &optional body-cleanup head-p)
+  (flet ((send-error-response (status)
+           ;; File preparation happens before headers are committed.  Close
+           ;; the HTTP/1 connection after this one response so unread request
+           ;; bytes cannot be parsed as another request.
+           (respond-and-close socket status
+                              (case status
+                                (403 "403 Forbidden")
+                                (404 "404 Not Found")
+                                (otherwise "500 Internal Server Error"))))
+         (path-length-matches-p (headers size)
+           (let ((declared (getf headers :content-length)))
+             (or (null declared)
+                 (handler-case
+                     (= size (etypecase declared
+                               (integer declared)
+                               (string (parse-integer declared))))
+                   (error () nil))))))
+    (let ((no-body '#:no-body)
+          (close (or (= (http-minor-version http) 0)
+                     (string-equal (gethash "connection" (http-headers http)) "close"))))
+
     (destructuring-bind (status headers &optional (body no-body))
         clack-res
+      (when (member status '(204 205 304))
+        (setf body nil)
+        (remf headers :transfer-encoding)
+        (when (= status 204) (remf headers :content-length)))
       (when (eq body no-body)
         (setf (getf headers :transfer-encoding) "chunked")
         (setf (getf headers :content-length) nil)
@@ -482,56 +504,105 @@
 
       (etypecase body
         (null
-         (wev:with-async-writing (socket :write-cb
-                                         (response-write-callback socket close body-cleanup))
-           (unless (= status 304)
+         (wev:with-async-writing (socket :write-cb (and close
+                                                        (lambda (socket)
+                                                          (wev:graceful-close-socket socket))))
+           (unless (or head-p (member status '(204 304)))
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
         (pathname
-         (cond
-           ((woo.ev.socket:socket-ssl-handle socket)
-            ;; TLS cannot use sendfile. Transfer the open stream to the
-            ;; socket only after response setup succeeds; otherwise close it
-            ;; here so failed preparation never leaks a descriptor.
-            (let ((in (open body :element-type '(unsigned-byte 8))))
-              (handler-case
-                  (let ((size (file-length in)))
-                    (unless (getf headers :content-length)
-                      (setf (getf headers :content-length) size))
-                    (unless (getf headers :content-type)
-                      (setf (getf headers :content-type) (mimes:mime body)))
-                    (wev:with-async-writing (socket :write-cb
-                                                    (response-write-callback socket close body-cleanup))
-                      (write-response-headers socket status headers (not close))
-                      (woo.ev.socket:start-static-stream socket in size))
-                    ;; START-STATIC-STREAM owns IN from this point onward.
-                    (setf in nil))
-                (error (condition)
-                  (ignore-errors (close in :abort t))
-                  (error condition)))))
-           (t
-            (if (uiop:directory-exists-p body)
-                (respond-and-close socket 403 "403 Forbidden")
-                (let ((fd (wsys:open body)))
-                  (if (< fd 0)
-                      (let ((failure (static-preparation-status body (wsys:errno))))
-                        (respond-and-close socket failure
-                                            (if (= failure 403) "403 Forbidden" "404 Not Found")))
-                      (let ((size #+lispworks (sys:file-size body)
-                                  #+(or sbcl ccl) (fd-file-size fd)
-                                  #-(or sbcl ccl lispworks) (file-size body)))
-                        (unless (getf headers :content-length)
-                          (setf (getf headers :content-length) size))
-                        (unless (getf headers :content-type)
-                          (setf (getf headers :content-type) (mimes:mime body)))
-                        (wev:with-async-writing (socket :write-cb
-                                                        (response-write-callback socket close body-cleanup))
-                          (write-response-headers socket status headers (not close))
-                          (woo.ev.socket:send-static-file socket fd size)))))))))
-        (list
-         (wev:with-async-writing (socket :write-cb
-                                         (response-write-callback socket close body-cleanup))
+         (let ((preflight-status (and (uiop:directory-exists-p body) 403)))
            (cond
+             (preflight-status
+             (send-error-response preflight-status))
+             ((woo.ev.socket:socket-ssl-handle socket)
+              (let ((headers-committed nil) (in nil))
+                (unwind-protect
+                     (handler-case
+                         (progn
+                           (setf in (open body :element-type '(unsigned-byte 8)))
+                           (let ((size (file-length in)))
+                             (unless (path-length-matches-p headers size)
+                               (send-error-response 500)
+                               (return-from handle-normal-response))
+                             (unless (getf headers :content-length)
+                               (setf (getf headers :content-length) size))
+                             (unless (getf headers :content-type)
+                               (setf (getf headers :content-type) (mimes:mime body)))
+                             (wev:with-async-writing (socket :write-cb (and close #'wev:graceful-close-socket))
+                               (setf headers-committed t)
+                               (write-response-headers socket status headers (not close))
+                               (if head-p
+                                   (when body-cleanup (funcall body-cleanup))
+                                   (progn
+                                     (wev:start-static-stream socket in size)
+                                     (setf in nil))))))
+                       (file-error (e)
+                         (if headers-committed (error e)
+                             (let ((errno (ignore-errors (wsys:errno))))
+                               (send-error-response
+                                (static-preparation-status body errno)))))
+                       (error (e)
+                         (if headers-committed (error e) (send-error-response 500))))
+                  (when in (ignore-errors (close in :abort t))))))
+             (t
+              (let ((fd (wsys:open body)))
+                (if (< fd 0)
+                    (send-error-response
+                     (let ((errno (wsys:errno)))
+                       (static-preparation-status body errno)))
+                    (let ((headers-committed nil))
+                      (unwind-protect
+                           (handler-case
+                               (let ((size (progn
+                                             #+lispworks (sys:file-size body)
+                                             #+(or sbcl ccl) (fd-file-size fd)
+                                             #-(or sbcl ccl lispworks) (file-size body))))
+                                 (unless (path-length-matches-p headers size)
+                                   (send-error-response 500)
+                                   (return-from handle-normal-response))
+                                 (unless (getf headers :content-length)
+                                   (setf (getf headers :content-length) size))
+                                 (unless (getf headers :content-type)
+                                   (setf (getf headers :content-type) (mimes:mime body)))
+                                 (wev:with-async-writing (socket :write-cb (and close
+                                                                                (lambda (socket)
+                                                                                  (wev:graceful-close-socket socket))))
+                                   (setf headers-committed t)
+                                   (write-response-headers socket status headers (not close))
+                                   ;; SEND-STATIC-FILE takes ownership and closes
+                                   ;; FD after the transfer completes.
+                                   (if head-p
+                                       (when body-cleanup (funcall body-cleanup))
+                                       (progn
+                                         (woo.ev.socket:send-static-file socket fd size)
+                                         (setf fd nil)))))
+                             (file-error (e)
+                               (if headers-committed
+                                   (error e)
+                                   (send-error-response 500)))
+                             (error (e)
+                               (if headers-committed
+                                   (error e)
+                                   (send-error-response 500))))
+                        (when fd (wsys:close fd))))))))))
+
+
+        (list
+         (wev:with-async-writing (socket :write-cb (and close
+                                                        (lambda (socket)
+                                                          (wev:graceful-close-socket socket))))
+           (cond
+             (head-p
+              (unless (getf headers :content-length)
+                (setf (getf headers :content-length)
+                      (write-to-string
+                       (loop for chunk in body
+                             sum (if (stringp chunk)
+                                     (utf-8-byte-length chunk)
+                                     (length (list-body-chunk-to-octets chunk)))))))
+              (response-headers-bytes socket status headers (not close))
+              (write-socket-crlf socket))
              ((getf headers :content-length)
               (response-headers-bytes socket status headers (not close))
               (write-socket-crlf socket)
@@ -583,7 +654,8 @@
              (write-socket-string socket (write-to-string (length body)))
              (write-socket-crlf socket))
            (write-socket-crlf socket)
-           (wev:write-socket-data socket body)))))))
+           (unless head-p (wev:write-socket-data socket body)))))))))
+
 
 (defmethod clack.socket:read-callback ((socket woo.ev.socket:socket))
   (wev:socket-data socket))
