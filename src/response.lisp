@@ -73,7 +73,11 @@
        (422 "Unprocessable Entity")
        (423 "Locked")
        (424 "Failed Dependency")
+       (425 "Too Early")
        (426 "Upgrade Required")
+       (428 "Precondition Required")
+       (429 "Too Many Requests")
+       (431 "Request Header Fields Too Large")
        (451 "Unavailable For Legal Reasons")))
     (T
      (case code
@@ -87,24 +91,21 @@
        (507 "Insufficient Storage")
        (508 "Loop Detected")
        (509 "Bandwidth Limit Exceeded")
-       (510 "Not Extended")))))
+       (510 "Not Extended")
+       (511 "Network Authentication Required")))))
 
 (defvar *status-line* (make-hash-table :test 'eql))
 
 (defun http/1.1 (code)
-  (let ((status-text (status-code-to-text code)))
-    (when status-text
-      (format nil "HTTP/1.1 ~A ~A~C~C"
-              code
-              status-text
-              #\Return
-              #\Linefeed))))
+  (check-type code (integer 100 599))
+  (format nil "HTTP/1.1 ~D ~A~C~C" code
+          (or (status-code-to-text code) "") #\Return #\Linefeed))
 
-(loop for status from 100 to 510
-      for status-line = (http/1.1 status)
-      when status-line
+(clrhash *status-line*)
+(loop for status from 100 to 599
+      when (or (>= status 200) (status-code-to-text status))
         do (setf (gethash status *status-line*)
-                 (trivial-utf-8:string-to-utf-8-bytes status-line)))
+                 (trivial-utf-8:string-to-utf-8-bytes (http/1.1 status))))
 
 (defvar *empty-chunk*
   #.(trivial-utf-8:string-to-utf-8-bytes (format nil "0~C~C~C~C"
