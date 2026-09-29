@@ -1,8 +1,8 @@
 # Managed Lack compatibility
 
 `woo-lack-compat` provides an opt-in Clack adapter and explicit Lack middleware
-helpers. The required compatibility gates passed for the
-[snapshot below](#qualification-snapshot). The profile remains experimental;
+helpers. Qualification requires fresh receipts from the exact checkout.
+The profile remains experimental;
 [production readiness](production-readiness.md) is **UNKNOWN** pending complete
 protocol coverage and deployment validation.
 
@@ -197,8 +197,7 @@ disabled, generates test certificates, enforces time/log/descriptor budgets,
 and writes source-bound
 receipts. SQLite uses private fixtures. No missing service or dependency is
 silently skipped. `--soak-seconds 30` is a diagnostic run and cannot produce a
-qualification PASS. The snapshot below is historical; current source changes
-require fresh receipts.
+qualification PASS. Source changes require fresh receipts.
 
 Required gates:
 
@@ -223,32 +222,10 @@ dependency pins. The verifier rejects a receipt at another HEAD, including a
 later documentation commit. A local subset or diagnostic soak cannot qualify
 a new version or a production deployment.
 
-## Qualification snapshot
+## Qualification receipts
 
-The required gates passed on 2026-09-28 at
-[`fed54b345ce6e0084f32a960c91ad0846f5d9ca9`](https://github.com/pyrex41/woo/commit/fed54b345ce6e0084f32a960c91ad0846f5d9ca9).
-All three managed receipts verified the same runtime/test source digest:
-`072dd2bc2e6f35d030855706c510fa0d32f40b54e10152ce6d6a4014b652356e`.
-
-| Managed run | Result | Soak traffic |
-| --- | --- | ---: |
-| Native macOS | PASS, full 30-minute soak and cleanup | 543,460 requests |
-| Hosted Linux, `ubuntu-24.04` | PASS, full 30-minute soak and cleanup | 134,544 requests |
-| Hosted macOS, `macos-15` | PASS, full 30-minute soak and cleanup | 439,180 requests |
-
-Each managed run also passed the contracts, middleware/service tests, 100
-lifecycle cycles and four-transport preflight matrix listed above. Request
-counts describe executed test traffic.
-
-The [managed CI run](https://github.com/pyrex41/woo/actions/runs/36479314544)
-preserves `receipt.json` and bounded logs in
-`lack-compatibility-ubuntu-24.04` and `lack-compatibility-macos-15` artifacts.
-The [existing CI run](https://github.com/pyrex41/woo/actions/runs/36479314769)
-passed the Lisp suite, conformance-launcher regressions, pinned Rust oracle
-build and Hegel protocol properties at the same commit. Optional Lisp checks
-and the separate h2spec/Autobahn diagnostics retain their own coverage limits.
-
-This is evidence for the tested managed profile and dependency pins. It does
-not establish complete RFC compliance, application-specific production load
-behavior or a deployed system's readiness. Future runtime/dependency changes
-require fresh qualification.
+A result applies only to its recorded HEAD, source digest, dependency pins,
+platform and workload. Verify a complete 1800-second receipt with the command
+above before calling the managed profile qualified. A short diagnostic,
+load-only check, prior fork run or green run for a different HEAD does not qualify
+this checkout. Production readiness remains UNKNOWN.
