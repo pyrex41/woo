@@ -1,7 +1,5 @@
 (defsystem "woo-test"
-  :depends-on ("woo"
-               "clack-test"
-               "rove")
+  :depends-on ("woo" "clack-test" "rove")
   :components
   ((:file "t/test-support")
    (:file "t/file-size")
