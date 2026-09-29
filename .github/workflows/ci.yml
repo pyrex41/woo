@@ -6,6 +6,7 @@ jobs:
   test:
     name: ${{ matrix.lisp }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       matrix:
         lisp: [sbcl-bin]
@@ -27,6 +28,7 @@ jobs:
       - name: Install Rove
         run: ros install rove
       - name: Run tests
+        timeout-minutes: 10
         env:
           LISP: ${{ matrix.lisp }}
         run: |
