@@ -627,20 +627,37 @@ This intentionally yields between reads so a TLS writer must survive a slow peer
               (symbol-function 'woo.ssl:free-context) free)
         (when context (funcall free context))))))
 
+(defun verify-certificate-chain (label args)
+  (format t "ALPN-OPENSSL-BEGIN ~A ~S~%" label args)
+  (finish-output)
+  (let ((start (get-internal-real-time)))
+    (multiple-value-bind (output error-output exit-code)
+        (uiop:run-program args :ignore-error-status t :input nil
+                               :output :string :error-output :string)
+      (format t "ALPN-OPENSSL-END ~A exit=~S elapsed=~,3Fs stdout=~S stderr=~S~%"
+              label exit-code
+              (/ (- (get-internal-real-time) start) internal-time-units-per-second)
+              output error-output)
+      (values output error-output exit-code))))
+
 (deftest test-chain-trust-and-missing-intermediate
   (testing "OpenSSL trusts the complete chain and rejects a leaf without its intermediate"
     (let* ((root (cert-path "chain-root.crt"))
            (intermediate (cert-path "chain-intermediate.crt"))
            (leaf (cert-path "chain-leaf.crt"))
-           (ok (uiop:run-program (list "openssl" "verify" "-CAfile"
-                                       (namestring root) "-untrusted"
-                                       (namestring intermediate) (namestring leaf))
-                                 :ignore-error-status t :output :string))
-           (missing (uiop:run-program (list "openssl" "verify" "-CAfile"
-                                            (namestring root) (namestring leaf))
-                                      :ignore-error-status t :output :string)))
-      (ok (search "OK" ok) ok)
-      (ok (not (search "OK" missing)) missing))))
+           (ok (multiple-value-list
+                (verify-certificate-chain "complete"
+                  (list "openssl" "verify" "-CAfile"
+                        (namestring root) "-untrusted"
+                        (namestring intermediate) (namestring leaf)))))
+           (missing (multiple-value-list
+                     (verify-certificate-chain "missing-intermediate"
+                       (list "openssl" "verify" "-CAfile"
+                             (namestring root) (namestring leaf))))))
+      (ok (= (third ok) 0) ok)
+      (ok (search "OK" (first ok)) ok)
+      (ok (not (= (third missing) 0)) missing)
+      (ok (not (search "OK" (first missing))) missing))))
 
 (deftest test-two-listener-contexts-keep-alpn-local
   (testing "two listener contexts can carry different ALPN lists concurrently"
