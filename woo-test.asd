@@ -3,7 +3,13 @@
                "clack-test"
                "rove")
   :components
-  ((:file "t/woo")
+  ((:file "t/test-support")
+   (:file "t/file-size")
+   (:file "t/response")
+   (:file "t/response-validation")
+   (:file "t/static")
+   (:file "t/upload")
+   (:file "t/woo")
    (:file "t/ipv6")
    (:file "t/body-limit")
    (:file "t/tls-stream")

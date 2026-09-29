@@ -202,7 +202,7 @@
                 (let ((raw-body (finalize-buffer body-buffer)))
                   (ignore-errors (close raw-body))
                   (ignore-errors (delete-stream-file raw-body))))))
-          (wev:socket-close-hooks socket))
+          (woo.ev.socket::socket-close-hooks socket))
     (setf (wev:socket-data socket)
           (make-parser http
                        :header-callback
@@ -382,6 +382,13 @@
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
+(defun static-preparation-status (pathname &optional errno)
+  (cond ((and (integerp errno) (or (= errno wsys:EACCES) (= errno wsys:EISDIR))) 403)
+        ((and (integerp errno) (or (= errno wsys:ENOENT) (= errno wsys:ENOTDIR))) 404)
+        ((uiop:directory-exists-p pathname) 403)
+        ((probe-file pathname) 500)
+        (t 404)))
+
 (defun response-write-callback (socket close body-cleanup)
   (when (or close body-cleanup)
     (lambda (socket)
@@ -421,10 +428,11 @@
                 (wev:with-async-writing (socket :write-cb
                                                 (response-write-callback socket close body-cleanup))
                   (write-response-headers socket status headers (not close))
-                  ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
-                  (wev:write-socket-stream socket in)))))
+                  (woo.ev.socket:start-static-stream socket in size)))))
            (t
-            (let* ((fd (wsys:open body))
+            (if (uiop:directory-exists-p body)
+                (respond-and-close socket 403 "403 Forbidden")
+                (let* ((fd (wsys:open body))
                    (size #+lispworks (sys:file-size body)
                          #+(or sbcl ccl) (fd-file-size fd)
                          #-(or sbcl ccl lispworks) (file-size body)))
@@ -435,7 +443,7 @@
               (wev:with-async-writing (socket :write-cb
                                               (response-write-callback socket close body-cleanup))
                 (write-response-headers socket status headers (not close))
-                (woo.ev.socket:send-static-file socket fd size))))))
+                (woo.ev.socket:send-static-file socket fd size)))))))
         (list
          (wev:with-async-writing (socket :write-cb
                                          (response-write-callback socket close body-cleanup))
