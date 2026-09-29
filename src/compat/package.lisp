@@ -29,7 +29,8 @@
   (max-response-queue-bytes (* 8 1024 1024))
   (max-connection-queue-bytes (* 64 1024 1024))
   (max-server-queue-bytes (* 256 1024 1024))
-  (startup-timeout 10) (drain-timeout 10) (cleanup-timeout 5))
+  (startup-timeout 10) (drain-timeout 10) (cleanup-timeout 5)
+  (drain-deadline nil))
 
 (defclass connection ()
   ((server :initarg :server :reader connection-server)

@@ -98,7 +98,7 @@
                                                              (or (char= c #\Tab) (>= (char-code c) 32))
                                                              (/= (char-code c) 127))) value))
                            (error "Invalid response header"))
-                         (list (intern (string-upcase name) :keyword) value)))))
+                         (list (woo.response::canonical-header-name key) value)))))
     (when (> (count :content-length normalized) 1) (error "Repeated content length"))
     normalized))
 
@@ -108,8 +108,42 @@
 (defun response-body-length (body)
   (etypecase body
     (null 0)
-    (pathname (with-open-file (s body :element-type '(unsigned-byte 8)) (file-length s)))
+    (pathname
+     (let ((preflight-status (woo.http2.clack::pathname-response-status body)))
+       (when preflight-status
+         (error 'woo.http2.clack::pathname-response-error :status preflight-status))
+       (handler-case
+           (with-open-file (s body :element-type '(unsigned-byte 8))
+             (file-length s))
+         (file-error ()
+           (let ((errno (ignore-errors (wsys:errno))))
+             (error 'woo.http2.clack::pathname-response-error
+                    :status (woo.http2.clack::pathname-response-status body errno))))
+         (error ()
+           (error 'woo.http2.clack::pathname-response-error :status 500)))))
     ((or string list (vector (unsigned-byte 8))) (woo.http2.clack::response-octet-length body))))
+
+(defvar *pathname-body-prepared-hook* nil
+  "Test hook run after a pathname body is opened and measured.")
+
+(defun prepare-pathname-body (body)
+  (let ((status (woo.http2.clack::pathname-response-status body)))
+    (when status
+      (error 'woo.http2.clack::pathname-response-error :status status))
+    (handler-case
+        (let ((stream (open body :element-type '(unsigned-byte 8))))
+          (handler-case
+              (let ((size (file-length stream)))
+                (when *pathname-body-prepared-hook*
+                  (funcall *pathname-body-prepared-hook* body stream))
+                (values stream size))
+            (error (e) (close stream :abort t) (error e))))
+      (file-error ()
+        (let ((errno (ignore-errors (wsys:errno))))
+          (error 'woo.http2.clack::pathname-response-error
+                 :status (woo.http2.clack::pathname-response-status body errno))))
+      (error ()
+        (error 'woo.http2.clack::pathname-response-error :status 500)))))
 
 (defun wait-for-output (request)
   (let ((deadline (+ (now) (ms-cleanup-timeout (mr-server request)))))
@@ -119,6 +153,7 @@
               (lambda ()
                 (let ((socket (connection-socket (mr-connection request))))
                   (and (zerop (woo.ev.socket::socket-charged-output socket))
+                       (zerop (woo.ev.socket::socket-pending-output-charge socket))
                        (or (null (mr-h2-stream request))
                            (let ((pending (gethash (woo.http2.stream:http2-stream-id (mr-h2-stream request))
                                                   (woo.http2.connection::http2-connection-send-queue
@@ -128,7 +163,7 @@
       (when (>= (now) deadline) (error 'connection-closed))
       (sleep 0.001))))
 
-(defun emit-body (body writer &optional request)
+(defun emit-body (body writer &optional request prepared-stream)
   "Read ordinary bodies in bounded slices on the application worker."
   (labels ((part (data)
              (etypecase data
@@ -145,21 +180,36 @@
     (etypecase body
       (null)
       (pathname
-       (with-open-file (s body :element-type '(unsigned-byte 8))
+       (let ((s (or prepared-stream (open body :element-type '(unsigned-byte 8))))
+             (owned-p (null prepared-stream)))
+         (unwind-protect
          (let ((buffer (make-array 16384 :element-type '(unsigned-byte 8))))
            (loop for n = (read-sequence buffer s) while (plusp n)
                  unless (funcall writer buffer :end n) do (error 'connection-closed)
-                 do (when request (wait-for-output request))))))
+                 do (when request (wait-for-output request))))
+           (when owned-p (close s :abort t)))))
       (list (dolist (item body) (part item)))
       ((or string (vector (unsigned-byte 8))) (part body)))
     (funcall writer nil :close t)))
 
 (defun finish-http1 (request)
-  (let ((connection (mr-connection request)))
+  (let* ((connection (mr-connection request))
+         (server (mr-server request))
+         (socket (connection-socket connection)))
     (wire-completed request)
-    (if (or (mr-close-p request) (not (eq (ms-state (mr-server request)) :running)))
-        (woo.ev.socket:close-socket (connection-socket connection))
-        (progn (setf (connection-request connection) nil) (resume-input connection)))))
+    (cond
+      ((or (mr-close-p request)
+           (member (ms-state server) '(:draining :stopping)))
+       (let ((deadline (ms-drain-deadline server)))
+         (woo.ev.socket:graceful-close-socket
+          socket :deadline (when deadline
+                             (+ (lev:ev-now woo.ev:*evloop*)
+                                (max 0.0d0 (- deadline (now))))))))
+      ((not (eq (ms-state server) :running))
+       (woo.ev.socket:close-socket socket))
+      (t
+       (setf (connection-request connection) nil)
+       (resume-input connection)))))
 
 (defun http1-responder (request response)
   (destructuring-bind (status headers) response
@@ -169,7 +219,7 @@
       (setf (mr-chunked request) chunked)
       (let ((head (with-output-to-string (s)
                     (format s "HTTP/1.1 ~D ~A~C~C" status
-                            (or (woo.response::status-code-to-text status) "Response") #\Return #\Linefeed)
+                            (or (woo.response::status-code-to-text status) "") #\Return #\Linefeed)
                     (unless (getf headers :date)
                       (let ((woo.response::*date-header* (copy-seq "Thu, 01 Jan 1970 00:00:00 GMT")))
                         (format s "date: ~A~C~C" (woo.response::current-rfc-1123-timestamp) #\Return #\Linefeed)))
@@ -191,19 +241,24 @@
         (lev:ev-io-start woo.ev:*evloop* (woo.ev.socket:socket-write-watcher socket))
         t))))
 
-(defun request-failed (request)
+(defun request-failed-with-status (request status)
   (if (bt2:with-lock-held ((mr-lock request))
         (if (or (mr-headers-sent request) (mr-failure-handled request) (cancelled-p request))
             nil
             (setf (mr-failure-handled request) t)))
-      (managed-responder request '(500 (:content-length 0) nil))
+      (managed-responder request (list status '(:content-length 0) nil))
       (abandon-request request)))
+
+(defun request-failed (request)
+  (request-failed-with-status request 500))
 
 (defun managed-responder (request response)
   (bt2:with-lock-held ((mr-lock request))
     (when (or (mr-headers-sent request) (cancelled-p request))
       (return-from managed-responder nil)))
-  (handler-case
+  (let ((prepared-stream nil))
+    (unwind-protect
+         (handler-case
       (destructuring-bind (status headers &optional (body nil body-p)) response
         (check-type status (integer 200 599))
         (let* ((headers (response-headers headers))
@@ -213,12 +268,24 @@
                (expected (and length-header (parse-integer length-header))))
           (when (string-equal (getf headers :connection) "close") (setf (mr-close-p request) t))
           (when (and expected (minusp expected)) (error "Negative content length"))
-          (when (and body-p (not (member status '(204 205 304))))
-            (let ((size (response-body-length body)))
-              (when (and expected (/= size expected)) (error "Response length mismatch"))
-              (setf expected size (getf headers :content-length) (write-to-string size))))
-          (when (member status '(204 205))
+          (when (and body-p (not (member status '(204 205 304)))
+                     (or (not bodyless) (null expected)))
+            (let ((size (if (pathnamep body)
+                            (multiple-value-bind (stream pathname-size)
+                                (prepare-pathname-body body)
+                              (setf prepared-stream stream)
+                              pathname-size)
+                            (response-body-length body))))
+              (when (and (not bodyless) expected (/= size expected))
+                (error "Response length mismatch"))
+              (unless expected
+                (setf expected size (getf headers :content-length) (write-to-string size)))))
+          (when (= status 204)
             (remf headers :content-length) (setf expected nil))
+          ;; 205 permits a zero length; unlike 204 the HTTP/1 client needs
+          ;; framing to distinguish an empty response on a persistent socket.
+          (when (= status 205)
+            (setf (getf headers :content-length) "0" expected 0))
           (bt2:with-lock-held ((mr-lock request))
             (when (or (mr-headers-sent request) (cancelled-p request))
               (return-from managed-responder nil))
@@ -253,10 +320,17 @@
                                      (adjust-output connection (- n) nil))))
                            ok)))
                        (error () (abandon-request request) nil))))))
-            (if body-p (progn (unless bodyless (emit-body body writer request))
+            (if body-p (progn (unless bodyless (emit-body body writer request prepared-stream))
                              (when bodyless (funcall writer nil :close t)) nil)
                 writer))))
-    (error () (request-failed request) nil)))
+    (woo.http2.clack::pathname-response-error (e)
+      ;; The pathname was opened and measured before the response headers were
+      ;; committed, so report the filesystem-specific status exactly once.
+      (request-failed-with-status request
+                                  (woo.http2.clack::pathname-response-error-status e))
+      nil)
+    (error () (request-failed request) nil))
+      (when prepared-stream (close prepared-stream :abort t)))))
 
 ;; The raw socket API is available only on HTTP/1, and every operation runs on
 ;; its owner loop. A stream proxy cannot accidentally corrupt an HTTP/2 socket.
