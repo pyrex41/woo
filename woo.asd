@@ -48,7 +48,9 @@
                   :depends-on ("ev-packages" "dispatch")
                   :components ((:file "constants")
                                (:file "hpack" :depends-on ("constants"))
-                               (:file "frames" :depends-on ("constants"))))
+                               (:file "frames" :depends-on ("constants"))
+                               (:file "stream" :depends-on ("constants"))
+                               (:file "connection" :depends-on ("constants" "frames" "hpack" "stream"))))
                  (:module "llsocket"
                   :depends-on ("syscall")
                   :serial t
