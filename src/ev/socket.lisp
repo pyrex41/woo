@@ -3,6 +3,7 @@
   (:use :cl)
   (:import-from :woo.ev.event-loop
                 :*evloop*
+                :*input-buffer*
                 :deref-data-from-pointer
                 :remove-pointer-from-registry)
   (:import-from :woo.ev.util
@@ -54,6 +55,7 @@
            :socket-open-p
            :socket-ssl-handle
            :socket-tls-shutdown-p
+           :socket-tls-shutdown-read-wait-write-p
            :socket-input-rejected-p
            :stop-reading-for-close
            :*ssl-write-function*
@@ -71,6 +73,7 @@
            :send-static-file
            :graceful-close-socket
            :tls-shutdown-step
+           :tls-shutdown-read-step
            :close-socket))
 (in-package :woo.ev.socket)
 
@@ -143,6 +146,7 @@
   (read-wait-write-p nil :type boolean)
   (send-stream-error-p nil :type boolean)
   (tls-shutdown-p nil :type boolean)
+  (tls-shutdown-read-wait-write-p nil :type boolean)
   (tls-close-after-drain-p nil :type boolean)
   (tls-drain-deadline nil :type (or null double-float))
   (tls-shutdown-deadline nil :type (or null double-float)))
@@ -234,6 +238,7 @@
           (socket-buffer socket) nil
           (socket-pending-write-data socket) nil
           (socket-tls-shutdown-p socket) nil
+          (socket-tls-shutdown-read-wait-write-p socket) nil
           (socket-tls-close-after-drain-p socket) nil
           (socket-input-rejected-p socket) nil
           (socket-data socket) nil)
@@ -247,7 +252,11 @@
   "Stop application reads while a terminal response is being drained."
   (when (socket-open-p socket)
     (setf (socket-input-rejected-p socket) t)
-    (lev:ev-io-stop *evloop* (socket-read-watcher socket)))
+    ;; SSL_write may be waiting for read readiness. Keep that watcher armed
+    ;; so the pending write can progress; TCP dispatch checks the rejection
+    ;; flag before attempting another application SSL_read.
+    (unless (socket-write-wait-read-p socket)
+      (lev:ev-io-stop *evloop* (socket-read-watcher socket))))
   socket)
 
 (defun tls-shutdown-step (socket)
@@ -295,6 +304,53 @@
         (t
          (close-socket socket :abort t)
          t)))))
+
+(defun tls-shutdown-read-step (socket)
+  "Discard bounded application input while waiting for peer close_notify."
+  (unless (and (socket-open-p socket) (socket-tls-shutdown-p socket))
+    (return-from tls-shutdown-read-step t))
+  #+woo-no-ssl
+  (return-from tls-shutdown-read-step (tls-shutdown-step socket))
+  #-woo-no-ssl
+  (let ((handle (socket-ssl-handle socket)))
+    (unless handle
+      (return-from tls-shutdown-read-step (tls-shutdown-step socket)))
+    (setf (socket-tls-shutdown-read-wait-write-p socket) nil)
+    ;; Four reads at the current 16 KiB input-buffer size keep each callback
+    ;; bounded to at most 64 KiB; the absolute shutdown deadline remains the
+    ;; overall bound if more data is still in flight.
+    (loop repeat 4
+          while (socket-open-p socket)
+          do (let ((n (funcall *ssl-read-function*
+                               handle
+                               (static-vectors:static-vector-pointer *input-buffer*)
+                               (length *input-buffer*))))
+               (declare (type fixnum n))
+               (cond
+                 ((plusp n)
+                  (setf (socket-last-activity socket) (lev:ev-now *evloop*)))
+                 ((zerop n)
+                  (tls-shutdown-step socket)
+                  (return))
+                 (t
+                  (let ((errno (funcall *ssl-error-function* handle n)))
+                    (cond
+                      ((= errno cl+ssl::+ssl-error-zero-return+)
+                       (tls-shutdown-step socket)
+                       (return))
+                      ((= errno cl+ssl::+ssl-error-want-read+)
+                       ;; Do not call SSL_shutdown again before peer EOF.
+                       (lev:ev-io-start *evloop* (socket-read-watcher socket))
+                       (return))
+                      ((= errno cl+ssl::+ssl-error-want-write+)
+                       (setf (socket-tls-shutdown-read-wait-write-p socket) t)
+                       (lev:ev-io-stop *evloop* (socket-read-watcher socket))
+                       (lev:ev-io-start *evloop* (socket-write-watcher socket))
+                       (return))
+                      (t
+                       (close-socket socket :abort t)
+                       (return))))))))
+    t))
 
 (define-c-callback tls-shutdown-cb :void
     ((evloop :pointer) (timer :pointer) (events :int))
@@ -678,7 +734,9 @@
       (return-from async-write-cb))
 
     (when (socket-tls-shutdown-p socket)
-      (tls-shutdown-step socket)
+      (if (socket-tls-shutdown-read-wait-write-p socket)
+          (tls-shutdown-read-step socket)
+          (tls-shutdown-step socket))
       (return-from async-write-cb))
 
     (handler-case (async-write socket)

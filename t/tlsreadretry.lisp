@@ -136,12 +136,16 @@
                    (ok (null (woo.ev.socket:flush-buffer socket)))
                    (woo.ev.socket:stop-reading-for-close socket)
                    (ok (woo.ev.socket::socket-write-wait-read-p socket))
+                   (ok (plusp (lev:ev-is-active
+                               (woo.ev.socket:socket-read-watcher socket))))
                    (funcall (symbol-function 'woo.ev.tcp::tcp-read-cb)
                             woo.ev:*evloop*
                             (woo.ev.socket:socket-read-watcher socket)
                             lev:+EV-READ+)
                    (ok (= write-calls 2))
                    (ok (= read-calls 0))
+                   (ok (zerop (lev:ev-is-active
+                               (woo.ev.socket:socket-read-watcher socket))))
                    (ok (null (woo.ev.socket::socket-pending-write-data socket))))
                  (setf (woo.ev.socket::socket-ssl-handle socket) nil)
                  (woo.ev.socket:close-socket socket)
