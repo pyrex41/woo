@@ -197,7 +197,8 @@ disabled, generates test certificates, enforces time/log/descriptor budgets,
 and writes source-bound
 receipts. SQLite uses private fixtures. No missing service or dependency is
 silently skipped. `--soak-seconds 30` is a diagnostic run and cannot produce a
-qualification PASS.
+qualification PASS. The snapshot below is historical; current source changes
+require fresh receipts.
 
 Required gates:
 

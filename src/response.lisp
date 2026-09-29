@@ -73,7 +73,11 @@
        (422 "Unprocessable Entity")
        (423 "Locked")
        (424 "Failed Dependency")
+       (425 "Too Early")
        (426 "Upgrade Required")
+       (428 "Precondition Required")
+       (429 "Too Many Requests")
+       (431 "Request Header Fields Too Large")
        (451 "Unavailable For Legal Reasons")))
     (T
      (case code
@@ -87,24 +91,22 @@
        (507 "Insufficient Storage")
        (508 "Loop Detected")
        (509 "Bandwidth Limit Exceeded")
-       (510 "Not Extended")))))
+       (510 "Not Extended")
+       (511 "Network Authentication Required")))))
 
 (defvar *status-line* (make-hash-table :test 'eql))
 
 (defun http/1.1 (code)
-  (let ((status-text (status-code-to-text code)))
-    (when status-text
-      (format nil "HTTP/1.1 ~A ~A~C~C"
-              code
-              status-text
-              #\Return
-              #\Linefeed))))
+  (check-type code (integer 100 599))
+  (format nil "HTTP/1.1 ~D ~A~C~C" code
+          (or (status-code-to-text code) "") #\Return #\Linefeed))
 
-(loop for status from 100 to 510
-      for status-line = (http/1.1 status)
-      when status-line
+;; Unassigned final statuses are valid application responses too.
+(clrhash *status-line*)
+(loop for status from 100 to 599
+      when (or (>= status 200) (status-code-to-text status))
         do (setf (gethash status *status-line*)
-                 (trivial-utf-8:string-to-utf-8-bytes status-line)))
+                 (trivial-utf-8:string-to-utf-8-bytes (http/1.1 status))))
 
 (defvar *empty-chunk*
   #.(trivial-utf-8:string-to-utf-8-bytes (format nil "0~C~C~C~C"
@@ -182,8 +184,19 @@
       (write-int-to-date sec 23)))
   *date-header*)
 
+(defun canonical-header-name (key)
+  ;; Only server-controlled framing/metadata keys need GETF identity.
+  ;; Arbitrary application strings must not grow the keyword package.
+  (or (find (string key) '(:content-length :content-type :transfer-encoding
+                          :connection :content-encoding :vary :set-cookie)
+            :test #'string-equal :key #'string)
+      key))
+
 (defun response-headers-bytes (socket status headers &optional keep-alive-p)
-  (wev:write-socket-data socket (gethash status *status-line*))
+  (incf (woo.ev.socket::socket-response-generation socket))
+  (wev:write-socket-data socket
+                         (or (gethash status *status-line*)
+                             (error "Unsupported HTTP response status: ~S" status)))
   ;; Send default headers
   (wev:write-socket-data socket #.(string-to-utf-8-bytes "Date: "))
   (write-socket-string socket (the simple-string (current-rfc-1123-timestamp)))
@@ -228,6 +241,6 @@
 (defun finish-response (socket &optional (body *empty-bytes*))
   (wev:write-socket-data socket body
                          :write-cb (lambda (socket)
-                                     (wev:close-socket socket))))
+                                     (wev:graceful-close-socket socket))))
 
 (declaim (notinline wev:write-socket-data wev:write-socket-byte))

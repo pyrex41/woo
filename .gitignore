@@ -35,3 +35,7 @@ dump.md
 # Managed compatibility receipts and Python bytecode
 /.artifacts/
 /t/compat/__pycache__/
+
+# Local qualification bytecode and Hegel replay corpus
+/t/qualification/__pycache__/
+/t/hegel/.hegel/

@@ -10,6 +10,12 @@
      (unwind-protect (progn ,@body) (clack:stop ,handler))))
 (defun get-body (port &optional (path "/"))
   (dex:get (format nil "http://127.0.0.1:~D~A" port path) :keep-alive nil :force-string t :read-timeout 5 :connect-timeout 5))
+(defun get-body/status (port path)
+  (handler-case
+      (dex:get (format nil "http://127.0.0.1:~D~A" port path)
+               :keep-alive nil :force-string t :read-timeout 5 :connect-timeout 5)
+    (dex:http-request-failed (condition)
+      (values (dex:response-body condition) (dex:response-status condition)))))
 (defun await-state (handler predicate)
   (loop with deadline = (+ (woo.compat::now) 5)
         for state = (woo.compat:server-state handler)
@@ -50,7 +56,96 @@
       (ok (equalp body (dex:post (format nil "http://127.0.0.1:~D/echo" port)
                                 :content body :headers '(("content-type" . "application/octet-stream"))
                                 :force-binary t :keep-alive nil))))
-    (ok (zerop (getf (await-state handler (lambda (s) (zerop (getf s :requests)))) :input-bytes)))))
+      (ok (zerop (getf (await-state handler (lambda (s) (zerop (getf s :requests)))) :input-bytes)))))
+
+(deftest managed-static-path-errors
+  "Path failures are reported before response headers, including real EACCES."
+  (let* ((root (merge-pathnames
+                (format nil "woo-compat-static-~D/" (random 1000000000))
+                (uiop:temporary-directory)))
+         (file (merge-pathnames "body" root))
+         (directory (merge-pathnames "directory/" root))
+         (missing (merge-pathnames "missing" root)))
+    (ensure-directories-exist directory)
+    (with-open-file (stream file :direction :output :if-exists :supersede)
+      (write-string "body" stream))
+    (flet ((app (env)
+             (let ((path (getf env :path-info)))
+               (cond
+                 ((string= path "/missing") (list 200 nil missing))
+                 ((string= path "/directory") (list 200 nil directory))
+                 ((string= path "/mismatch") (list 200 '(:content-length 1) file))
+                 ((string= path "/denied") (list 200 nil file))
+                 (t '(404 nil ()))))))
+      (with-managed (handler port #'app)
+        (multiple-value-bind (body status) (get-body/status port "/missing")
+          (declare (ignore body)) (ok (= status 404)))
+        (multiple-value-bind (body status) (get-body/status port "/directory")
+          (declare (ignore body)) (ok (= status 403)))
+        (let ((captured nil)
+              (old-hook woo.compat::*pathname-body-prepared-hook*))
+          (unwind-protect
+               (progn
+                 (setf woo.compat::*pathname-body-prepared-hook*
+                       (lambda (body stream)
+                         (when (equal body file) (setf captured stream))))
+                 (multiple-value-bind (body status) (get-body/status port "/mismatch")
+                   (declare (ignore body)) (ok (= status 500)))
+                 (ok (not (open-stream-p captured))))
+            (setf woo.compat::*pathname-body-prepared-hook* old-hook)))
+        ;; Root can bypass mode bits, so this assertion is intentionally only
+        ;; run by a non-root test process. It exercises the actual open(2)
+        ;; failure rather than relying on pathname preflight heuristics.
+        (unless (zerop #+sbcl (sb-posix:getuid) #-sbcl 1)
+          (ok (zerop (wsys:chmod (namestring file) 0)))
+          (unwind-protect
+               (multiple-value-bind (body status) (get-body/status port "/denied")
+                 (declare (ignore body)) (ok (= status 403)))
+            (wsys:chmod (namestring file) #o600))))
+    (ignore-errors (delete-file file))
+    (ignore-errors (uiop:delete-directory-tree root :validate t :if-does-not-exist :ignore)))))
+
+(deftest managed-static-uses-prepared-open-stream
+  (let* ((root (merge-pathnames
+                (format nil "woo-compat-identity-~D/" (random 1000000000))
+                (uiop:temporary-directory)))
+         (path (merge-pathnames "body" root))
+         (backup (merge-pathnames "body.old" root))
+         (replacement (merge-pathnames "body.new" root)))
+    (ensure-directories-exist root)
+    (with-open-file (s path :direction :output :if-exists :supersede)
+      (write-string "original" s))
+    (with-open-file (s replacement :direction :output :if-exists :supersede)
+      (write-string "replacement" s))
+    (let ((hook-ran nil)
+          (allow-rename nil)
+          (captured-stream nil)
+          (old-hook woo.compat::*pathname-body-prepared-hook*))
+      (unwind-protect
+           (progn
+             (setf woo.compat::*pathname-body-prepared-hook*
+                   (lambda (body stream)
+                     (setf captured-stream stream)
+                     (when allow-rename
+                       (setf hook-ran t))
+                     (when (and allow-rename (probe-file body))
+                       (rename-file body backup)
+                       (rename-file replacement body))))
+           (with-managed (handler port (lambda (env)
+                                         (declare (ignore env))
+                                         (list 200 nil path)))
+             (multiple-value-bind (body status headers)
+                 (dex:request (format nil "http://127.0.0.1:~D/" port)
+                              :method :head :keep-alive nil :force-string t)
+               (ok (= status 200))
+               (ok (zerop (length body)))
+               (ok (string= (gethash "content-length" headers) "8")))
+             (setf allow-rename t)
+             (ok (string= (get-body port) "original"))
+             (ok hook-ran)
+             (ok (not (open-stream-p captured-stream))))
+        (setf woo.compat::*pathname-body-prepared-hook* old-hook)
+        (ignore-errors (uiop:delete-directory-tree root :validate t :if-does-not-exist :ignore)))))))
 
 (deftest hunchentoot-baseline
   (let* ((port (free-port))
@@ -108,6 +203,88 @@
                (await-state handler (lambda (state) (zerop (getf state :connections))))
                (ok (funcall (getf observed :woo.request-cancelled-p))))
           (ignore-errors (usocket:socket-close client)) (bt2:signal-semaphore release))))))
+
+(deftest managed-producer-retains-body-after-disconnect
+  (let* ((temporary-directory
+           (uiop:ensure-directory-pathname
+            (merge-pathnames
+             (format nil "woo-managed-body-~36R/" (random (expt 36 8)))
+             (uiop:temporary-directory))))
+         (body (make-array 64 :element-type '(unsigned-byte 8)))
+         (entered (bt2:make-semaphore :count 0))
+         (allow-read (bt2:make-semaphore :count 0))
+         (producer-done (bt2:make-semaphore :count 0))
+         (observed-env nil)
+         (observed-stream nil)
+         (stream-open-before-read nil)
+         (observed-bytes nil)
+         (body-file nil))
+    (dotimes (i (length body)) (setf (aref body i) (mod (+ i 17) 251)))
+    (ensure-directories-exist temporary-directory)
+    (unwind-protect
+         (let ((memory-limit smart-buffer:*default-memory-limit*)
+               (disk-limit smart-buffer:*default-disk-limit*)
+               (default-directory smart-buffer::*temporary-directory*))
+           (setf smart-buffer:*default-memory-limit* 1
+                 smart-buffer:*default-disk-limit* 4096
+                 smart-buffer::*temporary-directory* temporary-directory)
+           (unwind-protect
+                (with-managed
+               (handler port
+                (lambda (env)
+                  (let ((raw-body (getf env :raw-body)))
+                    (setf observed-env env
+                          observed-stream raw-body
+                          body-file (and (typep raw-body 'file-stream)
+                                         (pathname raw-body)))
+                    (bt2:signal-semaphore entered)
+                    (bt2:wait-on-semaphore allow-read :timeout 5)
+                    (setf stream-open-before-read (open-stream-p raw-body))
+                    (let ((received (make-array (length body)
+                                                :element-type '(unsigned-byte 8))))
+                      (read-sequence received raw-body)
+                      (setf observed-bytes received))
+                    (bt2:signal-semaphore producer-done)
+                    '(200 (:content-length 2) ("ok"))))
+                :application-workers 1)
+             (let ((client (usocket:socket-connect
+                            "127.0.0.1" port
+                            :element-type '(unsigned-byte 8))))
+               (unwind-protect
+                    (let ((stream (usocket:socket-stream client)))
+                      (write-sequence
+                       (trivial-utf-8:string-to-utf-8-bytes
+                        (format nil "POST / HTTP/1.1~C~CHost: localhost~C~CContent-Length: ~D~C~C~C~C"
+                                #\Return #\Newline #\Return #\Newline
+                                (length body) #\Return #\Newline
+                                #\Return #\Newline))
+                       stream)
+                      (write-sequence body stream)
+                      (force-output stream)
+                      (ok (bt2:wait-on-semaphore entered :timeout 5))
+                      (usocket:socket-close client)
+                      (await-state handler (lambda (state)
+                                             (zerop (getf state :connections))))
+                      (ok (funcall (getf observed-env :woo.request-cancelled-p)))
+                      (bt2:signal-semaphore allow-read)
+                      (ok (bt2:wait-on-semaphore producer-done :timeout 5)))
+                 (ignore-errors (usocket:socket-close client))))
+             (ok stream-open-before-read)
+             (ok (equalp observed-bytes body))
+             (ok body-file)
+             (ok (equal (pathname-directory body-file)
+                        (pathname-directory temporary-directory)))
+             (ok (loop repeat 400
+                       when (and observed-stream body-file
+                                 (not (open-stream-p observed-stream))
+                                 (not (probe-file body-file)))
+                         return t
+                       do (sleep 0.05)))
+             (setf smart-buffer:*default-memory-limit* memory-limit
+                   smart-buffer:*default-disk-limit* disk-limit
+                   smart-buffer::*temporary-directory* default-directory)))
+      (uiop:delete-directory-tree temporary-directory
+                                   :validate t :if-does-not-exist :ignore)))))
 
 (deftest headers-and-framing-rejected-before-write
   (ok (signals (woo.compat::response-headers (list :x (format nil "good~C~Cbad" #\Return #\Linefeed)))))
@@ -192,3 +369,22 @@
       (ok (zerop (getf state :output-bytes))))
     (ok (signals (get-body port)))
     (ok (eq (getf (woo.compat:server-state handler) :state) :running))))
+
+(deftest application-worker-random-states-are-private
+  (let ((lock (bt2:make-lock)) (states nil)
+        (entered (bt2:make-semaphore :count 0)) (release (bt2:make-semaphore :count 0)))
+    (with-managed (handler port
+                   (lambda (env)
+                     (declare (ignore env))
+                     (bt2:with-lock-held (lock) (push *random-state* states))
+                     (bt2:signal-semaphore entered)
+                     (bt2:wait-on-semaphore release :timeout 5)
+                     '(200 nil ("ok"))) :application-workers 4)
+      (let ((clients (loop repeat 4 collect (bt2:make-thread (lambda () (get-body port))))))
+        (unwind-protect
+             (progn
+               (dotimes (i 4) (ok (bt2:wait-on-semaphore entered :timeout 5)))
+               (ok (= 4 (length (remove-duplicates states :test #'eq))))
+               (ok (not (member *random-state* states :test #'eq))))
+          (dotimes (i 4) (bt2:signal-semaphore release))
+          (dolist (client clients) (sb-thread:join-thread (bt2:thread-native-thread client) :timeout 10)))))))

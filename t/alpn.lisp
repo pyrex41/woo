@@ -504,6 +504,146 @@
           do (unless (= b 13) (vector-push-extend (code-char b) line)))
     (coerce line 'simple-string)))
 
+(defun read-http1-body-slowly (stream)
+  "Read a close-delimited HTTP/1 response in small pieces.
+This intentionally yields between reads so a TLS writer must survive a slow peer."
+  (write-sequence (trivial-utf-8:string-to-utf-8-bytes
+                   (format nil "GET / HTTP/1.1~C~CHost: localhost~C~CConnection: close~C~C~C~C"
+                           #\Return #\Newline #\Return #\Newline
+                           #\Return #\Newline #\Return #\Newline)) stream)
+  (force-output stream)
+  (let ((line (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
+        (headers nil))
+    (labels ((read-line-bytes ()
+               (setf (fill-pointer line) 0)
+               (loop for b = (read-byte stream nil nil)
+                     while (and b (/= b 10))
+                     do (unless (= b 13) (vector-push-extend (code-char b) line)))
+               (coerce line 'simple-string)))
+      (read-line-bytes)
+      (loop for h = (read-line-bytes)
+            until (zerop (length h))
+            do (let ((split (position #\: h)))
+                 (when split
+                   (push (cons (string-downcase (subseq h 0 split))
+                               (string-trim '(#\Space #\Tab) (subseq h (1+ split))))
+                         headers))))
+      (let* ((length (parse-integer (or (cdr (assoc "content-length" headers :test #'string=)) "0")))
+             (body (make-array length :element-type '(unsigned-byte 8))))
+        ;; cl+ssl's stream-read-sequence is unreliable when repeatedly
+        ;; reading into different offsets of one destination vector: after
+        ;; the first TLS record it can report a zero-length read while the
+        ;; peer is still delivering data. Read each bounded piece at offset
+        ;; zero, then copy it into the response buffer.
+        (let ((chunk (make-array 1024 :element-type '(unsigned-byte 8))))
+          (loop with offset = 0
+                while (< offset length)
+                do (let* ((want (min 1024 (- length offset)))
+                          (n (read-sequence chunk stream :start 0 :end want)))
+                     (when (zerop n) (error "TLS peer closed at ~D/~D" offset length))
+                     (replace body chunk :start1 offset :end1 (+ offset n) :end2 n)
+                     (incf offset n)
+                     (sleep 0.001))))
+        body))))
+
+(deftest test-tls-slow-reader-preserves-exact-body
+  (testing "a slow TLS reader receives every response byte in order"
+    (let* ((body (make-string (* 256 1024) :initial-element #\x))
+           (clack.test:*clack-test-handler* :woo)
+           (clack.test:*clackup-additional-args*
+             (list :ssl-cert-file (cert-path "localhost.crt")
+                   :ssl-key-file (cert-path "localhost.key"))))
+      (clack.test:testing-app "TLS slow reader"
+          (lambda (env)
+            (declare (ignore env))
+            `(200 (:content-type "text/plain" :content-length ,(length body)) (,body)))
+        (let ((port clack.test:*clack-test-port*))
+          (multiple-value-bind (received-size exact-p)
+              (call-with-deadline
+               15
+               (lambda ()
+                 (call-with-tls port '("http/1.1")
+                   (lambda (tls proto)
+                     (declare (ignore proto))
+                     (let ((received (read-http1-body-slowly tls)))
+                       (values (length received)
+                               (every (lambda (b) (= b (char-code #\x))) received)))))))
+            (ok (= received-size (length body)))
+            (ok exact-p)))))))
+
+(deftest test-fullchain-context-loads
+  (testing "a listener context accepts a leaf followed by an intermediate"
+    (let ((chain (merge-pathnames
+                  (format nil "woo-test-fullchain-~D.pem" (random 1000000))
+                  (uiop:temporary-directory)))
+          (ctx nil))
+      (unwind-protect
+           (progn
+             (with-open-file (out chain :direction :output :if-exists :supersede)
+               (dolist (name '("chain-leaf.crt" "chain-intermediate.crt"))
+                 (with-open-file (in (cert-path name))
+                   (loop for line = (read-line in nil nil)
+                         while line do (write-line line out)))))
+             (setf ctx (woo.ssl:create-context chain (cert-path "chain-leaf.key") nil))
+             (ok ctx))
+        (when ctx (woo.ssl:free-context ctx))
+        (when (probe-file chain) (delete-file chain))))))
+
+(deftest test-chain-trust-and-missing-intermediate
+  (testing "OpenSSL trusts the complete chain and rejects a leaf without its intermediate"
+    (let* ((root (cert-path "chain-root.crt"))
+           (intermediate (cert-path "chain-intermediate.crt"))
+           (leaf (cert-path "chain-leaf.crt"))
+           (ok (uiop:run-program (list "openssl" "verify" "-CAfile"
+                                       (namestring root) "-untrusted"
+                                       (namestring intermediate) (namestring leaf))
+                                 :ignore-error-status t :output :string))
+           (missing (uiop:run-program (list "openssl" "verify" "-CAfile"
+                                            (namestring root) (namestring leaf))
+                                      :ignore-error-status t :output :string)))
+      (ok (search "OK" ok) ok)
+      (ok (not (search "OK" missing)) missing))))
+
+(deftest test-two-listener-contexts-keep-alpn-local
+  (testing "two listener contexts can carry different ALPN lists concurrently"
+    (let ((one (woo.ssl:create-context (cert-path "localhost.crt")
+                                      (cert-path "localhost.key") nil))
+          (two (woo.ssl:create-context (cert-path "chain-leaf.crt")
+                                       (cert-path "chain-leaf.key") nil)))
+      (unwind-protect
+           (progn
+             (woo.ssl:configure-context-alpn one '("h2" "http/1.1"))
+             (woo.ssl:configure-context-alpn two '("http/1.1"))
+             (ok one)
+             (ok two)
+             (ok (equal woo.ssl:*alpn-protocols* '("http/1.1"))))
+        (woo.ssl:free-context one)
+        (woo.ssl:free-context two)))))
+
+(deftest test-tls-listener-restarts-cleanly
+  (testing "the same TLS listener port can be started and stopped repeatedly"
+    (let ((port (+ 55000 (random 500))))
+      (dotimes (iteration 2)
+        (declare (ignore iteration))
+        (let ((thread nil))
+        (unwind-protect
+             (progn
+               (setf thread (bt2:make-thread
+                             (lambda ()
+                               (woo:run (lambda (env) (declare (ignore env))
+                                          '(200 () ("ok")))
+                                        :port port :debug nil
+                                        :ssl-cert-file (cert-path "localhost.crt")
+                                        :ssl-key-file (cert-path "localhost.key")))
+                             :name "woo-tls-restart-test"))
+               (loop repeat 500 until (gethash thread woo::*stop-controls*) do (sleep 0.01))
+               (ok (gethash thread woo::*stop-controls*))
+               (ok (woo:stop-gracefully thread))
+               (loop repeat 1500 while (bt2:thread-alive-p thread) do (sleep 0.01))
+               (ok (not (bt2:thread-alive-p thread))))
+            (when (and thread (bt2:thread-alive-p thread))
+              (bt2:destroy-thread thread))))))))
+
 (deftest test-alpn-negotiates-h2-over-tls
   (testing "a TLS client offering h2 gets h2 and an HTTP/2 response; http/1.1 gets HTTP/1"
     (let ((clack.test:*clack-test-handler* :woo)

@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/pyrex41/woo/actions/workflows/ci.yml/badge.svg)](https://github.com/pyrex41/woo/actions/workflows/ci.yml)
 [![Lack compatibility](https://github.com/pyrex41/woo/actions/workflows/lack-compatibility.yml/badge.svg)](https://github.com/pyrex41/woo/actions/workflows/lack-compatibility.yml)
+[![Legacy qualification](https://github.com/pyrex41/woo/actions/workflows/legacy-qualification.yml/badge.svg)](https://github.com/pyrex41/woo/actions/workflows/legacy-qualification.yml)
 
 Woo is a Common Lisp HTTP server built on [libev](http://software.schmorp.de/pkg/libev.html). This fork adds HTTP/2, WebSocket, TLS/ALPN, and an optional managed Clack/Lack adapter to the original HTTP/1.1 server.
 
@@ -72,9 +73,9 @@ the native zstd library. It uses one network loop; configure
 `:application-workers` instead of legacy `:worker-num`.
 
 The profile remains experimental. Its required Linux/macOS gates and full
-30-minute soaks passed at `fed54b3` on 2026-09-28; see the
+30-minute soaks passed at the historical snapshot described in the
 [qualification snapshot](docs/lack-compatibility.md#qualification-snapshot).
-Production readiness remains **UNKNOWN**. The
+Those receipts do not qualify later source changes. Production readiness remains **UNKNOWN**. The
 [Lack compatibility guide](docs/lack-compatibility.md) documents limits,
 cancellation, websocket-driver use and reproducible test setup.
 
@@ -143,7 +144,6 @@ Run the Lisp suite from this checkout:
 
 ~~~common-lisp
 (push #P"/absolute/path/to/woo/" asdf:*central-registry*)
-(push #P"/absolute/path/to/woo/showcase/" asdf:*central-registry*)
 (ql:quickload :woo-test)
 (asdf:test-system :woo-test)
 ~~~
@@ -159,6 +159,22 @@ If CFFI cannot find libev or OpenSSL, add their `lib/` directories to `cffi:*for
 
 A green Lisp summary can include skips. Inspect its test output before treating a capability as covered. `WOO_SKIP_GO=1` explicitly skips the Go differential tests.
 
+The required core gate is `rove woo-test.asd`. Showcase checks are a separate
+optional ASDF system so missing showcase dependencies do not hide failures in
+the protocol and runtime gate. Run them explicitly after installing the
+showcase dependencies:
+
+In the Quicklisp session above:
+
+~~~common-lisp
+(push #P"/absolute/path/to/woo/showcase/" asdf:*central-registry*)
+(ql:quickload :woo-test/showcase)
+(asdf:test-system :woo-test/showcase)
+~~~
+
+For the full codec and fuzz suite, start SBCL with `--dynamic-space-size 4096`;
+the default 1 GiB heap on some platforms is insufficient for that test workload.
+
 The separate Hegel suite requires Go 1.26+ and Rust 1.97+. It drives live HTTP/1.1, h2c, and WebSocket cases and compares valid responses with the lockfile-pinned [axum oracle](t/hegel/oracle/README.md):
 
 ~~~sh
@@ -166,6 +182,25 @@ go -C t/hegel test -count=1 -skip '^TestManaged' -timeout 10m ./...
 ~~~
 
 It is required in CI. Each generated HTTP history uses a fresh connection, and HTTP/2 histories cannot silently redial. Both fixtures require a per-run readiness nonce. Hegel shrinks counterexamples; consecutive TCP writes do not guarantee distinct server reads.
+
+The legacy qualification lane is separate from the managed profile. From the
+exact checkout being qualified, run:
+
+~~~sh
+python3 t/qualification/check.py \
+  --dependencies /path/to/private/woo-legacy-deps \
+  --artifacts .artifacts/legacy
+python3 t/qualification/check.py \
+  --verify-receipt .artifacts/legacy/receipt.json
+~~~
+
+The default soak is 1800 seconds. The command owns private dependencies and
+fixtures, applies the pinned Clack shutdown patch only in that private copy,
+and writes a receipt bound to the Git HEAD, source digest, dependency pins,
+resource samples, cleanup results and required legacy HTTP/HTTPS/static-file/
+upload/disconnect gates. A shorter `--soak-seconds` run is diagnostic and
+cannot produce a qualification `PASS`. No receipt means the legacy gate is
+UNKNOWN.
 
 Run the managed transport, middleware, lifecycle and service matrix through
 the [compatibility runner](docs/lack-compatibility.md#required-validation).

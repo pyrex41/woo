@@ -52,7 +52,9 @@ Do not wait for an application worker from inside THUNK."
       (when (and (mr-producer-done request) (mr-wire-done request)
                  (not (eq (mr-phase request) :closed)))
         (when (mr-body request)
-          (ignore-errors (close (mr-body request))))
+          (unwind-protect
+               (ignore-errors (close (mr-body request)))
+            (ignore-errors (smart-buffer:delete-stream-file (mr-body request)))))
         (setf (mr-phase request) :closed (mr-body request) nil (mr-env request) nil)
         (decf (ms-input-bytes server) (mr-input-bytes request))
         (setf (mr-input-bytes request) 0)
@@ -76,7 +78,8 @@ Do not wait for an application worker from inside THUNK."
   (wire-completed request t))
 
 (defun pool-worker (server)
-  (loop
+  (let ((*random-state* (make-random-state t)))
+   (loop
     (let ((job
             (bt2:with-lock-held ((ms-lock server))
               (loop while (and (null (ms-jobs server))
@@ -88,7 +91,7 @@ Do not wait for an application worker from inside THUNK."
       (unwind-protect (funcall job)
         (bt2:with-lock-held ((ms-lock server))
           (decf (ms-running server))
-          (bt2:condition-notify (ms-wake server)))))))
+          (bt2:condition-notify (ms-wake server))))))))
 
 (defun submit-request (request thunk)
   (let ((server (mr-server request)))
@@ -306,6 +309,7 @@ Do not wait for an application worker from inside THUNK."
   (check-type server managed-server)
   (when (eq (ms-state server) :stopped) (return-from stop-managed t))
   (let ((drain-deadline (+ (now) (ms-drain-timeout server))))
+    (setf (ms-drain-deadline server) drain-deadline)
     (bt2:with-lock-held ((ms-lock server)) (setf (ms-state server) :draining))
     (when (ms-thread server) (woo::quiesce (ms-thread server)))
     (let* ((connections (bt2:with-lock-held ((ms-lock server))
@@ -325,7 +329,10 @@ Do not wait for an application worker from inside THUNK."
                      (woo.http2.frames:make-goaway-frame
                       (woo.http2.connection::http2-connection-last-stream-id (connection-h2 connection)) 0)))
                   (when (null (connection-requests connection))
-                    (clack.socket:close-socket connection)))))))))
+                    (woo.ev.socket:graceful-close-socket
+                     (connection-socket connection)
+                     :deadline (+ (lev:ev-now woo.ev:*evloop*)
+                                  (max 0.0d0 (- drain-deadline (now)))))))))))))
     (loop while (and (< (now) drain-deadline)
                      (bt2:with-lock-held ((ms-lock server))
                        (plusp (hash-table-count (ms-requests server))))) do (sleep 0.01)))

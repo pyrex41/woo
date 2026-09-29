@@ -1316,7 +1316,7 @@
              (ok (not (http2-connection-goaway-sent conn))))
         (when (probe-file path) (delete-file path)))))
 
-  (testing "a delayed response whose file is missing gets a 500"
+  (testing "a delayed response whose file is missing gets a 404"
     (let* ((responder nil)
            (conn (adapter-conn (lambda (env)
                                  (declare (ignore env))
@@ -1326,9 +1326,29 @@
       (run-adapter-request conn 1)
       (let ((frames (capture-frames
                      (lambda () (funcall responder (list 200 nil missing))))))
-        (ok (equal (response-status frames) "500"))
+        (ok (equal (response-status frames) "404"))
         (ok (end-stream-p (car (last frames))))
-        (ok (null (gethash 1 (http2-connection-streams conn))) "the stream is closed")))))
+        (ok (null (gethash 1 (http2-connection-streams conn))) "the stream is closed"))))
+
+  (testing "a delayed response whose pathname is a directory gets a 403"
+    (let* ((responder nil)
+           (conn (adapter-conn (lambda (env)
+                                 (declare (ignore env))
+                                 (lambda (r) (setf responder r)))))
+           (directory (merge-pathnames
+                       (format nil "woo-h2-static-dir-~D/" (random 1000000000))
+                       (uiop:temporary-directory))))
+      (ensure-directories-exist directory)
+      (unwind-protect
+           (progn
+             (run-adapter-request conn 1)
+             (let ((frames (capture-frames
+                            (lambda () (funcall responder (list 200 nil directory))))))
+               (ok (equal (response-status frames) "403"))
+               (ok (end-stream-p (car (last frames))))
+               (ok (null (gethash 1 (http2-connection-streams conn)))
+                   "the stream is closed")))
+        (uiop:delete-directory-tree directory :validate t :if-does-not-exist :ignore)))))
 
 ;;; A pathname body whose file changes mid-send is reset, not sent mixed
 

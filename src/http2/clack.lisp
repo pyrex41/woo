@@ -45,6 +45,8 @@
            :request-method-keyword
            :*pathname-chunk-size*
            :*pathname-body-open-hook*
+           :pathname-response-error
+           :pathname-response-error-status
            :*max-queued-response-bytes*
            :*max-connection-queued-response-bytes*
            :attach-http2-app
@@ -56,6 +58,38 @@
            ;; Defined in woo.http2.connection; re-exported for callers.
            :*http2-frame-sink*))
 (in-package :woo.http2.clack)
+
+(define-condition pathname-response-error (error)
+  ((status :initarg :status :reader pathname-response-error-status)))
+
+(defun pathname-permission-denied-p ()
+  (let ((errno (ignore-errors (wsys:errno))))
+    (and (integerp errno) (= errno wsys:EACCES))))
+
+(defun pathname-error-status (errno)
+  "Map the errno captured from a failed pathname operation to HTTP status."
+  (cond ((= errno wsys:EACCES) 403)
+        ((or (= errno wsys:ENOENT) (= errno wsys:ENOTDIR)) 404)
+        ((= errno wsys:EISDIR) 403)
+        (t 500)))
+
+(defun pathname-response-status (path &optional errno)
+  "Return the response status for a pathname that cannot be prepared.
+Missing paths are 404, directories and permission failures are 403, and
+unexpected filesystem failures are 500."
+  (handler-case
+      (if (integerp errno)
+          (pathname-error-status errno)
+          (cond
+            ((uiop:directory-exists-p (uiop:ensure-directory-pathname path)) 403)
+            ((probe-file path) nil)
+            ((pathname-permission-denied-p) 403)
+            (t 404)))
+    (file-error ()
+      (if (integerp errno)
+          (pathname-error-status errno)
+          500))
+    (error () 500)))
 
 (defun emit-frame (conn frame)
   "Send FRAME. connection-send-frame reports it to *http2-frame-sink*."
@@ -881,9 +915,19 @@
   (let ((pending (make-pending-response :end-stream t)))
     (cond
       ((pathnamep body)
-       (multiple-value-bind (size identity)
-           (with-open-file (in body :element-type '(unsigned-byte 8))
-             (values (file-length in) (open-file-identity in)))
+       (let ((preflight-status (pathname-response-status body)))
+         (when preflight-status
+           (error 'pathname-response-error :status preflight-status))
+         (multiple-value-bind (size identity)
+             (handler-case
+                 (with-open-file (in body :element-type '(unsigned-byte 8))
+                   (values (file-length in) (open-file-identity in)))
+               (file-error ()
+                 (let ((errno (ignore-errors (wsys:errno))))
+                   (error 'pathname-response-error
+                          :status (pathname-response-status body errno))))
+               (error ()
+                 (error 'pathname-response-error :status 500)))
          (let ((headers (copy-list headers)))
            (unless (response-header-present-p headers :content-type)
              (setf (getf headers :content-type) (mimes:mime body)))
@@ -892,7 +936,7 @@
            (setf (pending-path pending) body
                  (pending-path-end pending) size
                  (pending-path-identity pending) identity)
-           (values headers pending))))
+           (values headers pending)))))
       (t
        (setf (pending-source pending)
              (remove-if (lambda (part)
@@ -970,12 +1014,21 @@
    case nothing is sent."
   (unless (response-startable-p conn stream)
     (return-from send-http2-response nil))
-  (multiple-value-bind (headers pending) (prepare-response-body conn headers body)
-    (if pending
-        (begin-response conn stream status headers pending)
-        (progn
-          (connection-stream-error conn stream +internal-error+)
-          nil))))
+  (handler-case
+      (multiple-value-bind (headers pending) (prepare-response-body conn headers body)
+        (if pending
+            (begin-response conn stream status headers pending)
+            (progn
+              (connection-stream-error conn stream +internal-error+)
+              nil)))
+    (pathname-response-error (e)
+      ;; Preparation happens before HEADERS are sent, so a filesystem error
+      ;; can still be represented as an ordinary response. Once a pathname
+      ;; body is queued, send-pending-path resets the stream instead.
+      (send-http2-response conn stream
+                           (pathname-response-error-status e)
+                           '(:content-length 0)
+                           nil))))
 
 (defun begin-streaming-response (conn stream status headers)
   "Send HEADERS without END_STREAM and queue an empty body for a writer.

@@ -62,6 +62,8 @@
                             (list (format nil "~D|~D|~D" (woo.compat::ms-input-bytes server)
                                           (woo.compat::ms-output-bytes server)
                                           (hash-table-count (woo.compat::ms-requests server))))))))
+                 ((uiop:string-prefix-p "/status/" path)
+                  (list (parse-integer path :start 8) nil nil))
                  ((equal path "/auth") (funcall auth env))
                  ((equal path "/csrf") (funcall csrf env))
                  ((equal path "/ws")

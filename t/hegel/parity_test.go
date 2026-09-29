@@ -9,6 +9,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,6 +84,36 @@ func TestReferenceParityHTTP(t *testing.T) {
 	}
 }
 
+func TestReferenceParityValidRoutes(t *testing.T) {
+	woo := startWoo(t)
+	reference := startOracle(t)
+	for _, h2 := range []bool{false, true} {
+		t.Run(map[bool]string{false: "http1", true: "h2c"}[h2], func(t *testing.T) {
+			wooClient, closeWoo, err := parityClient(woo, h2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeWoo()
+			refClient, closeRef, err := parityClient(reference, h2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeRef()
+			hegel.Test(t, func(ht *hegel.T) {
+				for _, code := range []int{200, 425, 428, 429, 431, 500, 511} {
+					checkParityRequest(ht, wooClient, refClient, woo, reference, http.MethodGet,
+						fmt.Sprintf("/status/%d", code), nil, h2, []byte(strconv.Itoa(code)))
+				}
+				checkParityRequest(ht, wooClient, refClient, woo, reference, http.MethodGet,
+					"/static/fixture.txt", nil, h2, []byte("woo reference fixture\n"))
+				payload := bytes.Repeat([]byte("upload"), 512)
+				checkParityRequest(ht, wooClient, refClient, woo, reference, http.MethodPost,
+					"/upload", payload, h2, payload)
+			}, hegel.WithTestCases(1))
+		})
+	}
+}
+
 func checkParityRequest(ht *hegel.T, wooClient, refClient *http.Client,
 	woo, reference, method, path string, body []byte, h2 bool, expected []byte) {
 	ht.Helper()
@@ -93,15 +125,23 @@ func checkParityRequest(ht *hegel.T, wooClient, refClient *http.Client,
 	if err != nil {
 		ht.Fatalf("reference %s %s: %v", method, path, err)
 	}
+	wantStatus := http.StatusOK
+	if strings.HasPrefix(path, "/status/") {
+		var statusErr error
+		wantStatus, statusErr = strconv.Atoi(strings.TrimPrefix(path, "/status/"))
+		if statusErr != nil {
+			ht.Fatalf("invalid status fixture path %q: %v", path, statusErr)
+		}
+	}
 	wantProto := 1
 	if h2 {
 		wantProto = 2
 	}
-	if left.status != 200 || right.status != 200 || left.proto != wantProto || right.proto != wantProto ||
+	if left.status != wantStatus || right.status != wantStatus || left.proto != wantProto || right.proto != wantProto ||
 		!bytes.Equal(left.body, expected) || !bytes.Equal(right.body, expected) ||
 		!bytes.Equal(left.body, right.body) {
-		ht.Fatalf("%s %s: Woo=%+v reference=%+v wantProto=%d wantBody=%x",
-			method, path, left, right, wantProto, expected)
+		ht.Fatalf("%s %s: Woo=%+v reference=%+v wantStatus=%d wantProto=%d wantBody=%x",
+			method, path, left, right, wantStatus, wantProto, expected)
 	}
 }
 

@@ -1,0 +1,39 @@
+name: Legacy qualification
+
+on: [push, pull_request]
+
+jobs:
+  legacy:
+    name: Legacy Woo (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+      - name: Install frozen Quicklisp distribution
+        run: |
+          nix develop --command sh -c '
+            set -eu
+            curl --fail --max-time 60 --location https://beta.quicklisp.org/quicklisp.lisp -o /tmp/quicklisp.lisp
+            python3 -c "import hashlib; assert hashlib.sha256(open(\"/tmp/quicklisp.lisp\", \"rb\").read()).hexdigest() == \"4a7a5c2aebe0716417047854267397e24a44d0cce096127411e9ce9ccfeb2c17\""
+            sbcl --non-interactive --load /tmp/quicklisp.lisp --eval "(quicklisp-quickstart:install :path \"$HOME/quicklisp/\")"
+            sbcl --non-interactive --load "$HOME/quicklisp/setup.lisp" --eval "(ql-dist:install-dist \"http://beta.quicklisp.org/dist/quicklisp/2026-01-01/distinfo.txt\" :prompt nil :replace t)"
+          '
+      - name: Run bounded legacy qualification
+        run: |
+          nix develop --command python3 t/qualification/check.py \
+            --dependencies "$RUNNER_TEMP/woo-legacy-deps" \
+            --artifacts .artifacts/legacy
+      - name: Verify exact-head receipt
+        run: nix develop --command python3 t/qualification/check.py --verify-receipt .artifacts/legacy/receipt.json
+      - name: Preserve bounded logs and receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-qualification-${{ matrix.os }}
+          path: .artifacts/legacy/
+          if-no-files-found: error

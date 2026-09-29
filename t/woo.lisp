@@ -109,6 +109,7 @@
           (ok (null errors)
               (format nil "no server thread errors: ~{~A~^; ~}" errors)))))))
 
+#-woo-no-ssl
 (deftest woo-ssl-server-tests
   (let ((clack.test:*clackup-additional-args*
           '(:ssl-cert-file #P"t/certs/localhost.crt"
@@ -193,6 +194,36 @@
         (ok (equal (reverse seen) '("/first" "/ws")))
         (ok (equalp (woo.websocket:take-pending-websocket-data socket)
                     (trivial-utf-8:string-to-utf-8-bytes "xyz")))))))
+
+(deftest http1-fragmented-fixed-body-keeps-pipelined-request
+  (testing "the final body fragment does not consume the next request"
+    (let* ((seen-body nil)
+           (seen-paths nil)
+           (socket (bare-socket))
+           (request (trivial-utf-8:string-to-utf-8-bytes
+                     (format nil "POST /body HTTP/1.1~C~CHost: x~C~CContent-Length: 4~C~C~C~CabcdGET /next HTTP/1.1~C~CHost: x~C~C~C~C"
+                             #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline #\Return #\Newline
+                             #\Return #\Newline))))
+      (let ((woo.specials:*app*
+              (lambda (env)
+                (push (getf env :path-info) seen-paths)
+                (when (string= (getf env :path-info) "/body")
+                  (let ((body (getf env :raw-body))
+                        (bytes (make-array 4 :element-type '(unsigned-byte 8))))
+                    (read-sequence bytes body)
+                    (setf seen-body (map 'string #'code-char bytes))))
+                (lambda (responder) (declare (ignore responder)))))
+            (woo.specials:*debug* t))
+        (woo::setup-parser socket)
+        ;; Split inside the body, then put the rest of the body and next head
+        ;; in the same read to exercise the remaining-byte accounting.
+        (let ((cut (+ 2 (search "ab" (map 'string #'code-char request)))))
+          (woo::read-cb socket (subseq request 0 cut))
+          (woo::read-cb socket (subseq request cut)))
+        (ok (string= seen-body "abcd"))
+        (ok (equal (reverse seen-paths) '("/body" "/next")))))))
 
 (deftest http1-pipelined-heads-are-one-piece
   (testing "16 pipelined GETs in one read go to fast-http in one call"

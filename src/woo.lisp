@@ -65,7 +65,11 @@
   (:import-from :smart-buffer
                 :make-smart-buffer
                 :write-to-buffer
-                :finalize-buffer)
+                :finalize-buffer
+                :buffer-on-memory-p
+                :delete-stream-file
+                :*default-disk-limit*
+                :buffer-limit-exceeded)
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes
                 :utf-8-bytes-to-string
@@ -215,7 +219,8 @@ SERVER may be the listener or the thread running WOO:RUN."
         (*debug* debug)
         (*listener* nil)
         (ssl (or ssl-key-file ssl-cert-file))
-        (http2-handler nil))
+        (http2-handler nil)
+        (ssl-context nil))
     (labels ((ensure-http2-handler ()
                (unless http2-handler
                  (setf http2-handler (make-http2-app-handler *app*)))
@@ -238,6 +243,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                #-woo-no-ssl
                (when ssl
                  (woo.ssl:init-ssl-handle socket
+                                          ssl-context
                                           ssl-cert-file
                                           ssl-key-file
                                           ssl-key-password))
@@ -338,7 +344,6 @@ SERVER may be the listener or the thread running WOO:RUN."
         (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
         #-woo-no-ssl
         (progn
-          (cl+ssl::ensure-initialized)
           (when ssl-key-file
             (setf ssl-key-file
                   (uiop:native-namestring
@@ -348,28 +353,51 @@ SERVER may be the listener or the thread running WOO:RUN."
             (setf ssl-cert-file
                   (uiop:native-namestring
                    (or (probe-file ssl-cert-file)
-                       (error "SSL certificate '~A' does not exist." ssl-cert-file)))))))
+                       (error "SSL certificate '~A' does not exist." ssl-cert-file)))))
+          (setf ssl-context
+                (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
+          ;; Install ALPN once per listener context. The callback storage is
+          ;; owned by this context and is retained until the server stops.
+          (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*)))
       (if worker-num
-          (start-multithread-server)
-          (start-singlethread-server)))))
+          (unwind-protect
+               (start-multithread-server)
+            #-woo-no-ssl
+            (when ssl-context (woo.ssl:free-context ssl-context)))
+          (unwind-protect
+               (start-singlethread-server)
+            #-woo-no-ssl
+            (when ssl-context (woo.ssl:free-context ssl-context)))))))
+
+(defun respond-and-close (socket status message)
+  (setf (wev:socket-data socket)
+        (lambda (data &key start end)
+          (declare (ignore data start end))))
+  (let ((body (string-to-utf-8-bytes message)))
+    (wev:with-async-writing (socket :write-cb #'wev:close-socket)
+      (write-response-headers socket status
+                              (list :connection "close"
+                                    :content-length (length body)))
+      (wev:write-socket-data socket body))))
 
 (defun read-cb (socket data &key (start 0) (end (length data)))
   (let ((parser (wev:socket-data socket)))
-    (handler-case (funcall parser data :start start :end end)
-      (woo.ev.condition:output-limit-exceeded () (wev:close-socket socket))
-      (request-body-limit-exceeded ()
-        (wev:with-async-writing (socket :write-cb #'wev:close-socket)
-          (write-response-headers socket 413 '(:content-length 0 :connection "close"))))
-      (fast-http:parsing-error (e)
-        (vom:error "HTTP parse error: ~A" e)
-        (let ((body #.(map '(simple-array (unsigned-byte 8) (*))
-                           #'char-code
-                           "400 Bad Request")))
-          (wev:with-async-writing (socket :write-cb #'wev:close-socket)
-            (write-response-headers socket 400
-                                    (list :connection "close"
-                                          :content-length (length body)))
-            (wev:write-socket-data socket body)))))))
+    (block read
+      (handler-bind (((or fast-http:cb-headers-complete fast-http:cb-body)
+                      (lambda (condition)
+                        (let ((cause (slot-value condition 'fast-http.error::error)))
+                          (when (typep cause 'buffer-limit-exceeded)
+                            (vom:error "~A" cause)
+                            (respond-and-close socket 413
+                                                "413 Request Entity Too Large")
+                            (return-from read nil))))))
+        (handler-case (funcall parser data :start start :end end)
+          (woo.ev.condition:output-limit-exceeded () (wev:close-socket socket))
+          (request-body-limit-exceeded ()
+            (respond-and-close socket 413 "413 Request Entity Too Large"))
+          (fast-http:parsing-error (e)
+            (vom:error "HTTP parse error: ~A" e)
+            (respond-and-close socket 400 "400 Bad Request")))))))
 
 (define-condition request-body-limit-exceeded (fast-http:fast-http-error) ()
   (:report (lambda (condition stream) (declare (ignore condition))
@@ -494,7 +522,10 @@ SERVER may be the listener or the thread running WOO:RUN."
 
 (defun make-request-body-buffer (socket)
   (let ((limit (woo.ev.socket::socket-body-memory-limit socket)))
-    (if limit (make-smart-buffer :memory-limit limit :disk-limit limit)
+    (if limit
+        (make-smart-buffer
+         :memory-limit (min limit smart-buffer:*default-memory-limit*)
+         :disk-limit limit)
         (make-smart-buffer))))
 
 (defun setup-parser (socket)
@@ -513,6 +544,7 @@ SERVER may be the listener or the thread running WOO:RUN."
   ;; and every later one go to FEED-WEBSOCKET-DATA, never to fast-http.
   (let ((http (make-http-request))
         (body-buffer (make-request-body-buffer socket))
+        (body-streams nil)
         ;; The request being parsed carries an Upgrade header.
         (upgrade-request nil)
         ;; The piece being parsed ends at the end of an Upgrade request's
@@ -528,12 +560,26 @@ SERVER may be the listener or the thread running WOO:RUN."
         (holding nil)
         ;; Length of the CR LF CR LF prefix that ends the octets read.
         (crlf-match 0)
+        ;; Remaining bytes in the current fixed-length body. This is kept
+        ;; separately from FAST-HTTP's mutable content-length slot because the
+        ;; reader may split one socket read across the body and next request.
+        (body-remaining nil)
         parser
         reader
         (request-completed nil))
     (declare (type (integer 0 3) crlf-match)
              (type fixnum head-fields))
-    (labels ((next-split (data start end)
+    (labels ((release-body (stream)
+               (setf body-streams (delete stream body-streams :test #'eq))
+               (unwind-protect
+                    (ignore-errors (close stream))
+                 (ignore-errors (delete-stream-file stream))))
+             (cleanup-open-buffer (buffer)
+               (unless (buffer-on-memory-p buffer)
+                 (ignore-errors
+                  (let ((stream (finalize-buffer buffer)))
+                    (release-body stream)))))
+             (next-split (data start end)
                ;; The end of the next piece to feed fast-http. Second value:
                ;; true if octets after a completed head go in unscanned.
                (declare (type (simple-array (unsigned-byte 8) (*)) data)
@@ -581,7 +627,7 @@ SERVER may be the listener or the thread running WOO:RUN."
                     ;; A body is never scanned. Cut a fixed-length body at
                     ;; its end, then scan the next request's head.
                     (setq aligned nil)
-                    (let* ((n (http-content-length http))
+                    (let* ((n body-remaining)
                            (split (if (and (= state fast-http.http:+state-body+)
                                            (typep n 'fixnum)
                                            (plusp n))
@@ -628,10 +674,22 @@ SERVER may be the listener or the thread running WOO:RUN."
                          :first-line-callback
                          (lambda ()
                            ;; fast-http retains these fields between messages.
-                           (setf (http-content-length http) nil (http-chunked-p http) nil))
+                           (setf (http-content-length http) nil
+                                 (http-chunked-p http) nil
+                                 body-remaining nil))
                          :header-callback
                          (lambda (headers)
-                           (declare (ignore headers))
+                           (let ((content-length (or (http-content-length http)
+                                                     (gethash "content-length" headers))))
+                             (when (and (stringp content-length)
+                                        (integer-string-p content-length))
+                               (setf content-length (parse-integer content-length)))
+                             (let ((limit (or (woo.ev.socket::socket-body-memory-limit socket)
+                                              *default-disk-limit*)))
+                               (when (and content-length (> content-length limit))
+                                 (error 'buffer-limit-exceeded :limit limit)))
+                             (setf body-remaining
+                                   (and (not (http-chunked-p http)) content-length)))
                            (when (http-upgrade-p http)
                              (setq upgrade-request t)
                              ;; fast-http would take a Content-Length body for
@@ -660,18 +718,21 @@ SERVER may be the listener or the thread running WOO:RUN."
                              (when upgrading
                                (setq upgrade-seen t))
                              (setf (http-upgrade-p http) nil)
-                             (flet ((main (env)
-                                      (handle-response http socket
-                                                       (watch-response
-                                                        upgrading
-                                                        (if *debug*
-                                                            (funcall *app* env)
-                                                            (if-let (res (handler-case (funcall *app* env)
-                                                                           (error (error)
-                                                                             (vom:error (princ-to-string error))
-                                                                             nil)))
-                                                                    res
-                                                                    '(500 nil nil)))) env)))
+                             (flet ((main (env release)
+                                      (let ((response
+                                              (watch-response
+                                               upgrading
+                                               (if *debug*
+                                                   (funcall *app* env)
+                                                   (if-let (res (handler-case (funcall *app* env)
+                                                                  (error (error)
+                                                                    (vom:error (princ-to-string error))
+                                                                    nil)))
+                                                     res
+                                                     '(500 nil nil))))))
+                                        (handle-response http socket response env release
+                                                         (eq (http-method http) :head))
+                                        response)))
                                (block result
                                  (let ((raw-body (finalize-buffer body-buffer)))
                                    (setq body-buffer (make-request-body-buffer socket))
@@ -683,7 +744,14 @@ SERVER may be the listener or the thread running WOO:RUN."
                                               (return-from result (handle-response http socket '(500 nil nil)))))))
                                      (let ((env (nconc (list :raw-body raw-body :woo.response-handler nil)
                                                        (handle-request http socket))))
-                                       (main env))))))))))
+                                       (unless (getf env :woo.response-handler)
+                                         (push raw-body body-streams))
+                                       (let ((result (main env (lambda ()
+                                                                 (unless (getf env :woo.response-handler)
+                                                                   (release-body raw-body))))))
+                                         (when (and (not (getf env :woo.response-handler))
+                                                    (listp result))
+                                           (release-body raw-body))))))))))))
       (setq reader
             (lambda (data &key (start 0) (end (length data)))
               (declare (type (simple-array (unsigned-byte 8) (*)) data)
@@ -704,7 +772,11 @@ SERVER may be the listener or the thread running WOO:RUN."
                   (return (hold-for-websocket data start end)))
                 (multiple-value-bind (split unscanned) (next-split data start end)
                   (setf request-completed nil)
-                  (funcall parser data :start start :end split)
+                  (let ((body-state (= (fast-http.http:http-state http)
+                                       fast-http.http:+state-body+)))
+                    (funcall parser data :start start :end split)
+                    (when (and body-state (typep body-remaining 'fixnum))
+                      (decf body-remaining (- split start))))
                   ;; Unlike fixed bodies, fast-http does not reset its state
                   ;; after a chunked message. The next piece is a fresh request.
                   (when (and request-completed (http-chunked-p http))
@@ -716,6 +788,16 @@ SERVER may be the listener or the thread running WOO:RUN."
                              (= (fast-http.http:http-state http)
                                 fast-http.http:+state-headers+))
                     (setq head-fields (logior +field-upgrade+ +field-body+)))))))
+      (push (lambda ()
+              ;; Managed compatibility requests transfer body ownership to
+              ;; the request lifecycle once the application starts. Their
+              ;; connection close hook marks wire completion; releasing here
+              ;; would race an application producer still reading the body.
+              (unless (woo.ev.socket::socket-body-admitter socket)
+                (dolist (stream (copy-list body-streams))
+                  (release-body stream)))
+              (cleanup-open-buffer body-buffer))
+            (woo.ev.socket::socket-close-hooks socket))
       (setf (wev:socket-data socket) reader))))
 
 (defun stop (server)
@@ -775,7 +857,71 @@ SERVER may be the listener or the thread running WOO:RUN."
 ;;
 ;; Handling responses
 
-(defun handle-response (http socket clack-res &optional env)
+(defun validate-response (response &optional head-p)
+  "Validate a legacy response before any bytes are committed."
+  (unless (and (listp response) (member (list-length response) '(2 3)))
+    (error "Invalid Clack response shape"))
+  (destructuring-bind (status headers &optional body) response
+    (check-type status (integer 200 599))
+    (unless (and (listp headers) (let ((n (list-length headers))) (and n (evenp n))))
+      (error "Invalid Clack response headers"))
+    (loop for (key value) on headers by #'cddr
+          do (unless (and (typep key '(or string symbol))
+                          (plusp (length (string key)))
+                          (every (lambda (c) (and (< (char-code c) 128)
+                                                 (or (alphanumericp c)
+                                                     (find c "!#$%&'*+-.^_`|~"))))
+                                 (string key))
+                          (or (null value)
+                              (every (lambda (c) (and (<= (char-code c) 255)
+                                                     (or (char= c #\Tab) (>= (char-code c) 32))
+                                                     (/= (char-code c) 127)))
+                                     (princ-to-string value))))
+               (error "Invalid Clack response header")))
+    (let ((lengths (loop for (key value) on headers by #'cddr
+                         when (and value (string-equal (string key) "content-length")) collect value))
+          (encodings (loop for (key value) on headers by #'cddr
+                           when (and value (string-equal (string key) "transfer-encoding")) collect value)))
+      (when (or (> (length lengths) 1) (and lengths encodings))
+        (error "Ambiguous response framing"))
+      (when lengths
+        (let ((text (princ-to-string (first lengths))))
+          (unless (and (plusp (length text)) (every #'digit-char-p text))
+            (error "Invalid response content length"))))
+      (when (and encodings (or (> (length encodings) 1)
+                               (not (string-equal (princ-to-string (first encodings)) "chunked"))))
+        (error "Unsupported response transfer encoding")))
+    (unless (or (null body) (pathnamep body) (stringp body)
+                (typep body '(vector (unsigned-byte 8)))
+                (and (listp body) (list-length body) (every #'stringp body)))
+      (error "Invalid Clack response body"))
+    (let ((normalized (loop for (key value) on headers by #'cddr
+                            append (list (woo.response::canonical-header-name key) value))))
+      (when (and (= (length response) 3) (not head-p)
+                 (not (member status '(204 205 304))) (not (pathnamep body))
+                 (getf normalized :content-length))
+        (let ((expected (parse-integer (princ-to-string (getf normalized :content-length))))
+              (actual (typecase body
+                        (null 0)
+                        (string (utf-8-byte-length body))
+                        (list (loop for chunk in body sum (utf-8-byte-length chunk)))
+                        (vector (length body)))))
+          (unless (= expected actual) (error "Response content length mismatch"))))
+      ;; Framing is generated by the body writer; don't emit duplicate TE.
+      (remf normalized :transfer-encoding)
+      (if (= (length response) 2) (list status normalized)
+          (list status normalized (if (stringp body) (list body) body))))))
+
+(defun legacy-response-failed (http socket generation)
+  (when (wev:socket-open-p socket)
+    (if (/= generation (woo.ev.socket::socket-response-generation socket))
+        (wev:close-socket socket)
+        (progn
+          (handle-normal-response http socket '(500 (:connection "close") nil))
+          (setf (woo.ev.socket::socket-write-cb socket) #'wev:close-socket)))))
+
+(defun handle-response (http socket clack-res &optional env body-cleanup head-p)
+
   (when (getf env :woo.response-handler)
     (return-from handle-response
       (funcall (getf env :woo.response-handler) http socket clack-res)))
@@ -784,23 +930,26 @@ SERVER may be the listener or the thread running WOO:RUN."
   ;; 200), writing it would corrupt the stream.
   (when (socket-upgraded-p socket)
     (return-from handle-response nil))
-  (handler-case
-      (etypecase clack-res
-        (list (handle-normal-response http socket clack-res))
-        (function (funcall clack-res (lambda (clack-res)
-                                       (unless (socket-upgraded-p socket)
-                                         (handler-case
-                                             (handle-normal-response http socket clack-res)
-                                           (wev:socket-closed ())))))))
-    (wev:tcp-error (e)
-      (vom:error (princ-to-string e)))))
+  (let ((generation (woo.ev.socket::socket-response-generation socket)))
+    (handler-case
+        (etypecase clack-res
+          (list (handle-normal-response http socket (validate-response clack-res head-p) body-cleanup head-p))
+          (function
+           (funcall clack-res
+                    (lambda (response)
+                      (unless (socket-upgraded-p socket)
+                        (handler-case
+                            (handle-normal-response http socket (validate-response response head-p) body-cleanup head-p)
+                          (error () (legacy-response-failed http socket generation))))))))
+      (error () (legacy-response-failed http socket generation)))))
+
 
 #+sbcl
-(defvar *stat* (make-instance 'sb-posix:stat))
-#+sbcl
 (defun fd-file-size (fd)
-  (sb-posix:fstat fd *stat*)
-  (sb-posix:stat-size *stat*))
+  ;; FSTAT mutates its destination; workers must never share that object.
+  (let ((stat (make-instance 'sb-posix:stat)))
+    (sb-posix:fstat fd stat)
+    (sb-posix:stat-size stat)))
 #+ccl
 (defun fd-file-size (fd)
   (multiple-value-bind (successp mode size)
@@ -817,9 +966,14 @@ SERVER may be the listener or the thread running WOO:RUN."
   (with-open-file (in path)
     (file-length in)))
 
-(defun make-streaming-writer (socket)
+(defun make-streaming-writer (socket &optional body-cleanup head-p)
   (lambda (body &key (start 0 has-start) (end nil has-end) (close nil))
-    (if body
+    (if (and body head-p)
+        (when close
+          (wev:with-async-writing (socket)
+            (finish-response socket *empty-chunk*)
+            (when body-cleanup (funcall body-cleanup))))
+        (if body
         (wev:with-async-writing (socket :force-streaming t)
           (etypecase body
             (string
@@ -831,10 +985,12 @@ SERVER may be the listener or the thread running WOO:RUN."
                                       :start start
                                       :end (or end (length body)))))
           (when close
-            (finish-response socket *empty-chunk*)))
+            (finish-response socket *empty-chunk*)
+            (when body-cleanup (funcall body-cleanup))))
         (when close
           (wev:with-async-writing (socket)
-            (finish-response socket *empty-chunk*))))))
+            (finish-response socket *empty-chunk*)
+            (when body-cleanup (funcall body-cleanup))))))))
 
 (defun list-body-chunk-to-octets (chunk)
   (typecase chunk
@@ -843,62 +999,142 @@ SERVER may be the listener or the thread running WOO:RUN."
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
-(defun handle-normal-response (http socket clack-res)
-  (let ((no-body '#:no-body)
-        (close (or (= (http-minor-version http) 0)
-                   (string-equal (gethash "connection" (http-headers http)) "close"))))
+(defun handle-normal-response (http socket clack-res &optional body-cleanup head-p)
+  (flet ((send-error-response (status)
+           ;; File preparation happens before headers are committed.  Close
+           ;; the HTTP/1 connection after this one response so unread request
+           ;; bytes cannot be parsed as another request.
+           (wev:with-async-writing (socket :write-cb (lambda (socket)
+                                                       (wev:close-socket socket)))
+             (write-response-headers socket status
+                                     '(:connection "close" :content-length 0))))
+         (path-length-matches-p (headers size)
+           (let ((declared (getf headers :content-length)))
+             (or (null declared)
+                 (handler-case
+                     (= size (etypecase declared
+                               (integer declared)
+                               (string (parse-integer declared))))
+                   (error () nil))))))
+    (let ((no-body '#:no-body)
+          (close (or (= (http-minor-version http) 0)
+                     (string-equal (gethash "connection" (http-headers http)) "close"))))
+
     (destructuring-bind (status headers &optional (body no-body))
         clack-res
+      (when (member status '(204 205 304))
+        (setf body nil)
+        (remf headers :transfer-encoding)
+        (when (= status 204) (remf headers :content-length)))
       (when (eq body no-body)
         (setf (getf headers :transfer-encoding) "chunked")
         (setf (getf headers :content-length) nil)
         (wev:with-async-writing (socket)
           (write-response-headers socket status headers))
         (return-from handle-normal-response
-          (make-streaming-writer socket)))
+          (make-streaming-writer socket body-cleanup head-p)))
 
       (etypecase body
         (null
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
-           (unless (= status 304)
+                                                          (wev:graceful-close-socket socket))))
+           (unless (or head-p (member status '(204 304)))
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
         (pathname
-         (cond
-           ((woo.ev.socket:socket-ssl-handle socket)
-            (with-open-file (in body :element-type '(unsigned-byte 8))
-              (let ((size (file-length in)))
-                (unless (getf headers :content-length)
-                  (setf (getf headers :content-length) size))
-                (unless (getf headers :content-type)
-                  (setf (getf headers :content-type) (mimes:mime body)))
-                (wev:with-async-writing (socket :write-cb (and close
-                                                               (lambda (socket)
-                                                                 (wev:close-socket socket))))
-                  (write-response-headers socket status headers (not close))
-                  ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
-                  (wev:write-socket-stream socket in)))))
-           (t
-            (let* ((fd (wsys:open body))
-                   (size #+lispworks (sys:file-size body)
-                         #+(or sbcl ccl) (fd-file-size fd)
-                         #-(or sbcl ccl lispworks) (file-size body)))
-              (unless (getf headers :content-length)
-                (setf (getf headers :content-length) size))
-              (unless (getf headers :content-type)
-                (setf (getf headers :content-type) (mimes:mime body)))
-              (wev:with-async-writing (socket :write-cb (and close
-                                                             (lambda (socket)
-                                                               (wev:close-socket socket))))
-                (write-response-headers socket status headers (not close))
-                (woo.ev.socket:send-static-file socket fd size))))))
+         (let ((preflight-status (woo.http2.clack::pathname-response-status body)))
+           (cond
+             (preflight-status
+             (send-error-response preflight-status))
+             ((woo.ev.socket:socket-ssl-handle socket)
+              (let ((headers-committed nil) (in nil))
+                (unwind-protect
+                     (handler-case
+                         (progn
+                           (setf in (open body :element-type '(unsigned-byte 8)))
+                           (let ((size (file-length in)))
+                             (unless (path-length-matches-p headers size)
+                               (send-error-response 500)
+                               (return-from handle-normal-response))
+                             (unless (getf headers :content-length)
+                               (setf (getf headers :content-length) size))
+                             (unless (getf headers :content-type)
+                               (setf (getf headers :content-type) (mimes:mime body)))
+                             (wev:with-async-writing (socket :write-cb (and close #'wev:graceful-close-socket))
+                               (setf headers-committed t)
+                               (write-response-headers socket status headers (not close))
+                               (if head-p
+                                   (when body-cleanup (funcall body-cleanup))
+                                   (progn
+                                     (wev:start-static-stream socket in size)
+                                     (setf in nil))))))
+                       (file-error (e)
+                         (if headers-committed (error e)
+                             (let ((errno (ignore-errors (wsys:errno))))
+                               (send-error-response
+                                (woo.http2.clack::pathname-response-status body errno)))))
+                       (error (e)
+                         (if headers-committed (error e) (send-error-response 500))))
+                  (when in (ignore-errors (close in :abort t))))))
+             (t
+              (let ((fd (wsys:open body)))
+                (if (< fd 0)
+                    (send-error-response
+                     (let ((errno (wsys:errno)))
+                       (woo.http2.clack::pathname-error-status errno)))
+                    (let ((headers-committed nil))
+                      (unwind-protect
+                           (handler-case
+                               (let ((size (progn
+                                             #+lispworks (sys:file-size body)
+                                             #+(or sbcl ccl) (fd-file-size fd)
+                                             #-(or sbcl ccl lispworks) (file-size body))))
+                                 (unless (path-length-matches-p headers size)
+                                   (send-error-response 500)
+                                   (return-from handle-normal-response))
+                                 (unless (getf headers :content-length)
+                                   (setf (getf headers :content-length) size))
+                                 (unless (getf headers :content-type)
+                                   (setf (getf headers :content-type) (mimes:mime body)))
+                                 (wev:with-async-writing (socket :write-cb (and close
+                                                                                (lambda (socket)
+                                                                                  (wev:graceful-close-socket socket))))
+                                   (setf headers-committed t)
+                                   (write-response-headers socket status headers (not close))
+                                   ;; SEND-STATIC-FILE takes ownership and closes
+                                   ;; FD after the transfer completes.
+                                   (if head-p
+                                       (when body-cleanup (funcall body-cleanup))
+                                       (progn
+                                         (woo.ev.socket:send-static-file socket fd size)
+                                         (setf fd nil)))))
+                             (file-error (e)
+                               (if headers-committed
+                                   (error e)
+                                   (send-error-response 500)))
+                             (error (e)
+                               (if headers-committed
+                                   (error e)
+                                   (send-error-response 500))))
+                        (when fd (wsys:close fd))))))))))
+
+
         (list
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
+                                                          (wev:graceful-close-socket socket))))
            (cond
+             (head-p
+              (unless (getf headers :content-length)
+                (setf (getf headers :content-length)
+                      (write-to-string
+                       (loop for chunk in body
+                             sum (if (stringp chunk)
+                                     (utf-8-byte-length chunk)
+                                     (length (list-body-chunk-to-octets chunk)))))))
+              (response-headers-bytes socket status headers (not close))
+              (write-socket-crlf socket))
              ((getf headers :content-length)
               (response-headers-bytes socket status headers (not close))
               (write-socket-crlf socket)
@@ -943,14 +1179,14 @@ SERVER may be the listener or the thread running WOO:RUN."
         ((vector (unsigned-byte 8))
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)
-                                                          (wev:close-socket socket))))
+                                                          (wev:graceful-close-socket socket))))
            (response-headers-bytes socket status headers (not close))
            (unless (getf headers :content-length)
              (wev:write-socket-data socket #.(string-to-utf-8-bytes "Content-Length: "))
              (write-socket-string socket (write-to-string (length body)))
              (write-socket-crlf socket))
            (write-socket-crlf socket)
-           (wev:write-socket-data socket body)))))))
+           (unless head-p (wev:write-socket-data socket body)))))))))
 
 (defmethod clack.socket:read-callback ((socket woo.ev.socket:socket))
   (wev:socket-data socket))

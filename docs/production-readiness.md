@@ -1,10 +1,14 @@
 # Production readiness
 
-Status: **UNKNOWN**. The managed Clack/Lack profile passed its required local
-and hosted Linux/macOS gates at `fed54b3` on 2026-09-28, including full
-30-minute soaks. See the [qualification snapshot](lack-compatibility.md#qualification-snapshot)
-for the exact commit, source digest, dependency pins and CI evidence. Complete
-RFC coverage and staged production deployment have not been established.
+Status: **UNKNOWN**. The managed Clack/Lack profile has a historical
+qualification snapshot with local and hosted Linux/macOS 30-minute soaks. See
+the [qualification snapshot](lack-compatibility.md#qualification-snapshot) for
+that receipt's exact commit, source digest, dependency pins and CI evidence.
+Those receipts do not qualify the current source. Focused native TLS and
+independent Go TLS checks now pass, including exact slow transfers and listener
+cleanup. Fresh release qualification receipts must still be verified against
+the exact checkout; complete RFC coverage and staged production deployment
+have not been established.
 
 ## Scope and reference model
 
@@ -24,10 +28,11 @@ Parity alone cannot establish RFC compliance.
 | Gate | Required evidence | Current state |
 |------|-------------------|---------------|
 | Protocol inventory | RFC MUST/MUST NOT requirements mapped to code and tests, with unsupported features explicit | UNKNOWN |
-| Valid-path parity | Shared generated HTTP/1.1, HTTP/2, TLS/ALPN, and WebSocket scenarios against Woo and an independent server | PARTIAL: Hegel compares HTTP/1.1, h2c and WebSocket echo with the pinned axum oracle. Managed tests cover HTTP/1, HTTPS, h2c and HTTP/2 TLS, with a separate Hunchentoot reference check. TLS oracle parity and broader generated methods/headers/multiplexing remain open. |
+| Valid-path parity | Shared generated HTTP/1.1, HTTP/2, TLS/ALPN, and WebSocket scenarios against Woo and an independent server | PARTIAL: Hegel compares HTTP/1.1, h2c and WebSocket echo with the pinned axum oracle. Focused coverage now includes HEAD/bodyless statuses, static pathname preparation, upload ownership, TLS retry readiness and per-listener certificate contexts. Managed tests cover HTTP/1, HTTPS, h2c and HTTP/2 TLS, with a separate Hunchentoot reference check. TLS oracle parity and broader generated methods/headers/multiplexing remain open. |
 | Invalid-path conformance | Fragmented and malformed frames, HPACK, stream states, WebSocket masking/fragmentation, request smuggling boundaries, and timeout/error outcomes | PARTIAL: existing Lisp and Hegel tests, the opt-in h2spec baseline, and nine Autobahn control-frame cases below; no complete RFC 9113 or RFC 6455 inventory yet. |
 | Resource safety | Connection/stream/body/header limits under slow peers and concurrent load; no unbounded descriptors, memory, or queue growth | PARTIAL: the managed snapshot passed admission/output budgets, cancellation, drain, uncooperative-worker reporting, 100 lifecycle cycles and descriptor/RSS checks. These budgets exclude application allocations. Broader slow-peer and adversarial connection/header workloads remain open; legacy threaded Clack cleanup needs its separate integration. |
-| Soak | Sustained representative traffic, forced disconnects, restarts, and clean shutdown with bounded latency and resource use | PARTIAL: required 30-minute managed transport soaks passed locally and on hosted Linux/macOS. Production-duration, application-specific and adversarial workloads remain unqualified. |
+| Soak | Sustained representative traffic, forced disconnects, restarts, and clean shutdown with bounded latency and resource use | Requires an exact-head receipt: the historical managed 30-minute snapshot and focused slow-reader checks do not qualify a later source revision. Production-duration, application-specific and adversarial workloads remain unqualified. |
+| Legacy qualification | Exact-head 1800-second legacy HTTP/HTTPS/static-file/upload/disconnect run with private pinned dependencies, cleanup and source-bound receipt | UNKNOWN: use `t/qualification/check.py`; no current-head receipt is recorded here. |
 | Deployment | Exact build and configuration, TLS/ALPN negotiation, observability, staged traffic, rollback, and customer-visible checks | UNKNOWN |
 
 ## Immediate work
@@ -46,17 +51,25 @@ Parity alone cannot establish RFC compliance.
 4. Extend the managed resource/soak matrix with slow peers, adversarial
    connection/header loads and longer application-specific traffic. Preserve
    bounded deadlines, resource samples and source-bound receipts.
-5. Qualify the release snapshot and configuration in a staged deployment,
+5. Run the managed and legacy Linux/macOS gates, and preserve fresh receipts
+   for the exact release source. Verify local receipts with each runner before
+   using them as release evidence.
+6. Qualify the release snapshot and configuration in a staged deployment,
    including observability, rollback and customer-visible checks, before
    changing production status.
+7. Run `python3 t/qualification/check.py` with its default 1800-second soak
+   from the exact release commit and verify its receipt. A diagnostic shorter
+   run, a managed-profile receipt, or the core Lisp summary cannot close the
+   legacy gate.
 
 ## Historical local validation: 2026-09-27
 
 | Check | Result | Limit |
 |------|--------|-------|
-| Lisp test system at soft descriptor limit 256 | 17 suites passed | Optional checks can skip; inspect the test output. |
+| Lisp test system at soft descriptor limit 256 | Historical local run passed | Optional checks can skip; inspect the test output for the current source. |
 | Full Hegel suite | Passed | Valid-path cases and selected Woo-only protocol assertions. |
 | Conformance launcher regressions | Nine passed, plus focused JUnit validation cases | Uses fake tools and fixtures. |
+| Legacy qualification | No current-head receipt | The command exists at `t/qualification/check.py`; its default 1800-second run and exact-head verifier are required. |
 | Selected Autobahn control-frame cases | 9/9 passed | Does not cover the full WebSocket suite. |
 | h2spec v2.6.0 | 143/146 passed; exit nonzero | Targets older RFC 7540 expectations in the three failing cases. |
 
@@ -114,8 +127,8 @@ These local checks do not establish sustained production resource safety.
 
 The optional `woo-lack-compat` profile has a separate
 [compatibility contract and required matrix](lack-compatibility.md). It owns
-Clack lifecycle, application workers and draining shutdown. Both hosted
-Linux/macOS managed gates and existing protocol gates passed at the
+Clack lifecycle, application workers and draining shutdown. The historical
+hosted Linux/macOS managed gates and existing protocol gates passed at the
 [recorded snapshot](lack-compatibility.md#qualification-snapshot). Future
 release snapshots need their own receipts; diagnostic soaks and partial
 receipts do not close those gates. Deployment readiness remains UNKNOWN.

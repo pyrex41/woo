@@ -17,6 +17,7 @@
   (:import-from :trivial-utf-8
                 :string-to-utf-8-bytes)
   (:export :ssl-ctx-set-alpn-select-callback
+           :release-ctx-alpn
            :ssl-get0-alpn-selected
            :make-alpn-selector
            :+ssl-tlsext-err-ok+
@@ -225,6 +226,18 @@
    and is not freed while a worker may still be inside the callback."
   (setf *preferred-protocols* (copy-list preferred-protocols))
   (ensure-ctx-alpn-arg ssl-ctx preferred-protocols :call-openssl t))
+
+(defun release-ctx-alpn (ssl-ctx)
+  "Release callback argument storage after SSL_CTX is no longer in use."
+  (when ssl-ctx
+    (bt2:with-lock-held (*alpn-arg-lock*)
+      (let* ((addr (cffi:pointer-address ssl-ctx))
+             (state (gethash addr *alpn-ctx-args*)))
+        (when state
+          (ignore-errors (cffi:foreign-free (alpn-ctx-arg-ptr state)))
+          (dolist (ptr (alpn-ctx-arg-retired state))
+            (ignore-errors (cffi:foreign-free ptr)))
+          (remhash addr *alpn-ctx-args*))))))
 
 (defun make-alpn-selector (preferred-protocols)
   "Create an ALPN selector function.
