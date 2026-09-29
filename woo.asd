@@ -44,6 +44,11 @@
                   :depends-on ("ev-packages" "ssl-alpn")
                   :if-feature (:not :woo-no-ssl))
                  (:file "dispatch" :depends-on ("ev-packages"))
+                 (:module "http2" :pathname "http2"
+                  :depends-on ("ev-packages" "dispatch")
+                  :components ((:file "constants")
+                               (:file "hpack" :depends-on ("constants"))
+                               (:file "frames" :depends-on ("constants"))))
                  (:module "llsocket"
                   :depends-on ("syscall")
                   :serial t
