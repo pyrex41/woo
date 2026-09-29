@@ -19,10 +19,11 @@ import (
 )
 
 type diagReadResult struct {
-	bytes int
-	dur   time.Duration
-	err   error
-	sha   string
+	bytes   int
+	dur     time.Duration
+	err     error
+	gotSHA  string
+	wantSHA string
 }
 
 func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, readBuffer int) diagReadResult {
@@ -37,7 +38,9 @@ func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, 
 	}
 	defer conn.Close()
 	tlsConn := tls.Client(tcp, tlsLiveTLSConfig(roots, "http/1.1"))
-	if err := tlsConn.Handshake(); err != nil {
+	handshakeContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := tlsConn.HandshakeContext(handshakeContext); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := io.WriteString(tlsConn, "GET /large-static HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); err != nil {
@@ -74,7 +77,8 @@ func diagSlowRead(t *testing.T, addr string, roots *x509.CertPool, body []byte, 
 	if parts := bytes.SplitN(response.Bytes(), []byte("\r\n\r\n"), 2); len(parts) == 2 {
 		bodyGot = parts[1]
 	}
-	return diagReadResult{bytes: len(response.Bytes()), dur: time.Since(start), err: readErr, sha: fmt.Sprintf("%x/%x", sha256.Sum256(bodyGot), sha256.Sum256(body))}
+	return diagReadResult{bytes: len(response.Bytes()), dur: time.Since(start), err: readErr,
+		gotSHA: fmt.Sprintf("%x", sha256.Sum256(bodyGot)), wantSHA: fmt.Sprintf("%x", sha256.Sum256(body))}
 }
 
 func startDiagReference(t *testing.T, certs tlsLiveCertificates, body []byte) *httptest.Server {
@@ -104,13 +108,7 @@ func TestDiagnosticTLSReferenceAndWoo(t *testing.T) {
 	ref := startDiagReference(t, certs, body)
 	for _, size := range []int{1024, 16 * 1024} {
 		refResult := diagSlowRead(t, strings.TrimPrefix(ref.URL, "https://"), roots, body, size)
-		t.Logf("reference read_buffer=%d bytes=%d duration=%s err=%v sha=%s", size, refResult.bytes, refResult.dur, refResult.err, refResult.sha)
-		if refResult.err != nil {
-			t.Errorf("reference read_buffer=%d: %v", size, refResult.err)
-		}
-		if !strings.HasSuffix(refResult.sha, fmt.Sprintf("/%x", sha256.Sum256(body))) {
-			t.Errorf("reference digest mismatch: %s", refResult.sha)
-		}
+		t.Logf("reference read_buffer=%d bytes=%d duration=%s err=%v body_sha=%s want_sha=%s", size, refResult.bytes, refResult.dur, refResult.err, refResult.gotSHA, refResult.wantSHA)
 
 		port := tlsLivePort(t)
 		t.Setenv("WOO_HEGEL_PORT", port)
@@ -120,7 +118,15 @@ func TestDiagnosticTLSReferenceAndWoo(t *testing.T) {
 			t.Fatal(err)
 		}
 		result := diagSlowRead(t, net.JoinHostPort("127.0.0.1", strconv.Itoa(mustPort(t, port)+1)), roots, body, size)
-		t.Logf("woo read_buffer=%d bytes=%d duration=%s err=%v sha=%s", size, result.bytes, result.dur, result.err, result.sha)
+		t.Logf("woo read_buffer=%d bytes=%d duration=%s err=%v body_sha=%s want_sha=%s", size, result.bytes, result.dur, result.err, result.gotSHA, result.wantSHA)
+		if size == 16*1024 {
+			if refResult.err != nil || refResult.gotSHA != refResult.wantSHA {
+				t.Errorf("reference 16KiB control failed: err=%v sha=%s/%s", refResult.err, refResult.gotSHA, refResult.wantSHA)
+			}
+			if result.err != nil || result.gotSHA != result.wantSHA {
+				t.Errorf("Woo 16KiB control failed: err=%v sha=%s/%s", result.err, result.gotSHA, result.wantSHA)
+			}
+		}
 		_ = addr
 	}
 }
