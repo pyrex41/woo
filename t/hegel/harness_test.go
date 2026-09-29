@@ -27,11 +27,11 @@ type fixtureSpec struct {
 }
 
 type boundedLog struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-	file *os.File
+	mu        sync.Mutex
+	b         bytes.Buffer
+	file      *os.File
 	fileBytes int
-	writeErr error
+	writeErr  error
 }
 
 func (l *boundedLog) Write(p []byte) (int, error) {
