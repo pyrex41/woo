@@ -632,7 +632,7 @@ This intentionally yields between reads so a TLS writer must survive a slow peer
   (finish-output)
   (let ((start (get-internal-real-time)))
     (multiple-value-bind (output error-output exit-code)
-        (uiop:run-program args :ignore-error-status t :input nil
+        (uiop:run-program args :ignore-error-status t
                                :output :string :error-output :string)
       (format t "ALPN-OPENSSL-END ~A exit=~S elapsed=~,3Fs stdout=~S stderr=~S~%"
               label exit-code
