@@ -19,6 +19,7 @@
                 :socket-timeout-timer
                 :socket-last-activity
                 :socket-tls-shutdown-p
+                :socket-input-rejected-p
                 :socket-read-wait-write-p
                 :tls-shutdown-step
                 :*ssl-read-function*
@@ -109,6 +110,13 @@
     (when (socket-tls-shutdown-p socket)
       (tls-shutdown-step socket)
       (return-from tcp-read-cb))
+    ;; A terminal HTTP error can be queued while the peer is still sending
+    ;; the rejected request body. Do not consume those bytes or rearm the
+    ;; application read watcher; graceful TLS shutdown will rearm it only
+    ;; when it needs to receive close_notify.
+    (when (socket-input-rejected-p socket)
+      (lev:ev-io-stop *evloop* (socket-read-watcher socket))
+      (return-from tcp-read-cb))
     (loop
       ;; SSL_write can return WANT_READ. Service that exact pending write
       ;; before attempting another SSL_read; otherwise a readable event can
@@ -183,6 +191,7 @@
              (funcall (the function read-cb) socket *input-buffer* :start 0 :end n))
            (when (and (woo.ev.socket:socket-open-p socket)
                       (not (socket-tls-shutdown-p socket))
+                      (not (socket-input-rejected-p socket))
                       (not (woo.ev.socket::socket-input-paused-p socket)))
              (lev:ev-io-start *evloop* (socket-read-watcher socket)))
            (unless (and (= n buffer-len)

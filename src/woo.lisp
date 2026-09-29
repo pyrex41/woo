@@ -369,6 +369,9 @@ SERVER may be the listener or the thread running WOO:RUN."
         (when ssl-context (woo.ssl:free-context ssl-context))))))
 
 (defun respond-and-close (socket status message)
+  ;; The request may have unread body bytes.  Once this terminal response is
+  ;; selected, stop application reads so they cannot race its TLS drain.
+  (wev:stop-reading-for-close socket)
   (setf (wev:socket-data socket)
         (lambda (data &key start end)
           (declare (ignore data start end))))
