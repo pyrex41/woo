@@ -34,9 +34,9 @@
                    (list 200 '(:content-type "text/plain")
                          (list (write-to-string (getf (dbi:fetch (dbi:execute (dbi:prepare conn "SELECT 42 AS n"))) :|n|))))))))
        (initialized (dbi:do-sql database "CREATE TABLE sessions (id TEXT PRIMARY KEY, session_data TEXT)"))
-       ;; The plain listener can accept the readiness probe before the TLS
-       ;; listener and shutdown callback have been installed. Keep readiness
-       ;; false until both listeners and the drain trigger are complete.
+       ;; The plain listener can accept the readiness probe before the
+       ;; shutdown callback has been installed. Keep readiness false until
+       ;; both listeners and the drain trigger are complete.
        (shutdown nil) (ready nil)
        (app
          (lack:builder :woo-backtrace :woo-deflater
