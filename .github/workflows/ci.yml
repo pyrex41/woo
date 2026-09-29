@@ -30,7 +30,7 @@ jobs:
             "$installer" | sha256sum --check --strict
           ROSWELL_BRANCH=v26.02.116 sh "$installer"
           printf '%s  %s\n' \
-            'ece1aa4a807ee36f44061aa802354c722cb5bd80b5056b19aa982c14709a6c' \
+            'edece1aa4a807ee36f44061aa802354c722cb5bd80b5056b19aa982c14709a6c' \
             "$HOME/roswell.tar.gz" | sha256sum --check --strict
           ros version
       - name: Install frozen Quicklisp distribution
