@@ -13,11 +13,12 @@
                 :socket-remote-addr
                 :socket-remote-port
                 :socket-data
-                :socket-close-hooks
                 :close-socket
                 :write-socket-data
                 :write-socket-byte
                 :write-socket-stream
+                :start-static-stream
+                :graceful-close-socket
                 :flush-buffer
                 :with-async-writing)
   (:import-from :woo.ev.event-loop
@@ -38,9 +39,10 @@
            :write-socket-data
            :write-socket-byte
            :write-socket-stream
+           :start-static-stream
+           :graceful-close-socket
            :with-async-writing
            :socket-data
-           :socket-close-hooks
            :close-socket
            :*buffer-size*
            :*connection-timeout*
