@@ -161,3 +161,151 @@ Must track the loop in src/response.lisp.")
               unless (uiop:string-prefix-p (woo.response::http/1.1 code) response)
                 do (push code failures))
         (ok (null failures) (format nil "bad final statuses: ~S" failures))))))
+
+(deftest malformed-response-is-contained
+  (let ((clack.test:*clack-test-handler* :woo) (clack.test:*enable-debug* nil))
+    (dolist (response '((99 nil nil) (600 nil nil) (200 (:bad) nil)
+                        (200 (:content-type "bad
+header") nil)
+                        (200 nil ("ok" 42)) (200 nil #("bad")) (200 (:content-length "oops") nil)
+                        (200 (:content-length 0 :content-length 1) nil)
+                        (200 (:content-length 0 :transfer-encoding "chunked") nil)
+                        (200 (:content-length 1) ("too much"))
+                        (200 (:content-length 99) ("short"))
+                        (200 (:content-length 1) #(1 2 3))))
+      (clack.test:testing-app "Malformed response receives one 500"
+          (lambda (env) (declare (ignore env)) response)
+        (let ((result (woo-test::raw-exchange clack.test:*clack-test-port*
+                        (woo-test::crlf-lines "GET / HTTP/1.1" "Host: localhost"
+                                               "Connection: close" ""))))
+          (ok (uiop:string-prefix-p "HTTP/1.1 500 " result))
+          (ok (not (search "HTTP/1.1 " result :start2 1)))))))
+  (ok (equal (woo::validate-response '(200 nil "hello")) '(200 nil ("hello"))))
+  (ok (equal (woo::validate-response '(200 nil)) '(200 nil))))
+
+(deftest worker-random-bindings-are-private
+  (let* ((a (cdr (assoc '*random-state* (woo.specials:default-thread-bindings))))
+         (b (cdr (assoc '*random-state* (woo.specials:default-thread-bindings))))
+         (caller (make-random-state *random-state*)))
+    (ok (typep a 'random-state)) (ok (typep b 'random-state))
+    (ok (not (eq a b))) (ok (not (eq a *random-state*)))
+    (let ((*random-state* a)) (dotimes (i 100) (random 1000000)))
+    (ok (= (random 1000000 caller) (random 1000000 (make-random-state *random-state*))))))
+
+(deftest empty-status-framing
+  (let ((clack.test:*clack-test-handler* :woo) (clack.test:*enable-debug* nil))
+    (dolist (code '(204 205 304))
+      (clack.test:testing-app "Bodyless statuses ignore application payload"
+          (lambda (env) (declare (ignore env)) (list code nil '("must-not-send")))
+        (let ((response (woo-test::raw-exchange clack.test:*clack-test-port*
+                         (woo-test::crlf-lines "GET / HTTP/1.1" "Host: localhost"
+                                                "Connection: close" ""))))
+          (ok (not (search "must-not-send" response)))
+          (when (= code 204) (ok (not (search "Content-Length:" response))))
+          (when (= code 205) (ok (search "Content-Length: 0" response))))))))
+
+(deftest response-framing-and-header-storage
+  (ok (equal (woo::validate-response '(200 (:content-length 2) ("λ")))
+             '(200 (:content-length 2) ("λ"))))
+  (ok (equal (woo::validate-response '(200 (:content-length 0) nil))
+             '(200 (:content-length 0) nil)))
+  (ok (equal (woo::validate-response '(200 (:content-length 10) nil) t)
+             '(200 (:content-length 10) nil)))
+  (let* ((key (format nil "x-woo-test-~A" (gensym)))
+         (normalized (second (woo::validate-response (list 200 (list key "ok") nil)))))
+    (ok (stringp (first normalized)))
+    (ok (null (find-symbol (string-upcase key) :keyword))))
+  (ok (null (getf (second (woo::validate-response '(200 (:transfer-encoding "chunked") ("ok"))))
+                 :transfer-encoding))))
+
+(deftest legacy-head-persistent-pipeline-and-utf8-length
+  (let ((clack.test:*clack-test-handler* :woo)
+        (clack.test:*enable-debug* nil)
+        (utf8 (list "λ" "日本")))
+    (clack.test:testing-app "HEAD preserves metadata and pipeline has no HEAD body"
+        (lambda (env)
+          (cond
+            ((string= (getf env :path-info) "/meta")
+             (if (eq (getf env :request-method) :head)
+                 '(200 (:content-length 100) nil)
+                 (list 200 '(:content-length 100) (list (make-string 100 :initial-element #\a)))))
+            ((string= (getf env :path-info) "/utf8") (list 200 nil utf8))
+            (t '(404 nil nil))))
+      (let* ((head (woo-test::crlf-lines "HEAD /meta HTTP/1.1" "Host: localhost" ""))
+             (get (woo-test::crlf-lines "GET /meta HTTP/1.1" "Host: localhost" "Connection: close" ""))
+             (wire (woo-test::raw-exchange clack.test:*clack-test-port* head get))
+             (first-end (search (format nil "~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed) wire))
+             (second-status (and first-end (search "HTTP/1.1 200" wire :start2 (+ first-end 4)))))
+        (ok first-end)
+        (ok (search "content-length: 100" (subseq wire 0 first-end) :test #'char-equal))
+        (ok (and second-status (= second-status (+ first-end 4)))
+            "the pipelined GET starts immediately after HEAD headers")
+        (ok (= 2 (loop with start = 0
+                       for pos = (search "HTTP/1.1 200" wire :start2 start)
+                       while pos count 1 do (setf start (+ pos 1)))))
+        (let* ((utf8-wire (woo-test::raw-exchange clack.test:*clack-test-port*
+                                                 (woo-test::crlf-lines "GET /utf8 HTTP/1.0"
+                                                                       "Host: localhost" "Connection: close" "")))
+               (get-end (search (format nil "~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed) utf8-wire))
+               (expected (map 'string #'code-char (trivial-utf-8:string-to-utf-8-bytes (apply #'concatenate 'string utf8)))))
+          (ok (and get-end (string= (subseq utf8-wire (+ get-end 4)) expected)))
+          (let* ((head-wire (woo-test::raw-exchange clack.test:*clack-test-port*
+                                                   (woo-test::crlf-lines "HEAD /utf8 HTTP/1.1" "Host: localhost" "Connection: close" "")))
+                 (head-end (search (format nil "~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed) head-wire)))
+            (ok (and head-end (= (length head-wire) (+ head-end 4)))))
+          (ok (search (format nil "content-length: ~D"
+                              (reduce #'+ utf8 :key #'trivial-utf-8:utf-8-byte-length))
+                       (woo-test::raw-exchange clack.test:*clack-test-port*
+                                               (woo-test::crlf-lines "HEAD /utf8 HTTP/1.1"
+                                                                     "Host: localhost" "Connection: close" ""))
+                       :test #'char-equal)))))))
+
+(deftest legacy-head-pathname-plain-no-payload
+  (let* ((root (merge-pathnames (format nil "woo-head-private-~D/" (random 1000000000)) (uiop:temporary-directory)))
+         (path (merge-pathnames "body.txt" root)))
+    (ensure-directories-exist path)
+    (with-open-file (s path :direction :output :if-exists :error)
+      (write-string "pathname body" s))
+    (unwind-protect
+         (let ((clack.test:*clack-test-handler* :woo)
+               (clack.test:*enable-debug* nil))
+           (clack.test:testing-app "pathname HEAD has no payload"
+               (lambda (env) (list 200 nil path))
+             (let* ((head (woo-test::crlf-lines "HEAD / HTTP/1.1" "Host: localhost" ""))
+                    (get (woo-test::crlf-lines "GET / HTTP/1.1" "Host: localhost" "Connection: close" ""))
+                    (wire (woo-test::raw-exchange clack.test:*clack-test-port* head get))
+                    (first-end (search (format nil "~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed) wire))
+                    (second-start (and first-end (+ first-end 4)))
+                    (second-end (and second-start (search (format nil "~C~C~C~C" #\Return #\Linefeed #\Return #\Linefeed) wire :start2 second-start))))
+               (ok (search "content-length: 13" wire :test #'char-equal))
+               (ok (and second-start (= second-start (or (search "HTTP/1.1 200" wire :start2 second-start) -1))))
+               (ok (and second-end (string= (subseq wire (+ second-end 4)) "pathname body"))))))
+      (ignore-errors (uiop:delete-directory-tree root :validate t :if-does-not-exist :ignore)))))
+
+#-woo-no-ssl
+(deftest legacy-head-pathname-tls-no-payload
+  (let* ((path (merge-pathnames (format nil "woo-head-tls-~D.txt" (random 1000000))
+                                (uiop:temporary-directory))))
+    (ensure-directories-exist path)
+    (with-open-file (s path :direction :output :if-exists :error)
+      (write-string "tls pathname" s))
+    (unwind-protect
+         (let ((clack.test:*clack-test-handler* :woo)
+               (clack.test:*enable-debug* nil)
+               (clack.test:*use-https* t)
+               (clack.test:*clackup-additional-args*
+                 (list :ssl-cert-file (asdf:system-relative-pathname :woo-test "t/certs/localhost.crt")
+                       :ssl-key-file (asdf:system-relative-pathname :woo-test "t/certs/localhost.key")))
+               (dex:*not-verify-ssl* t))
+           (clack.test:testing-app "TLS pathname HEAD has no payload"
+               (lambda (env) (list 200 nil path))
+             (multiple-value-bind (body status headers)
+                 (dex:request (format nil "https://127.0.0.1:~D/" clack.test:*clack-test-port*)
+                              :method :head :keep-alive nil :force-string t)
+               (ok (= status 200))
+               (ok (zerop (length body)))
+               (ok (string= (gethash "content-length" headers) "12")))
+             (ok (string= (dex:get (format nil "https://127.0.0.1:~D/" clack.test:*clack-test-port*)
+                                  :keep-alive nil :force-string t)
+                         "tls pathname")))
+      (ignore-errors (delete-file path))))))

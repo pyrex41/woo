@@ -101,6 +101,7 @@
   (format nil "HTTP/1.1 ~D ~A~C~C" code
           (or (status-code-to-text code) "") #\Return #\Linefeed))
 
+;; Unassigned final statuses are valid application responses too.
 (clrhash *status-line*)
 (loop for status from 100 to 599
       when (or (>= status 200) (status-code-to-text status))
@@ -183,8 +184,19 @@
       (write-int-to-date sec 23)))
   *date-header*)
 
+(defun canonical-header-name (key)
+  ;; Only server-controlled framing/metadata keys need GETF identity.
+  ;; Arbitrary application strings must not grow the keyword package.
+  (or (find (string key) '(:content-length :content-type :transfer-encoding
+                          :connection :content-encoding :vary :set-cookie)
+            :test #'string-equal :key #'string)
+      key))
+
 (defun response-headers-bytes (socket status headers &optional keep-alive-p)
-  (wev:write-socket-data socket (gethash status *status-line*))
+  (incf (woo.ev.socket::socket-response-generation socket))
+  (wev:write-socket-data socket
+                         (or (gethash status *status-line*)
+                             (error "Unsupported HTTP response status: ~S" status)))
   ;; Send default headers
   (wev:write-socket-data socket #.(string-to-utf-8-bytes "Date: "))
   (write-socket-string socket (the simple-string (current-rfc-1123-timestamp)))
@@ -229,6 +241,6 @@
 (defun finish-response (socket &optional (body *empty-bytes*))
   (wev:write-socket-data socket body
                          :write-cb (lambda (socket)
-                                     (wev:close-socket socket))))
+                                     (wev:graceful-close-socket socket))))
 
 (declaim (notinline wev:write-socket-data wev:write-socket-byte))

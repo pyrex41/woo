@@ -14,6 +14,7 @@
    (:file "t/tlsretry" :if-feature (:not :woo-no-ssl))
    (:file "t/tlsreadretry" :if-feature (:not :woo-no-ssl))
    (:file "t/alpn" :if-feature (:not :woo-no-ssl))
-   (:file "t/tls-context" :if-feature (:not :woo-no-ssl)))
+   (:file "t/tls-context" :if-feature (:not :woo-no-ssl))
+   (:file "t/response-validation"))
   :perform (test-op (op c) (unless (symbol-call '#:rove '#:run c)
                (error "Woo test gate failed"))))
