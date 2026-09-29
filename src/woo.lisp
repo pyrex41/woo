@@ -196,6 +196,13 @@
 (defun setup-parser (socket)
   (let ((http (make-http-request))
         (body-buffer (make-smart-buffer)))
+    (push (lambda ()
+            (unless (smart-buffer::buffer-on-memory-p body-buffer)
+              (ignore-errors
+                (let ((raw-body (finalize-buffer body-buffer)))
+                  (ignore-errors (close raw-body))
+                  (ignore-errors (delete-stream-file raw-body))))))
+          (wev:socket-close-hooks socket))
     (setf (wev:socket-data socket)
           (make-parser http
                        :header-callback
@@ -375,6 +382,12 @@
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
+(defun response-write-callback (socket close body-cleanup)
+  (when (or close body-cleanup)
+    (lambda (socket)
+      (when close (wev:close-socket socket))
+      (when body-cleanup (funcall body-cleanup)))))
+
 (defun handle-normal-response (http socket clack-res &optional body-cleanup)
   (let ((no-body '#:no-body)
         (close (or (= (http-minor-version http) 0)
@@ -391,9 +404,8 @@
 
       (etypecase body
         (null
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:close-socket socket))))
+         (wev:with-async-writing (socket :write-cb
+                                         (response-write-callback socket close body-cleanup))
            (unless (= status 304)
              (setf (getf headers :content-length) 0))
            (write-response-headers socket status headers (not close))))
@@ -406,9 +418,8 @@
                   (setf (getf headers :content-length) size))
                 (unless (getf headers :content-type)
                   (setf (getf headers :content-type) (mimes:mime body)))
-                (wev:with-async-writing (socket :write-cb (and close
-                                                               (lambda (socket)
-                                                                 (wev:close-socket socket))))
+                (wev:with-async-writing (socket :write-cb
+                                                (response-write-callback socket close body-cleanup))
                   (write-response-headers socket status headers (not close))
                   ;; Future task: Use OpenSSL's SSL_sendfile which uses Kernel TLS.
                   (wev:write-socket-stream socket in)))))
@@ -421,15 +432,13 @@
                 (setf (getf headers :content-length) size))
               (unless (getf headers :content-type)
                 (setf (getf headers :content-type) (mimes:mime body)))
-              (wev:with-async-writing (socket :write-cb (and close
-                                                             (lambda (socket)
-                                                               (wev:close-socket socket))))
+              (wev:with-async-writing (socket :write-cb
+                                              (response-write-callback socket close body-cleanup))
                 (write-response-headers socket status headers (not close))
                 (woo.ev.socket:send-static-file socket fd size))))))
         (list
-         (wev:with-async-writing (socket :write-cb (and close
-                                                        (lambda (socket)
-                                                          (wev:close-socket socket))))
+         (wev:with-async-writing (socket :write-cb
+                                         (response-write-callback socket close body-cleanup))
            (cond
              ((getf headers :content-length)
               (response-headers-bytes socket status headers (not close))

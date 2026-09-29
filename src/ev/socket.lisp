@@ -47,6 +47,7 @@
            :socket-remote-addr
            :socket-remote-port
            :socket-data
+           :socket-close-hooks
            :socket-read-cb
            :socket-open-p
            :socket-ssl-handle
@@ -78,6 +79,7 @@
   (write-cb nil :type (or null function))
   (ssl-handle nil :type (or null cffi:foreign-pointer))
   (open-p t :type boolean)
+  close-hooks
 
   (buffer (make-output-buffer #+lispworks :output #+lispworks :static))
   (sendfile-fd nil :type (or null fixnum))
@@ -125,6 +127,10 @@
 (defun close-socket (socket)
   (when (socket-open-p socket)
     (setf (socket-open-p socket) nil)
+    (dolist (hook (prog1 (socket-close-hooks socket)
+                    (setf (socket-close-hooks socket) nil)))
+      (handler-case (funcall hook)
+        (error () (vom:error "Socket cleanup hook failed"))))
     (free-watchers socket)
     (let ((fd (socket-fd socket)))
       (wsys:close fd)
