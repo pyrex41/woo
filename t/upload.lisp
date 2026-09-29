@@ -78,12 +78,18 @@
               "data"))
            (ok saw-spill)
            (ok (null (directory (merge-pathnames "*" dir))))
-           (let ((response (make-string (* 1024 1024) :initial-element #\x)))
+           (let ((response (make-string (* 1024 1024) :initial-element #\x))
+                 (abort-seen nil)
+                 (abort-body-path nil))
              (clack.test:testing-app "Remove spilled request body after abort"
                  (lambda (env)
                    (if (string= (getf env :path-info) "/health")
                        '(200 nil ("healthy"))
                        (progn
+                         (let ((stream (getf env :raw-body)))
+                           (setf abort-body-path (and (streamp stream)
+                                                      (probe-file (pathname stream)))
+                                 abort-seen (not (null abort-body-path))))
                          (sleep 0.2)
                          (list 200 nil (list response)))))
                (let ((client (usocket:socket-connect
@@ -99,15 +105,24 @@
                                         "Content-Length: 4" "")
                                        "data"))
                          stream)
-                        (force-output stream))
-                   (usocket:socket-close client))))
-             (ok (search "HTTP/1.1 200 OK"
-                         (woo-test::raw-exchange
-                          clack.test:*clack-test-port*
-                          (woo-test::crlf-lines "GET /health HTTP/1.1"
-                                                "Host: localhost" "Connection: close" ""))))))
+                        (force-output stream)
+                        (loop repeat 100
+                              until abort-seen
+                              do (sleep 0.01))
+                        (ok abort-seen)
+                        (ok abort-body-path))
+                   (usocket:socket-close client)))
+               (loop repeat 100
+                     while (directory (merge-pathnames "*" dir))
+                     do (sleep 0.01))
+               (ok (null (directory (merge-pathnames "*" dir))))
+               (ok (search "HTTP/1.1 200 OK"
+                           (woo-test::raw-exchange
+                            clack.test:*clack-test-port*
+                            (woo-test::crlf-lines "GET /health HTTP/1.1"
+                                                  "Host: localhost" "Connection: close" "")))))
            (ok (null (directory (merge-pathnames "*" dir)))))
       (setf (symbol-value 'smart-buffer::*default-memory-limit*) old-memory
             (symbol-value 'smart-buffer::*default-disk-limit*) old-disk
             (symbol-value 'smart-buffer::*temporary-directory*) old-directory)
-      (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore)))
+      (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore)))))
