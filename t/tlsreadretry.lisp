@@ -83,6 +83,8 @@
                          (lambda (handle pointer length)
                            (declare (ignore handle pointer))
                            (incf read-calls)
+                           (when (> read-calls 1)
+                             (error "rejected input attempted a second SSL_read"))
                            length)))
                    (funcall (symbol-function 'woo.ev.tcp::tcp-read-cb)
                             woo.ev:*evloop*
