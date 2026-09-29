@@ -397,6 +397,11 @@
     (otherwise
      (warn "Invalid data in Clack response: ~S" chunk))))
 
+(defun static-preparation-status (pathname condition)
+  "Return the status for a pathname failure before response headers commit."
+  (declare (ignore condition))
+  (if (uiop:directory-exists-p pathname) 403 404))
+
 (defun handle-normal-response (http socket clack-res)
   (let ((no-body '#:no-body)
         (close (or (= (http-minor-version http) 0)
@@ -438,13 +443,19 @@
             ;; OPEN and fstat can fail after the application has returned a
             ;; pathname. Classify that failure before committing headers and
             ;; always close an fd that was not transferred to sendfile.
-            (let ((fd nil) (owned nil))
+            (if (uiop:directory-exists-p body)
+                (respond-and-close socket 403 "403 Forbidden")
+                (let ((fd nil) (owned nil) (committed nil))
               (unwind-protect
                    (handler-case
                        (progn
                          (setf fd (wsys:open body))
                          (if (< fd 0)
-                             (respond-and-close socket 404 "404 Not Found")
+                             (let ((failure (static-preparation-status body nil)))
+                               (respond-and-close socket failure
+                                                   (if (= failure 403)
+                                                       "403 Forbidden"
+                                                       "404 Not Found")))
                              (let ((size #+lispworks (sys:file-size body)
                                          #+(or sbcl ccl) (fd-file-size fd)
                                          #-(or sbcl ccl lispworks) (file-size body)))
@@ -455,13 +466,23 @@
                                (wev:with-async-writing (socket :write-cb (and close
                                                                               (lambda (socket)
                                                                                 (wev:close-socket socket))))
+                                 (setf committed t)
                                  (write-response-headers socket status headers (not close))
                                  (woo.ev.socket:send-static-file socket fd size)
                                  (setf owned t)))))
-                     (file-error () (respond-and-close socket 404 "404 Not Found"))
-                     (error () (respond-and-close socket 500 "500 Internal Server Error")))
-                (when (and fd (not owned))
-                  (ignore-errors (wsys:close fd))))))))
+                     (file-error (condition)
+                       (unless committed
+                         (let ((failure (static-preparation-status body condition)))
+                           (respond-and-close socket failure
+                                               (if (= failure 403)
+                                                   "403 Forbidden"
+                                                   "404 Not Found")))))
+                     (error ()
+                       (if committed
+                           (wev:close-socket socket)
+                           (respond-and-close socket 500 "500 Internal Server Error"))))
+                  (when (and fd (not owned))
+                    (ignore-errors (wsys:close fd)))))))))
         (list
          (wev:with-async-writing (socket :write-cb (and close
                                                         (lambda (socket)

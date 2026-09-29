@@ -21,3 +21,25 @@
                 ""))))
         (ok (and (search "HTTP/1.1 200 OK" response)
                  (search "Woo" response)))))))
+
+(deftest pathname-failures-have-distinct-statuses
+  (let ((clack.test:*clack-test-handler* :woo)
+        (clack.test:*enable-debug* nil)
+        (root (asdf:system-source-directory :woo)))
+    (clack.test:testing-app "Classify missing files and directories"
+        (lambda (env)
+          (if (string= (getf env :path-info) "/missing")
+              `(200 nil ,(merge-pathnames #p"does-not-exist" root))
+              `(200 nil ,root)))
+      (let ((missing
+              (woo-test::raw-exchange
+               clack.test:*clack-test-port*
+               (woo-test::crlf-lines "GET /missing HTTP/1.1" "Host: localhost"
+                                     "Connection: close" "")))
+            (directory
+              (woo-test::raw-exchange
+               clack.test:*clack-test-port*
+               (woo-test::crlf-lines "GET /directory HTTP/1.1" "Host: localhost"
+                                     "Connection: close" ""))))
+        (ok (and (search "HTTP/1.1 404 Not Found" missing)
+                 (search "HTTP/1.1 403 Forbidden" directory)))))))
