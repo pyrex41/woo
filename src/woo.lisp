@@ -339,35 +339,34 @@ SERVER may be the listener or the thread running WOO:RUN."
                           (setf stop-control (register-stop-control *listener* nil))
                           (when on-ready (funcall on-ready stop-control)))
                      (close-listener))))))
-      (when ssl
-        #+woo-no-ssl
-        (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
+      ;; Context ownership begins with allocation, so setup failures must
+      ;; run the same cleanup as a listener that started successfully.
+      (unwind-protect
+           (progn
+             (when ssl
+               #+woo-no-ssl
+               (warn "SSL certificate is specified but Woo's SSL feature is off. Ignored.")
+               #-woo-no-ssl
+               (progn
+                 (when ssl-key-file
+                   (setf ssl-key-file
+                         (uiop:native-namestring
+                          (or (probe-file ssl-key-file)
+                              (error "SSL private key file '~A' does not exist." ssl-key-file)))))
+                 (when ssl-cert-file
+                   (setf ssl-cert-file
+                         (uiop:native-namestring
+                          (or (probe-file ssl-cert-file)
+                              (error "SSL certificate '~A' does not exist." ssl-cert-file)))))
+                 (setf ssl-context
+                       (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
+                 ;; The callback storage lives until this context is freed.
+                 (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*)))
+             (if worker-num
+                 (start-multithread-server)
+                 (start-singlethread-server)))
         #-woo-no-ssl
-        (progn
-          (when ssl-key-file
-            (setf ssl-key-file
-                  (uiop:native-namestring
-                   (or (probe-file ssl-key-file)
-                       (error "SSL private key file '~A' does not exist." ssl-key-file)))))
-          (when ssl-cert-file
-            (setf ssl-cert-file
-                  (uiop:native-namestring
-                   (or (probe-file ssl-cert-file)
-                       (error "SSL certificate '~A' does not exist." ssl-cert-file)))))
-          (setf ssl-context
-                (woo.ssl:create-context ssl-cert-file ssl-key-file ssl-key-password))
-          ;; Install ALPN once per listener context. The callback storage is
-          ;; owned by this context and is retained until the server stops.
-          (woo.ssl:configure-context-alpn ssl-context woo.ssl:*alpn-protocols*)))
-      (if worker-num
-          (unwind-protect
-               (start-multithread-server)
-            #-woo-no-ssl
-            (when ssl-context (woo.ssl:free-context ssl-context)))
-          (unwind-protect
-               (start-singlethread-server)
-            #-woo-no-ssl
-            (when ssl-context (woo.ssl:free-context ssl-context)))))))
+        (when ssl-context (woo.ssl:free-context ssl-context))))))
 
 (defun respond-and-close (socket status message)
   (setf (wev:socket-data socket)
