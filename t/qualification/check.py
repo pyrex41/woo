@@ -59,15 +59,27 @@ def process_group_stats(pgid):
                     raise RuntimeError('cannot collect FD samples for live process ' + pid)
         else:
             try:
-                output = subprocess.check_output(['lsof', '-a', '-p', pid], text=True,
-                                                 stderr=subprocess.DEVNULL, timeout=2)
-                fds += max(0, len(output.splitlines()) - 1)
+                fds += process_pid_fd_count(pid)
             except (OSError, subprocess.SubprocessError):
                 if process_pid_running(pid):
                     raise RuntimeError('cannot collect FD samples for live process ' + pid)
     if rss <= 0 or fds <= 0:
         raise RuntimeError('resource sampler produced no positive evidence')
     return rss, fds
+
+def process_pid_fd_count(pid):
+    # Numeric descriptors only: exclude mapped files, cwd and executable
+    # records. Disable DNS/service lookups and bound transient retries.
+    command = ['lsof', '-n', '-P', '-a', '-p', pid, '-d', '0-99999', '-Ff']
+    for attempt in range(3):
+        try:
+            output = subprocess.check_output(command, text=True,
+                                             stderr=subprocess.DEVNULL, timeout=5)
+            return sum(1 for line in output.splitlines()
+                       if line.startswith('f') and line[1:].isdigit())
+        except subprocess.TimeoutExpired:
+            if attempt == 2:
+                raise
 
 def process_pid_running(pid):
     try:
@@ -191,6 +203,8 @@ def main():
         verify_receipt(args.verify_receipt); return
     if args.dependencies is None: parser.error('--dependencies is required')
     if not 1 <= args.soak_seconds <= 1800: parser.error('--soak-seconds must be 1..1800')
+    # Go runs from t/hegel; fixture paths must remain independent of cwd.
+    args.artifacts = args.artifacts.resolve()
     args.artifacts.mkdir(parents=True, exist_ok=True)
     dependency_parent = args.dependencies.resolve(); dependency_parent.mkdir(parents=True, exist_ok=True)
     dependencies = Path(tempfile.mkdtemp(prefix='woo-legacy-deps-', dir=dependency_parent))

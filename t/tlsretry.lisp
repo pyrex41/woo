@@ -192,3 +192,40 @@
             (setf (woo.ev.socket::socket-ssl-handle socket) nil)
             (ignore-errors (woo.ev.socket:close-socket socket)))
           (ignore-errors (sb-posix:close read-fd)))))))
+
+#+sbcl
+(deftest tls-shutdown-want-write-survives-flush-completion
+  (multiple-value-bind (read-fd write-fd) (sb-posix:pipe)
+    (let ((socket nil) (shutdown-calls 0))
+      (unwind-protect
+           (woo.ev.event-loop:with-event-loop ()
+             (setf socket (woo.ev.socket:make-socket
+                           :fd write-fd :tcp-read-cb 'woo.ev.tcp::tcp-read-cb))
+             (setf (woo.ev.socket::socket-ssl-handle socket) (cffi:null-pointer)
+                   (woo.ev.socket::socket-write-cb socket)
+                   (lambda (s) (woo.ev.socket:graceful-close-socket s)))
+             (let ((woo.ev.socket::*ssl-shutdown-function*
+                     (lambda (handle)
+                       (declare (ignore handle))
+                       (incf shutdown-calls)
+                       (if (= shutdown-calls 1) -1 1)))
+                   (woo.ev.socket::*ssl-error-function*
+                     (lambda (handle result)
+                       (declare (ignore handle result))
+                       cl+ssl::+ssl-error-want-write+)))
+               ;; Exercise the normal response completion callback, then
+               ;; service the readiness requested by SSL_shutdown itself.
+               (woo.ev.socket:async-write socket)
+               (ok (= shutdown-calls 1))
+               (ok (woo.ev.socket::socket-tls-shutdown-p socket))
+               (ok (plusp (lev:ev-is-active (woo.ev.socket:socket-write-watcher socket))))
+               (ok (zerop (lev:ev-is-active (woo.ev.socket:socket-read-watcher socket))))
+               (woo.ev.socket:async-write socket)
+               (ok (= shutdown-calls 2))
+               (ok (not (woo.ev.socket:socket-open-p socket))))
+             (setf socket nil)
+             (lev:ev-break woo.ev:*evloop* lev:+EVBREAK-ALL+))
+        (when socket
+          (setf (woo.ev.socket::socket-ssl-handle socket) nil)
+          (ignore-errors (woo.ev.socket:close-socket socket)))
+        (ignore-errors (sb-posix:close read-fd))))))

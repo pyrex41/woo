@@ -5,6 +5,23 @@ from unittest.mock import patch
 import check
 
 class ReceiptTests(unittest.TestCase):
+    def test_fd_sampler_retries_timeouts_and_counts_only_descriptors(self):
+        timeout = check.subprocess.TimeoutExpired(['lsof'], 5)
+        with patch.object(check.subprocess, 'check_output',
+                          side_effect=[timeout, 'p123\nfcwd\nf0\nf7\nftxt\n']) as sample:
+            self.assertEqual(check.process_pid_fd_count('123'), 2)
+            self.assertEqual(sample.call_count, 2)
+            self.assertIn('-n', sample.call_args.args[0])
+            self.assertIn('-Ff', sample.call_args.args[0])
+        with patch.object(check.subprocess, 'check_output', side_effect=timeout) as sample:
+            with self.assertRaises(check.subprocess.TimeoutExpired):
+                check.process_pid_fd_count('123')
+            self.assertEqual(sample.call_count, 3)
+        with patch.object(check.subprocess, 'check_output', side_effect=OSError('unavailable')) as sample:
+            with self.assertRaises(OSError):
+                check.process_pid_fd_count('123')
+            self.assertEqual(sample.call_count, 1)
+
     def test_pid_exit_requires_positive_observation(self):
         dead = check.subprocess.CalledProcessError(1, ['ps'], output='')
         with patch.object(check.subprocess, 'check_output', side_effect=dead):

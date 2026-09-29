@@ -79,6 +79,9 @@
 (defvar *ssl-read-function* #'cl+ssl::ssl-read
   "Indirection for the nonblocking SSL_read call; tests may inject WANT results.")
 #-woo-no-ssl
+(defvar *ssl-shutdown-function* #'cl+ssl::ssl-shutdown
+  "Indirection for deterministic nonblocking shutdown tests.")
+#-woo-no-ssl
 (defvar *ssl-error-function* #'cl+ssl::ssl-get-error
   "Indirection for SSL_get_error; tests may inject deterministic retry paths.")
 
@@ -152,6 +155,11 @@
                     'async-write-cb
                     fd
                     lev:+EV-WRITE+)
+    ;; Every allocated watcher must be initialized before close-socket can
+    ;; stop it, including sockets closed before start-listening. This timer
+    ;; stays inactive until TCP installs its connection-timeout callback.
+    (lev:ev-timer-init (socket-timeout-timer socket)
+                       'tls-shutdown-cb 0.0d0 0.0d0)
     (lev:ev-timer-init (socket-shutdown-timer socket)
                        'tls-shutdown-cb 0.0d0 0.0d0)
     socket))
@@ -245,7 +253,7 @@
     (unless handle
       (close-socket socket :abort t)
       (return-from tls-shutdown-step t))
-    (let ((result (ignore-errors (cl+ssl::ssl-shutdown handle))))
+    (let ((result (ignore-errors (funcall *ssl-shutdown-function* handle))))
       (cond
         ((eql result 1)
          (close-socket socket :abort t)
@@ -259,11 +267,11 @@
          (lev:ev-io-stop *evloop* (socket-write-watcher socket))
          (lev:ev-io-start *evloop* (socket-read-watcher socket))
          nil)
-        ((member (ignore-errors (cl+ssl::ssl-get-error handle result))
+        ((member (ignore-errors (funcall *ssl-error-function* handle result))
                  (list cl+ssl::+ssl-error-want-read+
                        cl+ssl::+ssl-error-want-write+)
                  :test #'eql)
-         (let ((errno (cl+ssl::ssl-get-error handle result)))
+         (let ((errno (funcall *ssl-error-function* handle result)))
            (if (= errno cl+ssl::+ssl-error-want-read+)
                (progn (lev:ev-io-stop *evloop* (socket-write-watcher socket))
                       (lev:ev-io-start *evloop* (socket-read-watcher socket)))
@@ -636,6 +644,8 @@
 
   ;; Completion callbacks can enqueue another write. Keep its watcher alive.
   (when (and (socket-open-p socket) (buffer-empty-p socket)
+             (not (socket-tls-shutdown-p socket))
+             (null (socket-pending-write-data socket))
              (null (socket-sendfile-fd socket))
              (null (socket-send-stream socket))
              (null (socket-flush-hooks socket))
