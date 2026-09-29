@@ -917,7 +917,7 @@ SERVER may be the listener or the thread running WOO:RUN."
         (wev:close-socket socket)
         (progn
           (handle-normal-response http socket '(500 (:connection "close") nil))
-          (setf (woo.ev.socket::socket-write-cb socket) #'wev:close-socket)))))
+          (setf (woo.ev.socket::socket-write-cb socket) #'wev:graceful-close-socket)))))
 
 (defun handle-response (http socket clack-res &optional env body-cleanup head-p)
 
@@ -1004,7 +1004,7 @@ SERVER may be the listener or the thread running WOO:RUN."
            ;; the HTTP/1 connection after this one response so unread request
            ;; bytes cannot be parsed as another request.
            (wev:with-async-writing (socket :write-cb (lambda (socket)
-                                                       (wev:close-socket socket)))
+                                                       (wev:graceful-close-socket socket)))
              (write-response-headers socket status
                                      '(:connection "close" :content-length 0))))
          (path-length-matches-p (headers size)
