@@ -229,49 +229,47 @@ class ReceiptTests(unittest.TestCase):
     def test_run_retains_samples_when_late_sampler_failure_stops_child(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
-            marker = directory / 'pid'
             log = directory / 'legacy.log'
             observations = {}
+            observed_pgid = None
             command = [sys.executable, '-c',
-                       'import os, pathlib, sys, time; '
-                       'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(10)',
-                       str(marker)]
+                       'import time; time.sleep(10)']
             first = (1024, 3, [{'pid': 1, 'rss_bytes': 1024, 'fd_count': 3}])
-            with patch.object(check, 'process_group_stats',
-                              side_effect=[first, RuntimeError('sampler unavailable')]):
+            calls = 0
+            def sample(pgid):
+                nonlocal calls, observed_pgid
+                calls += 1
+                if calls == 1:
+                    return first
+                observed_pgid = pgid
+                raise RuntimeError('sampler unavailable')
+            with patch.object(check, 'process_group_stats', side_effect=sample):
                 with self.assertRaisesRegex(RuntimeError, 'sampler unavailable'):
                     check.run(command, os.environ.copy(), log, 5, observations=observations)
             self.assertEqual(len(observations['resource_samples']), 1)
             self.assertEqual(observations['resource_samples'][0]['fd_count'], 3)
             self.assertEqual(observations['peak_rss_bytes'], 1024)
             self.assertFalse(observations['resource_samples_complete'])
-            deadline = time.monotonic() + 2
-            while not marker.exists() and time.monotonic() < deadline:
-                time.sleep(.01)
-            self.assertTrue(marker.exists())
-            self.assertFalse(check.process_group_alive(int(marker.read_text())))
+            self.assertIsNotNone(observed_pgid)
+            self.assertFalse(check.process_group_alive(observed_pgid))
 
     def test_run_marks_samples_incomplete_when_child_exits_during_sample(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
-            marker = directory / 'pid'
             log = directory / 'legacy.log'
             observations = {}
             command = [sys.executable, '-c',
-                       'import os, pathlib, sys, time; '
-                       'pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(10)',
-                       str(marker)]
+                       'import time; time.sleep(10)']
             first = (1024, 3, [{'pid': 1, 'rss_bytes': 1024, 'fd_count': 3}])
             calls = 0
 
-            def sample(_):
+            def sample(pgid):
                 nonlocal calls
                 calls += 1
                 if calls == 1:
                     return first
-                pid = int(marker.read_text())
-                os.kill(pid, 15)
-                os.waitpid(pid, 0)
+                os.kill(pgid, 15)
+                os.waitpid(pgid, 0)
                 raise RuntimeError('sampler observed an exited child')
 
             with patch.object(check, 'process_group_stats', side_effect=sample):
