@@ -56,6 +56,7 @@
            :socket-ssl-handle
            :socket-tls-shutdown-p
            :socket-tls-shutdown-read-wait-write-p
+           :socket-tls-shutdown-recv-p
            :socket-input-rejected-p
            :stop-reading-for-close
            :*ssl-write-function*
@@ -147,6 +148,7 @@
   (send-stream-error-p nil :type boolean)
   (tls-shutdown-p nil :type boolean)
   (tls-shutdown-read-wait-write-p nil :type boolean)
+  (tls-shutdown-recv-p nil :type boolean)
   (tls-close-after-drain-p nil :type boolean)
   (tls-drain-deadline nil :type (or null double-float))
   (tls-shutdown-deadline nil :type (or null double-float)))
@@ -239,6 +241,7 @@
           (socket-pending-write-data socket) nil
           (socket-tls-shutdown-p socket) nil
           (socket-tls-shutdown-read-wait-write-p socket) nil
+          (socket-tls-shutdown-recv-p socket) nil
           (socket-tls-close-after-drain-p socket) nil
           (socket-input-rejected-p socket) nil
           (socket-data socket) nil)
@@ -287,6 +290,7 @@
         ((zerop result)
          ;; SSL_shutdown returned 0: close_notify was sent and we are
          ;; waiting for the peer's close_notify on the readable side.
+         (setf (socket-tls-shutdown-recv-p socket) t)
          (lev:ev-io-stop *evloop* (socket-write-watcher socket))
          (lev:ev-io-start *evloop* (socket-read-watcher socket))
          nil)
@@ -295,6 +299,7 @@
                        cl+ssl::+ssl-error-want-write+)
                  :test #'eql)
          (let ((errno (funcall *ssl-error-function* handle result)))
+           (setf (socket-tls-shutdown-recv-p socket) nil)
            (if (= errno cl+ssl::+ssl-error-want-read+)
                (progn (lev:ev-io-stop *evloop* (socket-write-watcher socket))
                       (lev:ev-io-start *evloop* (socket-read-watcher socket)))
@@ -308,6 +313,13 @@
 (defun tls-shutdown-read-step (socket)
   "Discard bounded application input while waiting for peer close_notify."
   (unless (and (socket-open-p socket) (socket-tls-shutdown-p socket))
+    (return-from tls-shutdown-read-step t))
+  (unless (socket-tls-shutdown-recv-p socket)
+    (return-from tls-shutdown-read-step (tls-shutdown-step socket)))
+  (when (and (socket-tls-shutdown-deadline socket)
+             (>= (lev:ev-now *evloop*)
+                 (socket-tls-shutdown-deadline socket)))
+    (close-socket socket :abort t)
     (return-from tls-shutdown-read-step t))
   #+woo-no-ssl
   (return-from tls-shutdown-read-step (tls-shutdown-step socket))
@@ -330,12 +342,17 @@
                  ((plusp n)
                   (setf (socket-last-activity socket) (lev:ev-now *evloop*)))
                  ((zerop n)
-                  (tls-shutdown-step socket)
+                  (let ((errno (funcall *ssl-error-function* handle n)))
+                    (if (= errno cl+ssl::+ssl-error-zero-return+)
+                        (progn (setf (socket-tls-shutdown-recv-p socket) nil)
+                               (tls-shutdown-step socket))
+                        (close-socket socket :abort t)))
                   (return))
                  (t
                   (let ((errno (funcall *ssl-error-function* handle n)))
                     (cond
                       ((= errno cl+ssl::+ssl-error-zero-return+)
+                       (setf (socket-tls-shutdown-recv-p socket) nil)
                        (tls-shutdown-step socket)
                        (return))
                       ((= errno cl+ssl::+ssl-error-want-read+)
@@ -350,6 +367,8 @@
                       (t
                        (close-socket socket :abort t)
                        (return))))))))
+    (when (socket-open-p socket)
+      (lev:ev-io-start *evloop* (socket-read-watcher socket)))
     t))
 
 (define-c-callback tls-shutdown-cb :void
@@ -734,7 +753,8 @@
       (return-from async-write-cb))
 
     (when (socket-tls-shutdown-p socket)
-      (if (socket-tls-shutdown-read-wait-write-p socket)
+      (if (or (socket-tls-shutdown-read-wait-write-p socket)
+              (socket-tls-shutdown-recv-p socket))
           (tls-shutdown-read-step socket)
           (tls-shutdown-step socket))
       (return-from async-write-cb))
