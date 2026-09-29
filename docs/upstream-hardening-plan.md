@@ -17,7 +17,7 @@ Baseline fork: 4dbfdba; upstream: 2ef0d22. Both legacy and managed adapters are 
 - [x] Adapt per-listener certificate-chain contexts and ALPN lifetime (#128).
 - [x] Add focused regressions, the Lisp/Hegel test lanes, and a bounded legacy
   qualification command with an exact-head receipt verifier.
-- [x] Document the upstream attribution and safe adaptations, keep showcase
+- [x] Document the upstream attribution and local adaptations, keep showcase
   checks separate from the core `woo-test` gate, and retain bounded logs and
   receipts.
 
